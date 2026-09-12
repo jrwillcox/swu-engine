@@ -43,6 +43,12 @@ LAYERS = [
     "damage",
     "zones",
     "flow",
+    # `shared` holds the primitives that two or more DECISION families need, so no
+    # family can own one: moving such a helper to a consumer would only reverse the
+    # arrow. It sits above `flow` because two of them use it and below `combat`
+    # because none of them needs the attack pipeline. Anything here that grows a
+    # dependency on a decision family belongs in that family instead.
+    "shared",
     "combat",
     # `observers` sits directly below `turn` because the turn machinery is one of its
     # callers: _start_action_phase and _regroup_rollover both fire scheduled effects,
