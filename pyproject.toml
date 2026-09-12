@@ -41,6 +41,15 @@ web = [
 # with `pytest -m slow`, and the lot with `pytest -m ""`.
 addopts = "-m 'not slow'"
 
+# Put the project root on sys.path for the whole session. `tests/` is an implicit
+# namespace package (no __init__.py), so `tests/conftest.py`'s own
+# `from tests.dbpath import db_path` only resolves if the root is importable.
+# `python -m pytest` gets that for free — it prepends the CWD — but the bare
+# `pytest` console script does not, so the documented command failed on a clean
+# checkout while the `-m` form passed. Declaring it here fixes every invocation
+# (bare, -m, IDE runners, CI) instead of relying on how pytest was launched.
+pythonpath = ["."]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
