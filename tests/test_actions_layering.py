@@ -72,6 +72,7 @@ LAYERS = [
     # makes a push call an ordinary downward import, which is why no dispatch registry
     # for `push_*` is needed.
     "targeting",
+    "upgrades",
     "_legacy",
     "api",
 ]
