@@ -14,6 +14,19 @@ from tests.dbpath import db_path  # noqa: E402 — after the sys.path insert abo
 
 _DB = db_path()
 
+# Tell the *package* which database the tests resolved.  tests/dbpath.py is the
+# single source of truth for the suite, but the production code can't import it,
+# so the engine and web layers resolve independently — and they know nothing of
+# tests/fixtures/swu_fixture.db.  On a fresh clone that split was fatal: the
+# tests ran happily in fixture mode while `swu.engine.tokens` and
+# `_state_from_dict` looked for the absent real corpus, so creating a Shield
+# token raised FileNotFoundError and CI failed ~4,500 tests that pass locally
+# (where data/swu.db exists, and where an explicit SWU_DB hid it too).  Exporting
+# the resolved path here makes every consumer agree, including in fixture mode.
+# Set unconditionally: when SWU_DB is already set, db_path() returns it anyway,
+# so `SWU_DB=/nonexistent pytest` still exercises the no-database path.
+os.environ["SWU_DB"] = str(_DB)
+
 
 def pytest_addoption(parser):
     parser.addoption(

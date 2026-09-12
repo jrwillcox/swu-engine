@@ -1614,10 +1614,8 @@ def _player_from_dict(d: dict, repo: object) -> PlayerState:
 
 
 def _state_from_dict(d: dict) -> "GameState":
-    from swu.cards.repository import CardRepository
-    import os
-    db = os.environ.get("SWU_DB", "data/swu.db")
-    repo = CardRepository(db)
+    from swu.cards.repository import CardRepository, default_db_path
+    repo = CardRepository(default_db_path())
     players = [_player_from_dict(p, repo) for p in d["players"]]
     rng_raw = d["rng_state"]
     # Stored as list; reconstruct tuple as getstate() expects

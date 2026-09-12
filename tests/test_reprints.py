@@ -25,7 +25,15 @@ import find_reprints  # noqa: E402
 from swu.abilities.registry import _ESCAPE_HATCH, _REGISTRY, get_abilities  # noqa: E402
 from swu.cards import reprints  # noqa: E402  (import applies the aliases as a side effect)
 
-DB = str(ROOT / "data" / "swu.db")
+from tests.dbpath import require_corpus_db  # noqa: E402
+
+
+def _db() -> str:
+    """The real card corpus, or a skip.  Every assertion in this module is a
+    property of the whole pool, so the small fixture DB cannot answer it — and
+    naming ``data/swu.db`` directly let a bare ``sqlite3.connect`` downstream
+    create an empty one.  See ``tests.dbpath.require_corpus_db``."""
+    return require_corpus_db()
 
 
 def _unregistered_keywordless_text_card():
@@ -38,7 +46,7 @@ def _unregistered_keywordless_text_card():
     deterministic pick, and skipped outright if the campaign ever runs out."""
     registered, escape_hatch = audit._load_registry()
     known = registered | escape_hatch
-    for card in sorted(audit.load_cards(DB),
+    for card in sorted(audit.load_cards(_db()),
                        key=lambda c: (c.set_code, int(c.card_number or 0))):
         if card.card_type in audit.TOKEN_TYPES:
             continue
@@ -82,13 +90,13 @@ def registry_snapshot():
 
 class TestIdentityHelper:
     def test_law_93_groups_with_p26_2(self):
-        faces = reprints.load_faces(DB)
+        faces = reprints.load_faces(_db())
         assert reprints.face_key(faces[("LAW", "93")]) == \
             reprints.face_key(faces[("P26", "2")])
         assert faces[("LAW", "93")]["name"] == "Rio Durant"
 
     def test_maul_shadow_collective_group_has_multiple_members(self):
-        faces = reprints.load_faces(DB)
+        faces = reprints.load_faces(_db())
         groups: dict[tuple, list] = {}
         for (s, n), f in faces.items():
             if f["type"] in reprints.TOKEN_TYPES:
@@ -105,7 +113,7 @@ class TestIdentityHelper:
     def test_distinct_same_name_faces_do_not_collide(self):
         # A shared NAME is not enough — the several distinct "Maul" cards must
         # each get their own identity key (whole printed face, not just name).
-        faces = reprints.load_faces(DB)
+        faces = reprints.load_faces(_db())
         maul_keys = {
             reprints.face_key(f)
             for f in faces.values()
@@ -147,7 +155,7 @@ class TestPopulatedTable:
             _REGISTRY.pop(rep, None)
             _ESCAPE_HATCH.discard(rep)
         try:
-            gaps = dict(find_reprints._all_mirror_gaps(find_reprints.build_worklist(DB)))
+            gaps = dict(find_reprints._all_mirror_gaps(find_reprints.build_worklist(_db())))
         finally:
             _REGISTRY.clear()
             _REGISTRY.update(reg)
@@ -157,14 +165,14 @@ class TestPopulatedTable:
         assert set(gaps) == set(table)
         # Each aliased canonical must be a registered twin sharing the reprint's
         # printed face (the detector's own identity function).
-        faces = reprints.load_faces(DB)
+        faces = reprints.load_faces(_db())
         for reprint, canonical in table.items():
             assert canonical in reg, (reprint, canonical)
             assert reprints.face_key(faces[reprint]) == reprints.face_key(faces[canonical]), \
                 (reprint, canonical)
 
     def test_apply_is_idempotent_and_counts_all(self):
-        assert reprints.apply_reprint_aliases(DB) == len(reprints.REPRINT_ALIASES)
+        assert reprints.apply_reprint_aliases(_db()) == len(reprints.REPRINT_ALIASES)
 
     @pytest.mark.parametrize("reprint, canonical", ALIASES,
                              ids=[f"{r[0]}_{r[1]}" for r, _ in ALIASES])
@@ -177,14 +185,14 @@ class TestPopulatedTable:
     @pytest.mark.parametrize("reprint, canonical", ALIASES,
                              ids=[f"{r[0]}_{r[1]}" for r, _ in ALIASES])
     def test_alias_faces_are_identical(self, reprint, canonical):
-        faces = reprints.load_faces(DB)
+        faces = reprints.load_faces(_db())
         assert reprints.face_key(faces[reprint]) == reprints.face_key(faces[canonical])
 
     @pytest.mark.parametrize("reprint, canonical", ALIASES,
                              ids=[f"{r[0]}_{r[1]}" for r, _ in ALIASES])
     def test_alias_now_classifies_playable(self, reprint, canonical):
         registered, escape_hatch = audit._load_registry()
-        card_index = audit.index_by_set_number(audit.load_cards(DB))
+        card_index = audit.index_by_set_number(audit.load_cards(_db()))
         row = card_index[reprint]
         label = audit.classify(row, registered, escape_hatch)
         assert label in ("implemented", "escape-hatch")
@@ -206,7 +214,7 @@ class TestApplyGuard:
         assert wrong in _REGISTRY
         monkeypatch.setattr(reprints, "REPRINT_ALIASES", {reprint: wrong})
         with pytest.raises(ValueError, match="face mismatch"):
-            reprints.apply_reprint_aliases(DB)
+            reprints.apply_reprint_aliases(_db())
 
     def test_unregistered_canonical_raises(self, registry_snapshot, monkeypatch):
         # Alliance X-Wing LAW_253 / SOR_237 are the same (vanilla) face but NEITHER
@@ -219,7 +227,7 @@ class TestApplyGuard:
         assert ("SOR", "237") not in _REGISTRY
         monkeypatch.setattr(reprints, "REPRINT_ALIASES", {("LAW", "253"): ("SOR", "237")})
         with pytest.raises(ValueError, match="not registered"):
-            reprints.apply_reprint_aliases(DB)
+            reprints.apply_reprint_aliases(_db())
 
 
 # ── The --check exit-code contract ───────────────────────────────────────────
@@ -228,7 +236,7 @@ class TestCheckFlag:
     def test_check_passes_now_that_every_gap_is_aliased(self, monkeypatch, out_path):
         # Stage 2: the alias table covers every mirror gap, so --check exits 0.
         monkeypatch.setattr(sys, "argv", [
-            "find_reprints", "--check", "--db", DB,
+            "find_reprints", "--check", "--db", _db(),
             "--output", str(out_path),
         ])
         assert find_reprints.main() == 0
@@ -246,7 +254,7 @@ class TestCheckFlag:
         try:
             monkeypatch.setattr(reprints, "REPRINT_ALIASES", one_short)
             monkeypatch.setattr(sys, "argv", [
-                "find_reprints", "--check", "--db", DB, "--output", str(out_path),
+                "find_reprints", "--check", "--db", _db(), "--output", str(out_path),
             ])
             assert find_reprints.main() == 1
         finally:
@@ -259,7 +267,7 @@ class TestCheckFlag:
         import json
         out = out_path
         monkeypatch.setattr(sys, "argv", [
-            "find_reprints", "--db", DB, "--output", str(out),
+            "find_reprints", "--db", _db(), "--output", str(out),
         ])
         assert find_reprints.main() == 0
         wl = json.loads(out.read_text(encoding="utf-8"))
@@ -279,8 +287,8 @@ class TestVerifyPlayable:
 
     def test_verify_playable_finds_no_exceptions(self):
         # Fresh worklist (aliases applied at import), re-verified from scratch.
-        wl = find_reprints.build_worklist(DB)
-        problems = find_reprints.verify_playable(wl, DB)
+        wl = find_reprints.build_worklist(_db())
+        problems = find_reprints.verify_playable(wl, _db())
         assert problems == [], (
             "already_playable / keyword_deferred members that are not actually "
             f"playable: {problems}"
@@ -288,15 +296,15 @@ class TestVerifyPlayable:
 
     def test_verify_playable_flag_exits_zero(self, monkeypatch, out_path):
         monkeypatch.setattr(sys, "argv", [
-            "find_reprints", "--verify-playable", "--db", DB,
+            "find_reprints", "--verify-playable", "--db", _db(),
             "--output", str(out_path),
         ])
         assert find_reprints.main() == 0
 
     def test_already_playable_members_all_classify_playable(self):
-        wl = find_reprints.build_worklist(DB)
+        wl = find_reprints.build_worklist(_db())
         registered, escape_hatch = audit._load_registry()
-        idx = audit.index_by_set_number(audit.load_cards(DB))
+        idx = audit.index_by_set_number(audit.load_cards(_db()))
         checked = 0
         for entry in wl["buckets"]["already_playable"]:
             for m in entry["members"]:
@@ -309,9 +317,9 @@ class TestVerifyPlayable:
     def test_keyword_deferred_members_are_pure_playable_keywords(self):
         # Every keyword_deferred member: all keywords implemented engine-side and
         # no unregistered functional text beyond them.
-        wl = find_reprints.build_worklist(DB)
+        wl = find_reprints.build_worklist(_db())
         registered, _ = audit._load_registry()
-        idx = audit.index_by_set_number(audit.load_cards(DB))
+        idx = audit.index_by_set_number(audit.load_cards(_db()))
         for entry in wl["buckets"]["keyword_deferred"]:
             for m in entry["members"]:
                 card = idx[(m["set"], m["number"])]
@@ -343,7 +351,7 @@ class TestVerifyPlayable:
         # So the durable invariant is not "the bucket is empty" but "the bucket never
         # contains a group we could have aliased for free" — which stays true both as
         # the campaign shrinks the bucket and if a future DB import grows it.
-        wl = find_reprints.build_worklist(DB)
+        wl = find_reprints.build_worklist(_db())
         registered, _ = audit._load_registry()
         for entry in wl["buckets"]["needs_encoding"]:
             hits = [(m["set"], m["number"]) for m in entry["members"]
@@ -378,7 +386,7 @@ class TestVerifyPlayable:
             },
             "member_counts": {"already_playable": 0, "keyword_deferred": 1},
         }
-        problems = find_reprints.verify_playable(fake, DB)
+        problems = find_reprints.verify_playable(fake, _db())
         assert problems and problems[0]["set"] == card.set_code
         assert problems[0]["number"] == card.card_number
 
@@ -403,14 +411,14 @@ class TestAttachRestrictionExemption:
 
     def test_knights_saber_classifies_vanilla_and_playable(self):
         registered, escape_hatch = audit._load_registry()
-        idx = audit.index_by_set_number(audit.load_cards(DB))
+        idx = audit.index_by_set_number(audit.load_cards(_db()))
         for key in (("LOF", "151"), ("P25", "109")):
             label = audit.classify(idx[key], registered, escape_hatch)
             assert label == "vanilla", f"{key} → {label}"
             assert audit.is_playable(label)
 
     def test_knights_saber_group_in_already_playable(self):
-        wl = find_reprints.build_worklist(DB)
+        wl = find_reprints.build_worklist(_db())
         ne = {e["name"] for e in wl["buckets"]["needs_encoding"]}
         ap = {e["name"] for e in wl["buckets"]["already_playable"]}
         assert "Knight's Saber" not in ne

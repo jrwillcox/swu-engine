@@ -9,6 +9,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 from typing import Iterator, Optional
@@ -18,6 +19,28 @@ from swu.cards.models import (
     Leader, TokenUnit, TokenUpgrade, Unit, Upgrade,
 )
 from swu.cards.keyword_sanitizer import sanitize_keywords
+
+
+def default_db_path() -> Path:
+    """Where the card database is when the caller has no path of its own.
+
+    ``SWU_DB`` wins; otherwise the conventional ``<repo>/data/swu.db``, resolved
+    from this file rather than the process's working directory.  The engine used
+    to spell that fallback ``"data/swu.db"`` inline, which only worked when the
+    interpreter happened to be started from the repository root — so creating a
+    Shield token, or deserialising a saved game, raised ``FileNotFoundError``
+    anywhere else.  Mirrors ``swu.cards.reprints._find_db`` and
+    ``swu.web.paths.db_path``.
+
+    Returned even when nothing is there, so the caller's error message names a
+    sensible location; it is NOT proof the file exists.
+    """
+    env = os.environ.get("SWU_DB")
+    if env:
+        return Path(env)
+    here = Path(__file__).resolve()
+    # src/swu/cards/repository.py -> parents[3] == the repository root
+    return here.parents[3] / "data" / "swu.db"
 
 
 class CardRepository:

@@ -105,6 +105,32 @@ def skip_on_fixture(what: str) -> None:
         pytest.skip(f"{what} — not available on the small fixture DB")
 
 
+def require_corpus_db() -> str:
+    """The real corpus as a string path, or a skip — for the full-corpus modules.
+
+    ``tests/fixture_scope.FULL_CORPUS_PATTERNS`` names the modules whose subject is
+    the whole card pool, and ``conftest.pytest_collection_modifyitems`` skips their
+    DB-backed tests in fixture mode — but only the ones that *request* a DB fixture
+    (``repo``/``deck_a``/``deck_b``).  ``test_reprints``, ``test_plan_encoding`` and
+    ``test_verify_encoding`` reach the database directly instead, through a module
+    constant, so the skip never reached them: on a fresh clone they ran against the
+    small fixture and reported ~670 false failures.  Worse, the code they hand the
+    path to calls ``sqlite3.connect`` bare, which **created** a 0-byte
+    ``data/swu.db`` — and once that existed, :func:`db_path` preferred it to the
+    fixture and the whole suite collapsed into ``no such table: cards``.
+
+    Call this instead of naming ``data/swu.db``: the skip is per test, so the
+    registry-only tests in those same modules (the ~1,000 parametrised alias cases
+    that need no database at all) keep running.
+    """
+    if using_fixture():
+        pytest.skip("corpus-wide assertion — not meaningful on the small fixture DB")
+    path = db_path()
+    if not path.exists():
+        pytest.skip(f"swu.db not found at {path} — build it per docs/pipeline.md")
+    return str(path)
+
+
 def require_db() -> Path:
     """The database path, or ``pytest.skip`` if there is no database at all.
 

@@ -13,12 +13,20 @@ import plan_encoding as P  # noqa: E402
 import verify_encoding as V  # noqa: E402
 
 DECK = str(_ROOT / "tests" / "fixtures" / "shd_han_solo.json")
-DB = str(_ROOT / "data" / "swu.db")
+from tests.dbpath import require_corpus_db  # noqa: E402
+
+
+def _db() -> str:
+    """The real card corpus, or a skip.  Every assertion in this module is a
+    property of the whole pool, so the small fixture DB cannot answer it — and
+    naming ``data/swu.db`` directly let a bare ``sqlite3.connect`` downstream
+    create an empty one.  See ``tests.dbpath.require_corpus_db``."""
+    return require_corpus_db()
 
 
 @pytest.fixture
 def info():
-    _, groups, meta = P.plan(DECK, None, DB, slug_override="shd-han-solo")
+    _, groups, meta = P.plan(DECK, None, _db(), slug_override="shd-han-solo")
     return {"groups": groups, "meta": meta}
 
 

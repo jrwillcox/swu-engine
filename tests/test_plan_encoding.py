@@ -20,12 +20,20 @@ import plan_encoding as P  # noqa: E402
 import audit_coverage as A  # noqa: E402
 
 DECK = str(_ROOT / "tests" / "fixtures" / "shd_han_solo.json")
-DB = str(_ROOT / "data" / "swu.db")
+from tests.dbpath import require_corpus_db  # noqa: E402
+
+
+def _db() -> str:
+    """The real card corpus, or a skip.  Every assertion in this module is a
+    property of the whole pool, so the small fixture DB cannot answer it — and
+    naming ``data/swu.db`` directly let a bare ``sqlite3.connect`` downstream
+    create an empty one.  See ``tests.dbpath.require_corpus_db``."""
+    return require_corpus_db()
 
 
 @pytest.fixture
 def planned():
-    slug, groups, meta = P.plan(DECK, None, DB)
+    slug, groups, meta = P.plan(DECK, None, _db())
     return slug, groups, meta
 
 
@@ -36,8 +44,8 @@ def test_slug_from_fixture(planned):
 
 def test_determinism():
     """Same input ⇒ identical groups (ids, themes, membership)."""
-    s1, g1, _ = P.plan(DECK, None, DB)
-    s2, g2, _ = P.plan(DECK, None, DB)
+    s1, g1, _ = P.plan(DECK, None, _db())
+    s2, g2, _ = P.plan(DECK, None, _db())
     assert s1 == s2
     sig = lambda gs: [(g.gid, g.kind, g.theme, [c.cid for c in g.cards],
                        sorted(g.new_primitives), g.depends_on) for g in gs]
@@ -129,7 +137,7 @@ def test_classification_strong_functional_text():
                      "while ", "if you", "each time", "attack with")
     found = []
     for set_code in _campaign_set_order():
-        _slug, groups, _meta = P.plan(None, set_code, DB)
+        _slug, groups, _meta = P.plan(None, set_code, _db())
         for det in (c for g in groups for c in g.cards):
             text = (det.text or "").lower()
             if not text.strip() or any(w in text for w in trigger_words):
@@ -145,7 +153,7 @@ def test_classification_strong_functional_text():
 
 def test_classification_keyword_deferred():
     reg, esc = P.audit._load_registry()
-    details = P.load_details(DB, [("SHD", "161"), ("SHD", "165")])
+    details = P.load_details(_db(), [("SHD", "161"), ("SHD", "165")])
     # SHD_161's control-change primitive landed in the dedicated framework
     # session for group shd-han-solo:02 (When Played hands the unit to an
     # opponent via actions.change_control; its Bounty replays it from the owner's
@@ -175,7 +183,7 @@ def test_classification_keyword_deferred():
 def _set_with_gaps():
     """The first campaign set that still yields gap groups (skip if none do)."""
     for set_code in _campaign_set_order():
-        _slug, groups, _meta = P.plan(None, set_code, DB)
+        _slug, groups, _meta = P.plan(None, set_code, _db())
         if groups:
             return set_code
     pytest.skip("no set left with gap groups — the campaign has encoded them all")
@@ -184,7 +192,7 @@ def _set_with_gaps():
 def test_emit_valid_artifacts(tmp_path, monkeypatch):
     monkeypatch.setattr(P, "ENCODING_DIR", tmp_path)
     set_with_gaps = _set_with_gaps()
-    slug, groups, meta = P.plan(None, set_with_gaps, DB)
+    slug, groups, meta = P.plan(None, set_with_gaps, _db())
     assert groups, f"expected the {set_with_gaps} set to yield gap groups"
     out_dir = P.emit(slug, groups, meta)
     assert (out_dir / "MANIFEST.md").exists()
@@ -204,14 +212,14 @@ def test_rerun_stable_ids_no_clobber(tmp_path, monkeypatch):
     # Whole-set source (see the _set_with_gaps note above): the demo deck is fully
     # implemented now and yields no groups from scratch.
     set_with_gaps = _set_with_gaps()
-    slug, groups, meta = P.plan(None, set_with_gaps, DB)
+    slug, groups, meta = P.plan(None, set_with_gaps, _db())
     P.emit(slug, groups, meta)
     gids_first = [g.gid for g in groups]
     assert gids_first, f"expected the {set_with_gaps} set to yield gap groups"
 
     # Sentinel: hand-edit a not-yet-complete spec; a re-run must rewrite it
     # (group still incomplete) — but ids stay stable via reconcile.
-    slug2, groups2, meta2 = P.plan(None, set_with_gaps, DB)
+    slug2, groups2, meta2 = P.plan(None, set_with_gaps, _db())
     assert [g.gid for g in groups2] == gids_first
 
     # No-clobber: a spec whose group is fully done is preserved verbatim.
@@ -233,13 +241,13 @@ def test_set_code_input(tmp_path, monkeypatch):
     """
     monkeypatch.setattr(P, "ENCODING_DIR", tmp_path)
     # A completed set still resolves and reports its size; it just yields no groups.
-    slug, groups, meta = P.plan(None, "SHD", DB)
+    slug, groups, meta = P.plan(None, "SHD", _db())
     assert slug == "shd-set"
     assert meta["total_deck"] > 200
 
     # A set with gaps yields groups, and only the two campaign kinds.
     set_with_gaps = _set_with_gaps()
-    gslug, ggroups, _gmeta = P.plan(None, set_with_gaps, DB)
+    gslug, ggroups, _gmeta = P.plan(None, set_with_gaps, _db())
     assert gslug == f"{set_with_gaps.lower()}-set"
     assert ggroups, f"expected the {set_with_gaps} set to yield gap groups"
     # Every printed keyword is now modelled engine-side (Support, the last one, landed
@@ -251,7 +259,7 @@ def test_set_code_input(tmp_path, monkeypatch):
     # ASH used to be the one set that planned a keyword group; it is now COMPLETE
     # (264/264, finished in ash-set:29), so it resolves and reports its size while
     # yielding no groups at all — the same shape as SHD above.
-    aslug, agroups, ameta = P.plan(None, "ASH", DB)
+    aslug, agroups, ameta = P.plan(None, "ASH", _db())
     assert aslug == "ash-set"
     assert ameta["total_deck"] > 200
     assert agroups == []

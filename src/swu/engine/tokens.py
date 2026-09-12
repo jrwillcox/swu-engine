@@ -14,7 +14,6 @@ cached per process to avoid repeated DB hits.
 """
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -30,10 +29,9 @@ _token_cache: dict[str, "TokenUpgrade"] = {}
 def _token_def(name: str) -> "TokenUpgrade":
     """Return the canonical TokenUpgrade card def for *name*, cached."""
     if name not in _token_cache:
-        from swu.cards.repository import CardRepository
+        from swu.cards.repository import CardRepository, default_db_path
         from swu.cards.models import TokenUpgrade
-        db = os.environ.get("SWU_DB", "data/swu.db")
-        repo = CardRepository(db)
+        repo = CardRepository(default_db_path())
         for card in repo.by_name(name):
             if isinstance(card, TokenUpgrade):
                 _token_cache[name] = card
@@ -147,10 +145,9 @@ def _token_unit_def(name: str):
     card conservation and cease to exist when they leave play.
     """
     if name not in _token_unit_cache:
-        from swu.cards.repository import CardRepository
+        from swu.cards.repository import CardRepository, default_db_path
         from swu.cards.models import TokenUnit
-        db = os.environ.get("SWU_DB", "data/swu.db")
-        repo = CardRepository(db)
+        repo = CardRepository(default_db_path())
         for card in repo.by_name(name):
             if isinstance(card, TokenUnit):
                 _token_unit_cache[name] = card
@@ -168,10 +165,9 @@ _credit_def_cache: list = []  # one-element cache for the Credit CreditToken def
 def _credit_def():
     """Return the canonical Credit token (CreditToken) card def, cached."""
     if not _credit_def_cache:
-        from swu.cards.repository import CardRepository
+        from swu.cards.repository import CardRepository, default_db_path
         from swu.cards.models import CreditToken
-        db = os.environ.get("SWU_DB", "data/swu.db")
-        repo = CardRepository(db)
+        repo = CardRepository(default_db_path())
         for card in repo.by_name("Credit"):
             if isinstance(card, CreditToken):
                 _credit_def_cache.append(card)
