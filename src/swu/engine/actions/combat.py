@@ -36,12 +36,12 @@ from typing import Optional
 
 from swu.engine.decisions import PendingDecision
 from swu.engine.events import (
-    AttackDeclared, DamageDealt, DecisionPushed, OverwhelmDamage,
+    AttackDeclared, DamageDealt, DecisionPushed, DecisionResolved, OverwhelmDamage,
     RestoreHealing,
 )
 from swu.engine.keywords import Keyword, has_keyword, keyword_value, shields_on
 from swu.engine.state import (
-    CardInstance, GameState, Phase, PlayerState, Zone,
+    CardInstance, GameState, Phase, PlayerState, Zone, ability_suppressed,
 )
 from swu.engine.tokens import defeat_shield
 from swu.engine.triggers import get_bus
@@ -61,7 +61,6 @@ from swu.engine.actions.zones import (
 from swu.engine.actions.flow import (
     _assert_phase, _check_game_over, _switch_active_player,
 )
-
 
 # ── ACTION phase actions ──────────────────────────────────────────────────────
 
@@ -2109,3 +2108,835 @@ def _push_excess_damage_to_unit(s: GameState, attacker: CardInstance,
         return
     push_select_damage(s, attacker, amount_each=excess, max_targets=1,
                        arena=arena, exclude_source=True)
+
+
+# ── ACTION phase actions ──────────────────────────────────────────────────────
+
+@dataclass
+class AttackTwoUnits(Action):
+    """Attack two enemy units at once as a single attack (Darth Maul C24_6: "This
+    unit can attack 2 units instead of 1").
+
+    Both units are co-defenders of ONE attack: the attacker deals its power to each,
+    and takes the SUM of both defenders' power, all simultaneously; Overwhelm spills
+    the COMBINED excess to the defending base.  A base cannot be a co-defender ("may
+    not attack a base and a unit simultaneously"), so both fields are real unit ids.
+    """
+    attacker_id: str
+    defender1_id: str
+    defender2_id: str
+
+    def apply(self, state: GameState) -> GameState:
+        _assert_phase(state, Phase.ACTION)
+        s = copy.deepcopy(state)
+        active_ps = s.active_player
+        inactive_ps = s.inactive_player
+
+        attacker = _find_in_arenas(active_ps, self.attacker_id)
+        if attacker is None:
+            raise IllegalActionError(f"Attacker {self.attacker_id} not found")
+        if attacker.exhausted:
+            raise IllegalActionError("Attacker is exhausted")
+        if _multi_defender_count(s, attacker) < 2:
+            raise IllegalActionError("Attacker cannot attack two units")
+        if self.defender1_id == self.defender2_id:
+            raise IllegalActionError("Must choose two distinct defenders")
+        def1 = _find_in_arenas(inactive_ps, self.defender1_id)
+        def2 = _find_in_arenas(inactive_ps, self.defender2_id)
+        if def1 is None or def2 is None:
+            raise IllegalActionError("Defender not found")
+        if attacker.zone != def1.zone or attacker.zone != def2.zone:
+            raise IllegalActionError("Attacker and defenders must share an arena")
+
+        needs_continuation = _resolve_two_unit_combat(
+            s, active_ps, inactive_ps, attacker, def1, def2)
+
+        if not needs_continuation and not s.is_terminal() and not s.pending_decisions:
+            _switch_active_player(s)
+        return s
+
+    def describe(self) -> str:
+        return (f"Attack units {self.defender1_id} & {self.defender2_id} "
+                f"with {self.attacker_id}")
+
+
+# ── Phase 3 decision-resolving actions ───────────────────────────────────────
+
+@dataclass
+class ContinueAttack(Action):
+    """Resume the attack pipeline after OnAttack trigger decisions have resolved.
+
+    Resolves the top 'pre_attack' pending decision, then runs steps 2–6
+    (Restore/Saboteur, power computation, damage, Overwhelm, defeat).
+    """
+    attacker_id: str
+    defender_id: Optional[str]
+
+    def apply(self, state: GameState) -> GameState:
+        if not state.pending_decisions or state.pending_decisions[-1].kind != "pre_attack":
+            raise IllegalActionError("No pending pre_attack decision")
+        s = copy.deepcopy(state)
+        top = s.pending_decisions.pop()
+        s.event_log.append(DecisionResolved(
+            deciding_player_id=top.deciding_player_id,
+            kind="pre_attack",
+            choice="continue",
+        ))
+
+        active_ps = s.player_by_id(top.context["active_player_id"])
+        inactive_ps = s.players[1 - s.player_index(top.context["active_player_id"])]
+        attacker = _find_in_arenas(active_ps, self.attacker_id)
+        if attacker is None:
+            # The attack fizzles (a pre-attack trigger removed the attacker from
+            # play), but it still ended — clean up its this-attack modifiers so
+            # none leak into the settled state (would otherwise persist on the
+            # would-be attacker or another unit a granted bonus targeted).
+            _expire_modifiers(s, "this_attack")
+            if not s.is_terminal():
+                _switch_active_player(s)
+            return s
+
+        # A two-unit attack (Darth Maul C24_6) resumes into the multi-defender step2.
+        defender_ids = top.context.get("defender_ids")
+        if defender_ids is not None:
+            defenders = [d for d in (
+                _find_in_arenas(inactive_ps, defender_ids[0]),
+                _find_in_arenas(inactive_ps, defender_ids[1]),
+            ) if d is not None]
+            if not defenders:
+                # Both co-defenders left play during pre-attack triggers — cleanup.
+                _clear_this_attack_combat_flags(attacker)
+                _expire_modifiers(s, "this_attack")
+                if not s.is_terminal():
+                    _switch_active_player(s)
+                return s
+            _resolve_two_unit_combat_step2(s, active_ps, inactive_ps, attacker, defenders)
+        elif self.defender_id is None:
+            _resolve_base_attack_step2(s, active_ps, inactive_ps, attacker)
+        else:
+            defender = _find_in_arenas(inactive_ps, self.defender_id)
+            if defender is None:
+                # Defender left play during pre-attack triggers — same cleanup.
+                _clear_this_attack_combat_flags(attacker)
+                _expire_modifiers(s, "this_attack")
+                if not s.is_terminal():
+                    _switch_active_player(s)
+                return s
+            _resolve_unit_combat_step2(s, active_ps, inactive_ps, attacker, defender)
+
+        if not s.is_terminal() and not s.pending_decisions:
+            _switch_active_player(s)
+        return s
+
+    def describe(self) -> str:
+        if self.defender_id:
+            return f"Continue attack vs {self.defender_id}"
+        return "Continue base attack"
+
+
+# ── Phase 3: pre_attack continuation ──────────────────────────────────
+
+def _pre_attack_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    ctx = top.context
+    return [ContinueAttack(
+        attacker_id=ctx["attacker_id"],
+        defender_id=ctx.get("defender_id"),
+    )]
+
+
+# ── Internal helpers ──────────────────────────────────────────────────────────
+
+def _apply_ambush_defender_debuff(
+    s: GameState, attacking_ps: PlayerState,
+    attacker: CardInstance, defender: CardInstance,
+) -> None:
+    """Apply every ``AmbushDefenderDebuff`` the attacking player has in play as a
+    ``this_attack`` stats modifier on ``defender`` (Enfys Nest SHD_219).
+
+    Called only from ``UseAmbush.apply`` — the sole seam an Ambush attack is
+    declared — so an ordinary attack by the same unit is unaffected, which is the
+    distinction the card draws.  "Including this one" needs no special case: the
+    Ambush attacker is in play at this point and so is found by the same scan.
+    Multiple copies stack; a no-op (no modifier) when no such marker is in play."""
+    from swu.abilities.registry import get_abilities, AmbushDefenderDebuff
+    dp = dh = 0
+    for ci in attacking_ps.ground_arena + attacking_ps.space_arena:
+        if ability_suppressed(s, ci):
+            continue
+        sc = getattr(ci.card_def, "set_code", None) or ""
+        cn = getattr(ci.card_def, "card_number", None) or ""
+        if not sc or not cn:
+            continue
+        for spec in get_abilities(sc, cn):
+            if isinstance(spec, AmbushDefenderDebuff):
+                dp += spec.power
+                dh += spec.hp
+    if not (dp or dh):
+        return
+    from swu.engine.state import Modifier
+    s.modifiers.append(Modifier(
+        modifier_id=s.alloc_modifier_id(),
+        source_instance_id=attacker.instance_id,
+        target_instance_id=defender.instance_id,
+        kind="stats",
+        value={"power": dp, "hp": dh},
+        duration="this_attack",
+    ))
+
+
+def _apply_ambush_attacker_bonus(s: GameState, attacker: CardInstance) -> None:
+    """Apply the attacker's own ``AmbushAttackerBonus`` markers as a ``this_attack``
+    stats modifier (Heroic Purrgil ASH_207).
+
+    The mirror of ``_apply_ambush_defender_debuff``, and called from the same single
+    seam, so an ordinary attack by the same unit is unaffected — which is precisely
+    what "while attacking using Ambush" says."""
+    from swu.abilities.registry import get_abilities, AmbushAttackerBonus
+    if ability_suppressed(s, attacker):
+        return
+    sc = getattr(attacker.card_def, "set_code", None) or ""
+    cn = getattr(attacker.card_def, "card_number", None) or ""
+    if not sc or not cn:
+        return
+    bp = bh = 0
+    for spec in get_abilities(sc, cn):
+        if isinstance(spec, AmbushAttackerBonus):
+            bp += spec.power
+            bh += spec.hp
+    if not (bp or bh):
+        return
+    from swu.engine.state import Modifier
+    s.modifiers.append(Modifier(
+        modifier_id=s.alloc_modifier_id(),
+        source_instance_id=attacker.instance_id,
+        target_instance_id=attacker.instance_id,
+        kind="stats",
+        value={"power": bp, "hp": bh},
+        duration="this_attack",
+    ))
+
+
+def _multi_defender_count(state: GameState, attacker: CardInstance) -> int:
+    """The number of enemy units ``attacker`` may attack at once as a single attack
+    (Darth Maul C24_6: "This unit can attack 2 units instead of 1" =
+    ``MultiDefenderAttack(count=2)``), or 0 if it has no such marker.  Read at the
+    two-unit attack-enumeration seam (``_enumerate_two_unit_attacks``) and by the
+    ``AttackTwoUnits`` apply-guard; a no-op for the overwhelming majority of units
+    (no such spec).  Mirrors the ``_attack_forbidden`` scan shape."""
+    from swu.abilities.registry import get_abilities, MultiDefenderAttack
+    sc = getattr(attacker.card_def, "set_code", None) or ""
+    cn = getattr(attacker.card_def, "card_number", None) or ""
+    if not sc or not cn:
+        return 0
+    for spec in get_abilities(sc, cn):
+        if isinstance(spec, MultiDefenderAttack):
+            return int(spec.count)
+    return 0
+
+
+def _forced_attack_actions(state: GameState) -> "list[AttackWithUnit] | None":
+    """The constrained attack set for a Give-In-to-Your-Anger compulsion
+    (SHD_144), or ``None`` when no compulsion applies to the active player.
+
+    "Its controller's next action this phase must be an attack action with that
+    unit, if able. It must attack a unit, if able."  So while the flag names the
+    active player's unit and that unit is able to attack, ``legal_actions`` is
+    restricted to that unit's attacks — the unit-target attacks if any exist
+    ("must attack a unit, if able"), otherwise the base attack.  ``None`` means the
+    compulsion is vacuous (the unit is gone / exhausted / unable to attack, or the
+    flag isn't the active player's), so normal actions are offered and the flag is
+    consumed by whatever action they take (actions.apply).
+
+    A single-unit attack is the always-available attack form; the rare case where
+    the compelled unit is a multi-defender attacker (Darth Maul C24_6) still offers
+    its single attacks here — a documented simplification."""
+    fa = state.game_memory.forced_attack
+    if not fa:
+        return None
+    ps = state.active_player
+    if ps.player_id != fa.get("player_id"):
+        return None
+    unit_id = fa.get("unit_id")
+    attacker = next((u for u in ps.ground_arena + ps.space_arena
+                     if u.instance_id == unit_id), None)
+    if attacker is None or attacker.exhausted:
+        return None
+    attacks = [a for a in _enumerate_attacks(state, ps, state.inactive_player)
+               if a.attacker_id == unit_id]
+    if not attacks:
+        return None
+    unit_targets = [a for a in attacks if a.defender_id is not None]
+    return unit_targets if unit_targets else attacks
+
+
+def _enumerate_two_unit_attacks(
+    state: GameState, ps: PlayerState, inactive_ps: PlayerState,
+) -> list["AttackTwoUnits"]:
+    """All legal AttackTwoUnits actions for ps's ready multi-defender attackers
+    (Darth Maul C24_6).
+
+    An attacker carrying a ``MultiDefenderAttack`` marker may attack any unordered
+    pair of distinct enemy units in its OWN arena (a base can't be a co-defender —
+    "may not attack a base and a unit simultaneously").  Sentinel and Hidden are
+    honoured across the pair exactly as in ``_enumerate_attacks``: Hidden units are
+    dropped from the eligible defenders, and if the defending player controls a
+    Sentinel (and the attacker isn't a Saboteur), BOTH chosen units must be
+    Sentinels.  Requires ≥2 eligible defenders in the arena.
+    """
+    acts: list[AttackTwoUnits] = []
+    for attacker in ps.ground_arena + ps.space_arena:
+        if attacker.exhausted:
+            continue
+        if _multi_defender_count(state, attacker) < 2:
+            continue
+        if _attack_forbidden(state, attacker):
+            continue
+        enemy_arena = (
+            inactive_ps.ground_arena
+            if attacker.zone == Zone.GROUND_ARENA
+            else inactive_ps.space_arena
+        )
+        saboteur = has_keyword(state, attacker, Keyword.SABOTEUR)
+        attackable = [u for u in enemy_arena
+                      if not _is_hidden_from_attack(state, u)
+                      and not _cannot_be_attacked(state, u)]
+        sentinels = [u for u in attackable if has_keyword(state, u, Keyword.SENTINEL)]
+        sentinel_required = bool(sentinels) and not saboteur
+        eligible = sentinels if sentinel_required else attackable
+        for i in range(len(eligible)):
+            for j in range(i + 1, len(eligible)):
+                acts.append(AttackTwoUnits(
+                    attacker.instance_id,
+                    eligible[i].instance_id,
+                    eligible[j].instance_id))
+    return acts
+
+
+def push_granted_attack(
+    s: GameState, source_ci: CardInstance,
+    power_bonus: int = 0, hp_bonus: int = 0,
+    *,
+    optional: bool = False,
+    bonus_trait: Optional[str] = None,
+    grant_keywords: Optional[list[str]] = None,
+    attacker_predicates: Optional[list[str]] = None,
+    attacker_trait: Optional[str] = None,
+    attacker_aspect: Optional[str] = None,
+    attacker_id: Optional[str] = None,
+    attacker_cost_max: Optional[int] = None,
+    attacker_arena: Optional[str] = None,
+    attacker_pilot_related: bool = False,
+    bonus_if_defender_unit: bool = False,
+    bonus_if_odd_cost_diff_from: Optional[int] = None,
+    repeat: bool = False,
+    allow_exhausted: bool = False,
+    no_base: bool = False,
+    exclude_source: bool = False,
+    then_defeat_attacker: bool = False,
+    defender_power_bonus: int = 0,
+    defender_hp_bonus: int = 0,
+    repeat_max: Optional[int] = None,
+    cross_arena: bool = False,
+    bonus_if_defender_ground: bool = False,
+    bonus_per_defender_damage: int = 0,
+    bonus_per_defending_arena_unit: int = 0,
+    bonus_per_defending_player_unit: int = 0,
+    draw_if_base_damaged: bool = False,
+    opponent_discard_if_base_damaged: bool = False,
+    defeat_attacker_if_base_damaged: bool = False,
+    attacker_damage_prevention: bool = False,
+    attacker_prevention_combat_only: bool = False,
+    power_equals_remaining_hp: bool = False,
+    return_defender_upgrades: bool = False,
+    excess_damage_to_unit: bool = False,
+    then_attack_cheaper: bool = False,
+    defender_suppress_abilities: bool = False,
+    borrow_abilities: bool = False,
+    borrow_lender_id: Optional[str] = None,
+) -> None:
+    """Push a 'granted_attack' decision: the source's controller attacks with a
+    unit that gets a bonus for that attack (e.g. Surprise Strike, Shoot First,
+    Fleet Lieutenant).
+
+    Parameters
+    ----------
+    power_bonus / hp_bonus
+        Flat stat bonus applied to the chosen attacker for this attack.
+    optional
+        True for "You **may** attack with a unit" (a decline is always offered).
+    bonus_trait
+        If set, the stat bonus applies ONLY when the chosen attacker has this
+        trait (e.g. Fleet Lieutenant: +2/+0 only if the unit is Rebel).
+    grant_keywords
+        Keyword names granted to the chosen attacker for this attack (e.g. Shoot
+        First grants "First Strike").
+    attacker_predicates
+        Restricts which of the controller's units may be the attacker (e.g.
+        Desperate Attack: "Attack with a *damaged* unit").  Each entry is one of
+        the TargetSpec predicate names checked against a candidate attacker
+        (``"damaged"``/``"undamaged"``/``"exhausted"``/``"non_leader"``); an
+        attacker must satisfy ALL of them to be offered.  When the restriction
+        leaves no eligible attacker the (mandatory) attack fizzles via
+        DeclineGrantedAttack, exactly like having no ready unit at all.
+    attacker_trait
+        Restricts the attacker to units that have this trait (e.g. Rebel Assault:
+        "Attack with a REBEL unit").  Like ``attacker_predicates``, it merely
+        filters the offered AttackWithUnit options; no eligible attacker → the
+        (mandatory) attack fizzles via DeclineGrantedAttack.
+    attacker_id
+        Pins the attacker to one specific unit (e.g. Hotshot DL-44 Blaster:
+        "Attack with attached unit" — the upgrade's host).  Only attacks by that
+        unit are offered; if it cannot attack (exhausted / left play) the attack
+        fizzles via DeclineGrantedAttack.
+    attacker_cost_max
+        Restricts the attacker to units whose PRINTED cost is ≤ this (Moff Gideon
+        SHD_7: "Attack with a unit that costs 3 or less").  Like ``attacker_trait``,
+        it merely filters the offered AttackWithUnit options; no eligible attacker
+        → the (mandatory) attack fizzles via DeclineGrantedAttack.
+    attacker_arena
+        Restricts the attacker to units in this arena ("ground"/"space") — Tandem
+        Assault JTL_124: "Attack with a space unit … attack with a ground unit".
+        Like the other attacker filters, no eligible attacker → the (mandatory)
+        attack fizzles via DeclineGrantedAttack.
+    attacker_pilot_related
+        Restricts the attacker to "a Pilot unit or a unit with a Pilot on it"
+        (Leia Organa JTL_97).
+    bonus_if_defender_unit
+        When True, the stat bonus applies ONLY when the chosen attack targets a
+        unit, not a base (Moff Gideon SHD_7: "If it's attacking a unit, it gets
+        +1/+0 for this attack").
+    bonus_if_odd_cost_diff_from
+        The revealed card's cost for Han Solo JTL_17 ("If the revealed card and
+        that unit have different odd costs, +1/+0"): the stat bonus applies only
+        when BOTH this value and the chosen attacker's printed cost are odd and
+        the two costs differ.  ``grant_keywords`` entries may also be
+        ``(name, value)`` pairs to grant a numeric keyword (Leia's Restore 1).
+    repeat
+        "Attack with any number of … units (one at a time)" (Mon Mothma SEC_103).
+        After each granted attack resolves, the decision is re-pushed so the
+        controller may attack with another (not-yet-attacked) unit, until they
+        decline or no eligible unit remains.  Combine with ``optional`` so a
+        decline is always available to stop the loop.  LIMITATION: the re-push
+        happens at the end of AttackWithUnit; if a single attack itself requires a
+        mid-attack decision (a ``pre_attack`` continuation from an OnAttack trigger
+        that needs a choice), control returns through ContinueAttack instead and
+        the loop ends early.  No shipped repeat-grant card has a choice-requiring
+        OnAttack trigger on its other units, so this edge is not exercised.
+    repeat_max
+        Caps ``repeat`` at N attacks — "Attack with up to N units (one at a time)"
+        (Headhunting SHD_145).  None (the default) is the unbounded "any number"
+        (Mon Mothma SEC_103).
+    allow_exhausted
+        Offer attacks by EXHAUSTED units too (Mon Mothma SEC_103: "even if those
+        units are exhausted").  The normal "attacker is exhausted" guard in
+        AttackWithUnit is bypassed for a granted attack carrying this flag.
+    no_base
+        Drop the attack-a-base option, restricting granted attacks to enemy units
+        (Mon Mothma SEC_103: "They can't attack bases for these attacks").
+    exclude_source
+        Drop the source unit from the eligible attackers ("any number of *other*
+        units").
+    then_defeat_attacker
+        After the granted attack's combat fully settles, defeat the attacker
+        (Heroic Sacrifice SOR_150: the attacker "gains: 'When this unit deals
+        combat damage: Defeat it.'").  A +2/+0 attacker always has power ≥ 2 so it
+        always deals combat damage to its target — the "when it deals combat
+        damage" clause is therefore treated as unconditional.  If combat already
+        defeated the attacker, this is a clean no-op.  LIMITATION: like ``repeat``,
+        this fires only on the no-continuation settle path; an attacker whose own
+        OnAttack trigger needs a mid-attack choice (a ``pre_attack`` continuation)
+        is not self-defeated — no shipped card grants this rider to such a unit.
+
+    cross_arena
+        For THIS granted attack, let the chosen attacker reach enemy units in the
+        OTHER arena too — a temporary, decision-scoped version of the printed
+        CrossArenaAttack marker (Swoop Down SHD_230: a space unit "can attack ground
+        units for this attack").  Threaded into ``_enumerate_attacks`` (defender
+        enumeration) and the AttackWithUnit cross-arena apply-guard via the decision
+        context, so no printed marker is needed.
+    bonus_if_defender_ground
+        The ``power_bonus``/``hp_bonus`` (attacker) AND ``defender_power_bonus``/
+        ``defender_hp_bonus`` (defender debuff) apply ONLY when the chosen defender
+        is a unit in the ground arena (Swoop Down SHD_230: "If it attacks a ground
+        unit, it gets +2/+0 and the defender gets −2/−0").
+    bonus_per_defender_damage
+        The attacker gets +N/+0 for EACH damage already on the chosen defender when
+        the attack starts (Corner the Prey TWI_139, N=1) — a bonus scaled by the
+        defender rather than the attacker, snapshotted before combat deals anything.
+        A base defender counts its own damage.
+    bonus_per_defending_arena_unit
+        The attacker gets +N/+0 for EACH unit the DEFENDING player controls in the
+        attacker's own arena ("It gets +1/+0 for this attack for each unit the
+        defending player controls in its arena" — Masterstroke ASH_234).  A
+        population count rather than the damage count above, likewise snapshotted
+        before combat, and it applies to a base attack too (the defender's arena
+        population is still what it counts).
+    draw_if_base_damaged
+        The attacker's controller draws a card if this attack put damage on a base
+        — "For this attack, it … gains: 'When this unit deals damage to a base:
+        Draw a card.'" (Stay on Target JTL_177).  Settled in ``AttackWithUnit`` at
+        the ``then_defeat_attacker`` rider point, by comparing every base's damage
+        against a snapshot taken before combat, so an Overwhelm spill onto the base
+        counts exactly like a direct base attack.
+    opponent_discard_if_base_damaged
+        Each opponent whose BASE this attack damaged discards a card — "gains: 'When
+        Attack Ends: If this unit dealt combat damage to an opponent's base, that
+        opponent discards a card.'" (Rash Action ASH_162).  Shares
+        ``draw_if_base_damaged``'s snapshot and settle point, but re-reads it per
+        player so only a damaged OPPONENT's base counts; the discard is the standing
+        first-card simplification.
+    defeat_attacker_if_base_damaged
+        Defeat the attacker after the attack settles, but ONLY if it put damage on a
+        base — "After completing this attack, if that unit damaged a base, defeat that
+        unit" (Flash the Vents LAW_205).  The conditional sibling of the unconditional
+        ``then_defeat_attacker``: it shares ``draw_if_base_damaged``'s before/after base
+        snapshot (so an Overwhelm spill counts exactly like a direct base attack) and
+        ``then_defeat_attacker``'s settle point, so a defender that killed the attacker
+        first makes it a clean no-op.
+    borrow_abilities
+        The chosen attacker gains the SOURCE's other abilities for this attack — the
+        Support keyword (ASH).  Landed as a single ``borrowed_abilities`` this-attack
+        modifier naming the source as lender; ``state.borrowed_ability_sources`` is
+        the read layer, consulted by the keyword layer (``has_keyword`` /
+        ``keyword_value``, the Ghost JTL_53 copy block) and by
+        ``resolver._collect_triggers`` (the lender's triggers, resolving FROM the
+        attacker).  DOCUMENTED NARROWING: constant and activated abilities are not
+        borrowed — they are read by scans keyed on the card in the arena, and only
+        the keyword and trigger layers have a per-instance seam a duration can ride.
+
+    The decision is presented to the controller as AttackWithUnit options;
+    resolving one applies the bonus (this-attack) and runs combat.  If the
+    controller has no unit able to attack (or declines an optional attack), a
+    DeclineGrantedAttack lets the effect fizzle cleanly.
+    """
+    owner_idx = s.player_index(source_ci.owner_id)
+    dec = PendingDecision(
+        deciding_player_id=source_ci.owner_id,
+        kind="granted_attack",
+        context={
+            "source_id": source_ci.instance_id,
+            "power_bonus": power_bonus,
+            "hp_bonus": hp_bonus,
+            "optional": optional,
+            "bonus_trait": bonus_trait,
+            "grant_keywords": list(grant_keywords or []),
+            "attacker_predicates": list(attacker_predicates or []),
+            "attacker_trait": attacker_trait,
+            "attacker_aspect": attacker_aspect,
+            "attacker_id": attacker_id,
+            "attacker_cost_max": attacker_cost_max,
+            "attacker_arena": attacker_arena,
+            "attacker_pilot_related": attacker_pilot_related,
+            "bonus_if_defender_unit": bonus_if_defender_unit,
+            "bonus_if_odd_cost_diff_from": bonus_if_odd_cost_diff_from,
+            "repeat": repeat,
+            # "Then, you may attack with another unit that costs less than it"
+            # (Colonel Yularen SEC_6) — a one-shot follow-up whose cost cap is read
+            # off the unit that just attacked, resolved at the AttackWithUnit site.
+            "then_attack_cheaper": then_attack_cheaper,
+            "allow_exhausted": allow_exhausted,
+            "no_base": no_base,
+            "exclude_source": exclude_source,
+            "then_defeat_attacker": then_defeat_attacker,
+            "defender_power_bonus": defender_power_bonus,
+            "defender_hp_bonus": defender_hp_bonus,
+            "repeat_max": repeat_max,
+            "cross_arena": cross_arena,
+            "bonus_if_defender_ground": bonus_if_defender_ground,
+            "bonus_per_defender_damage": int(bonus_per_defender_damage),
+            "bonus_per_defending_arena_unit": int(bonus_per_defending_arena_unit),
+            "bonus_per_defending_player_unit": int(bonus_per_defending_player_unit),
+            "draw_if_base_damaged": bool(draw_if_base_damaged),
+            "opponent_discard_if_base_damaged": bool(
+                opponent_discard_if_base_damaged),
+            "defeat_attacker_if_base_damaged": bool(defeat_attacker_if_base_damaged),
+            "attacker_damage_prevention": bool(attacker_damage_prevention),
+            # "Prevent all COMBAT damage that would be dealt to each of them for
+            # these attacks" (Brothers TS26_59) — the combat-only narrowing of the
+            # JTL_193 blanket prevention.
+            "attacker_prevention_combat_only": bool(attacker_prevention_combat_only),
+            "power_equals_remaining_hp": bool(power_equals_remaining_hp),
+            "return_defender_upgrades": bool(return_defender_upgrades),
+            # "For this attack, you may deal its excess damage to another unit in
+            # the same arena" (Wipe Them Out ASH_137) — landed as a this_attack
+            # marker on the chosen attacker and settled at the pipeline's tail.
+            "excess_damage_to_unit": bool(excess_damage_to_unit),
+            # "the defender loses all abilities for this attack" (One Way Out
+            # SEC_157) — applied to the chosen unit defender at the AttackWithUnit
+            # site, alongside the defender stat debuff.
+            "defender_suppress_abilities": bool(defender_suppress_abilities),
+            # Support (ASH): "It gains this unit's OTHER abilities for this attack"
+            # — the chosen attacker borrows the source's keywords and triggered
+            # abilities for the duration of the attack (see the modifier landed at
+            # the AttackWithUnit site).
+            "borrow_abilities": bool(borrow_abilities),
+            # The lender, when it is NOT the source — "this unit gains the
+            # DISCARDED unit's abilities for this attack" (Improvised Identity
+            # ASH_230), a lender sitting in the discard pile.  Default: the source
+            # itself (Support).
+            "borrow_lender_id": borrow_lender_id,
+            "already_attacked": [],
+        },
+        after_resolve_player_index=1 - owner_idx,
+    )
+    s.pending_decisions.append(dec)
+    s.active_player_index = owner_idx
+    s.event_log.append(DecisionPushed(
+        deciding_player_id=source_ci.owner_id,
+        kind="granted_attack",
+    ))
+
+
+# ── Credit-token economy (jabba-the-hutt:07) ───────────────────────────────────
+
+def _resolve_two_unit_combat(
+    s: GameState,
+    active_ps: PlayerState,
+    inactive_ps: PlayerState,
+    attacker: CardInstance,
+    def1: CardInstance,
+    def2: CardInstance,
+) -> bool:
+    """Declare a two-unit attack (Darth Maul C24_6) and fire its OnAttack triggers,
+    then run steps 2–6 via ``_resolve_two_unit_combat_step2``.
+
+    Returns True if a pre_attack continuation was pushed (an OnAttack trigger needed
+    a choice) — callers must not switch the active player in that case.
+    """
+    # Step 1: Declare + exhaust.
+    attacker.exhausted = True
+    forced_by_sentinel = (
+        (has_keyword(s, def1, Keyword.SENTINEL) or has_keyword(s, def2, Keyword.SENTINEL))
+        and not has_keyword(s, attacker, Keyword.SABOTEUR)
+    )
+    s.game_memory.units_attacked_this_round.add(attacker.instance_id)
+    note_token_unit_attacked(s, attacker)
+    # Log an AttackDeclared for each co-defender (both are attacked) so the event
+    # stream names both.  The bus fire is a no-op for WhenAttacked (an ability, not a
+    # bus listener) but keeps parity with the single-defender declare.
+    first_evt = None
+    for defn in (def1, def2):
+        evt = AttackDeclared(
+            attacker_player_id=active_ps.player_id,
+            attacker_instance_id=attacker.instance_id,
+            attacker_name=attacker.card_def.display_name,
+            defender_instance_id=defn.instance_id,
+            defender_name=defn.card_def.display_name,
+            forced_by_sentinel=forced_by_sentinel,
+        )
+        s.event_log.append(evt)
+        get_bus().fire(s, evt)
+        if first_evt is None:
+            first_evt = evt
+
+    # Phase 3: collect OnAttack / WhenAttacked ability triggers ONCE.  The attacker's
+    # own OnAttack fires exactly once (the rules: "any triggered abilities only occur
+    # once").  SIMPLIFICATION (documented; no shipped card exercises it): only the
+    # first co-defender's WhenAttacked is fired — no shipped card has a WhenAttacked
+    # defender under a two-unit attack.  Both defender ids ride in the event context.
+    decisions_before = len(s.pending_decisions)
+    from swu.abilities.resolver import fire_triggered_abilities
+    event_ctx = {
+        "attacker_id": attacker.instance_id,
+        "defender_id": def1.instance_id,
+        "defender_ids": [def1.instance_id, def2.instance_id],
+    }
+    s = fire_triggered_abilities(
+        s, first_evt, after_all_player_idx=s.active_player_index, event_ctx=event_ctx)
+    if len(s.pending_decisions) > decisions_before:
+        pre_attack = PendingDecision(
+            deciding_player_id=active_ps.player_id,
+            kind="pre_attack",
+            context={
+                "attacker_id": attacker.instance_id,
+                "defender_id": def1.instance_id,
+                "defender_ids": [def1.instance_id, def2.instance_id],
+                "active_player_id": active_ps.player_id,
+            },
+            after_resolve_player_index=1 - s.player_index(active_ps.player_id),
+        )
+        s.pending_decisions.insert(decisions_before, pre_attack)
+        return True
+
+    _resolve_two_unit_combat_step2(s, active_ps, inactive_ps, attacker, [def1, def2])
+    return False
+
+
+def _resolve_two_unit_combat_step2(
+    s: GameState,
+    active_ps: PlayerState,
+    inactive_ps: PlayerState,
+    attacker: CardInstance,
+    defenders: list[CardInstance],
+) -> None:
+    """Steps 2–6 of a two-unit attack (Darth Maul C24_6).  Both co-defenders are hit
+    simultaneously for the attacker's power; the attacker takes the SUM of both
+    defenders' power; Overwhelm spills the COMBINED excess to the defending base.
+
+    SIMPLIFICATIONS (documented; none exercised by a shipped card co-occurring with a
+    two-unit attacker): First Strike, defender-deals-first (The Stranger LAW_86) and
+    combat-damage redirect (Maul SHD_90) are not modelled here — a two-unit attack is
+    always simultaneous; the "while defending" attacker debuff (Lando LAW_108) is not
+    applied (``defender_id`` is left None for the attacker's power).
+    """
+    # Step 2: On-attack keyword triggers.
+    if has_keyword(s, attacker, Keyword.RESTORE):
+        n = keyword_value(s, attacker, Keyword.RESTORE)
+        if n > 0:
+            _apply_restore(s, active_ps, n, attacker.card_def.display_name)
+    if has_keyword(s, attacker, Keyword.SABOTEUR):
+        for defn in defenders:
+            while shields_on(defn) > 0:
+                defeat_shield(s, defn)
+
+    # Combat damage is exchanged only among units still in play (an OnAttack ability
+    # may have removed the attacker or a defender already — the same guard as the
+    # single-defender step2, extended to two co-defenders).
+    if _find_in_arenas(active_ps, attacker.instance_id) is None:
+        _clear_this_attack_combat_flags(attacker)
+        _expire_modifiers(s, "this_attack")
+        return
+    live_defs = [d for d in defenders
+                 if _find_in_arenas(inactive_ps, d.instance_id) is not None]
+    if not live_defs:
+        _clear_this_attack_combat_flags(attacker)
+        _expire_modifiers(s, "this_attack")
+        return
+
+    # Step 3: Effective powers (snapshot before any damage lands).
+    atk_power = compute_power(s, attacker, is_attacking=True, attacking_unit=True)
+    atk_power = _combat_power_after_block(s, attacker, atk_power)   # LAW_130
+    hp_before = {d.instance_id: compute_hp(s, d) - d.damage for d in live_defs}
+    def_powers = {d.instance_id: _combat_power_after_block(
+                      s, d, compute_power(s, d, is_attacking=False))
+                  for d in live_defs}
+
+    # Step 4: simultaneous damage — each defender takes the attacker's power (its own
+    # Shield may intercept); the attacker takes the SUM of the defenders' power.
+    dealt = {}
+    for d in live_defs:
+        dealt[d.instance_id] = _deal_damage_with_shield(s, inactive_ps, d, atk_power,
+                                                        is_combat=True,
+                                                        dealer_source_id=attacker.instance_id)
+    total_to_attacker = sum(def_powers[d.instance_id] for d in live_defs)
+    # The co-defenders deal one pooled instance, so no single dealing card can be
+    # named — the conservative reading (it keeps every prevention it would have).
+    dealt_to_attacker = _deal_damage_with_shield(
+        s, active_ps, attacker, total_to_attacker, is_combat=True)
+
+    # Step 5: Overwhelm — the COMBINED excess spills to the defending base.
+    spill_to_base = 0
+    if (has_keyword(s, attacker, Keyword.OVERWHELM)
+            and not _overwhelm_denied_by(s, live_defs)):
+        excess = sum(max(0, dealt[d.instance_id] - hp_before[d.instance_id])
+                     for d in live_defs)
+        if excess > 0:
+            def_base = inactive_ps.base_instance
+            if def_base is not None:
+                excess = base_damage_after_prevention(s, def_base, excess)
+            if def_base is not None and excess > 0:
+                def_base.damage += excess
+                spill_to_base = excess
+                record_base_damage(s, inactive_ps.player_id, excess)
+                s.event_log.append(OverwhelmDamage(
+                    defending_player_id=inactive_ps.player_id,
+                    amount=excess,
+                ))
+                s.event_log.append(DamageDealt(
+                    target_instance_id=def_base.instance_id,
+                    target_name=def_base.card_def.display_name,
+                    owner_id=inactive_ps.player_id,
+                    amount=excess,
+                    is_base=True,
+                ))
+                _check_game_over(s)
+
+    # Step 6: Defeat processing (attacker + both co-defenders).  Re-check each is
+    # still in its arena before defeating it (a WhenDefeated AoE from the first defeat
+    # can already remove another combatant — the single-defender double-defeat guard).
+    attacker_id = attacker.instance_id
+    attacker_dead = _hp_lethal(s, attacker)
+    if attacker_dead:
+        s.game_memory.attackers_defeated_this_round.add(active_ps.player_id)
+    defeated_def_ids: list[str] = []
+    for d in live_defs:
+        if (_hp_lethal(s, d)
+                and _find_in_arenas(inactive_ps, d.instance_id) is not None):
+            defeated_def_ids.append(d.instance_id)
+            _defeat_unit(s, inactive_ps, d, by_combat_damage=True)
+    if attacker_dead and _find_in_arenas(active_ps, attacker_id) is not None:
+        _defeat_unit(s, active_ps, attacker, while_attacking=True,
+                     by_combat_damage=True)
+
+    # The Advantage tokens this attack actually rode with — snapshotted before any
+    # attack-end trigger can hand out another one (ASH_180 / ASH_144).
+    adv_snapshot = _snapshot_advantage_tokens(attacker, *live_defs)
+
+    from swu.abilities.resolver import fire_triggered_abilities as _fire
+    # OnAttackDefeatsUnit fires (once per defeated co-defender) when the attacker
+    # survives and defeats a defender.
+    if defeated_def_ids and not attacker_dead:
+        for _did in defeated_def_ids:
+            if s.is_terminal():
+                break
+            s = _fire(
+                s, None,
+                after_all_player_idx=s.active_player_index,
+                event_ctx={"attack_defeated_unit": attacker_id,
+                           "attack_defeated_defender": _did},
+            )
+
+    # The WhenFriendlyUnitAttackEnds observer (Boba Fett LAW_7, Anakin LAW_88) — as in
+    # the single-defender pipeline, its own fire so a dead attacker still counts, and
+    # EXACTLY ONCE: the attack ends once however many co-defenders it killed, so the
+    # defeated key carries the first of them rather than the fire repeating.
+    if not s.is_terminal():
+        end_obs_ctx = {"attack_ended_attacker": attacker_id}
+        if defeated_def_ids:
+            end_obs_ctx["attack_ended_defender_defeated"] = defeated_def_ids[0]
+        if spill_to_base > 0:
+            end_obs_ctx["attack_ended_base_damage"] = attacker_id
+            end_obs_ctx["attack_ended_base_damage_amount"] = spill_to_base
+        s = _fire(
+            s, None,
+            after_all_player_idx=s.player_index(inactive_ps.player_id),
+            event_ctx=end_obs_ctx,
+        )
+
+    # "When combat damage is dealt to this unit" (Phase-III Dark Trooper SHD_84) for
+    # each combatant that took >0 combat damage and survived.
+    hit_list = [(d, inactive_ps, dealt[d.instance_id]) for d in live_defs]
+    hit_list.append((attacker, active_ps, dealt_to_attacker))
+    for hit_ci, hit_ps, d_amt in hit_list:
+        if (d_amt > 0 and not s.is_terminal()
+                and _find_in_arenas(hit_ps, hit_ci.instance_id) is not None):
+            s = _fire(
+                s, None,
+                after_all_player_idx=s.active_player_index,
+                event_ctx={"dealt_combat_damage_to": hit_ci.instance_id,
+                           "combat_damage_amount": d_amt},
+            )
+
+    # "When Attack Ends: If this unit survived" (Vermillion LAW_215) for the attacker.
+    # Same two extra keys as the single-defender pipeline (ASH_33/223, ASH_101).
+    if not s.is_terminal() and _find_in_arenas(active_ps, attacker_id) is not None:
+        end_ctx = {"attack_ended_survivor": attacker_id}
+        if defeated_def_ids:
+            end_ctx["attack_ended_defender_defeated"] = defeated_def_ids[0]
+        damaged_ids = [d.instance_id for d in live_defs if dealt[d.instance_id] > 0]
+        if damaged_ids:
+            end_ctx["attack_ended_combat_damaged"] = damaged_ids
+        if spill_to_base > 0:
+            end_ctx["attack_ended_base_damage"] = attacker_id
+            end_ctx["attack_ended_base_damage_amount"] = spill_to_base
+        s = _fire(
+            s, None,
+            after_all_player_idx=s.player_index(inactive_ps.player_id),
+            event_ctx=end_ctx,
+        )
+
+    _settle_defeat_after_attack(s, attacker)   # "… defeat this unit" (LAW_62)
+    _defeat_advantage_tokens_after_combat(s, attacker, *live_defs,
+                                          only_ids=adv_snapshot)   # ASH_2
+    _clear_this_attack_combat_flags(attacker)
+    _expire_modifiers(s, "this_attack")
