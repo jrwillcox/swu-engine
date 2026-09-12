@@ -84,7 +84,8 @@ def _assign_targets(node: ast.Assign | ast.AnnAssign) -> list[str]:
     return names
 
 
-def collect(source: str, origin: str) -> dict[str, tuple[str, str]]:
+def collect(source: str, origin: str,
+            repeats: list[str] | None = None) -> dict[str, tuple[str, str]]:
     """Map qualname -> (dumped AST, origin file) for one parsed source file.
 
     Recurses into classes (so methods are compared individually, which matters:
@@ -95,10 +96,18 @@ def collect(source: str, origin: str) -> dict[str, tuple[str, str]]:
     tree = ast.parse(source)
     out: dict[str, tuple[str, str]] = {}
 
+    def record(qual: str, node: ast.AST) -> None:
+        # A qualname defined twice in ONE file is what a buggy extraction produces:
+        # Python just re-binds, so it is invisible at runtime until the two copies
+        # diverge, and a dict-based comparison would silently collapse them.
+        if qual in out and repeats is not None:
+            repeats.append(qual)
+        out[qual] = (_dump(node), origin)
+
     def visit(body: list[ast.stmt], prefix: str) -> None:
         for node in body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                out[f"{prefix}{node.name}"] = (_dump(node), origin)
+                record(f"{prefix}{node.name}", node)
             elif isinstance(node, ast.ClassDef):
                 qual = f"{prefix}{node.name}"
                 # The class node minus its body: decorators and bases are part of
@@ -112,17 +121,17 @@ def collect(source: str, origin: str) -> dict[str, tuple[str, str]]:
                     decorator_list=node.decorator_list,
                     type_params=getattr(node, "type_params", []),
                 )
-                out[f"{qual}#shell"] = (_dump(shell), origin)
+                record(f"{qual}#shell", shell)
                 visit(node.body, f"{qual}.")
             elif isinstance(node, (ast.Assign, ast.AnnAssign)):
                 for name in _assign_targets(node):
-                    out[f"{prefix}{name}"] = (_dump(node), origin)
+                    record(f"{prefix}{name}", node)
 
     visit(tree.body, "")
     return out
 
 
-def baseline_map(ref: str) -> dict[str, tuple[str, str]]:
+def baseline_map(ref: str, repeats: list[str] | None = None) -> dict[str, tuple[str, str]]:
     spec = f"{ref}:{BASELINE_PATH}"
     try:
         # Bytes, not text=True: the file's section banners are UTF-8 box-drawing
@@ -137,11 +146,15 @@ def baseline_map(ref: str) -> dict[str, tuple[str, str]]:
             f"cannot read baseline {spec!r}: {exc.stderr.decode('utf-8', 'replace').strip()}\n"
             f"Create the baseline first:  git tag {BASELINE_TAG} <commit before the split>"
         )
-    return collect(raw.decode("utf-8"), BASELINE_PATH)
+    return collect(raw.decode("utf-8"), BASELINE_PATH, repeats=repeats)
 
 
-def current_map() -> tuple[dict[str, tuple[str, str]], list[str]]:
-    """The working tree's map, plus any qualname defined in two places."""
+def current_map(baseline_repeats: set[str]) -> tuple[dict[str, tuple[str, str]], list[str]]:
+    """The working tree's map, plus any qualname defined in two places.
+
+    ``baseline_repeats`` are the names the pre-split module already rebound at top
+    level; those are pre-existing, not introduced by the refactor.
+    """
     files: list[Path] = []
     if TARGET_PACKAGE.is_dir():
         files.extend(sorted(TARGET_PACKAGE.rglob("*.py")))
@@ -154,7 +167,13 @@ def current_map() -> tuple[dict[str, tuple[str, str]], list[str]]:
     duplicates: list[str] = []
     for path in files:
         rel = path.relative_to(REPO_ROOT).as_posix()
-        for qual, (dumped, _) in collect(path.read_text(encoding="utf-8"), rel).items():
+        within: list[str] = []
+        one = collect(path.read_text(encoding="utf-8"), rel, repeats=within)
+        # Repeats WITHIN one file, which a per-file dict would otherwise hide.
+        # Only new ones matter: the pre-split module may itself rebind a name.
+        duplicates.extend(f"{q}: defined twice in {rel}"
+                          for q in within if q not in baseline_repeats)
+        for qual, (dumped, _) in one.items():
             if qual in merged:
                 # Two modules defining the same qualname is the copy-paste
                 # accident this refactor is most likely to produce, and the
@@ -198,6 +217,18 @@ def self_test() -> int:
             ok = False
         sense = "invisible to" if should_match else "caught by"
         print(f"  [{verdict}] {label} — {sense} the gate")
+
+    # A duplicate WITHIN one file: Python silently rebinds, so this is the one
+    # corruption a buggy extraction produces that runs fine and compares equal.
+    # It went undetected in the first version of this script, which is why it is
+    # pinned here.
+    repeats: list[str] = []
+    collect(base + "\n" + base, "variant", repeats=repeats)
+    dup_caught = repeats == ["f"]
+    ok = ok and dup_caught
+    print(f"  [{'PASS' if dup_caught else 'FAIL'}] a definition duplicated within one "
+          f"file — caught by the gate")
+
     print("\nself-test:", "the gate behaves as documented" if ok else "THE GATE IS BROKEN")
     return 0 if ok else 1
 
@@ -223,8 +254,9 @@ def main() -> int:
     if args.self_test:
         return self_test()
 
-    before = baseline_map(args.baseline)
-    after, duplicates = current_map()
+    baseline_repeats: list[str] = []
+    before = baseline_map(args.baseline, repeats=baseline_repeats)
+    after, duplicates = current_map(set(baseline_repeats))
     waivers = load_waivers()
 
     missing = sorted(set(before) - set(after))
