@@ -546,6 +546,15 @@ def main() -> int:
         q for q in set(before) & set(after) if before[q][0] != after[q][0]
     )
 
+    # Only this mode's waivers. The two modes share one file so the budget stays
+    # countable, but a `dispatch-arm:` key is a decision KIND, never a qualname, so
+    # it can never appear in `waived` here — treating it as one reported every arm
+    # waiver as permanently stale and failed the gate with no way to pass it. Same
+    # shape of bug as the `_`-prefix filter in load_waivers: a waiver namespace read
+    # by the wrong mode is worse than no waiver.
+    total_waivers = len(waivers)
+    waivers = {k: v for k, v in waivers.items()
+               if not k.startswith(ARM_WAIVER_PREFIX)}
     waived = [q for q in changed if q in waivers]
     changed = [q for q in changed if q not in waivers]
     stale = sorted(set(waivers) - set(waived))
@@ -587,14 +596,17 @@ def main() -> int:
             print(f"  … and {len(added) - 20} more")
 
     if waived and not args.quiet:
-        print(f"\nWAIVED ({len(waived)}/{MAX_WAIVERS}):")
+        print(f"\nWAIVED ({len(waived)} here, {total_waivers}/{MAX_WAIVERS} in the "
+              f"file):")
         for item in waived:
             print(f"  {item} — {waivers[item]}")
 
-    if len(waived) > MAX_WAIVERS:
+    # The budget is on the FILE, not on this mode, so splitting the waivers into two
+    # namespaces cannot quietly double the allowance.
+    if total_waivers > MAX_WAIVERS:
         problems += 1
-        print(f"\nTOO MANY WAIVERS: {len(waived)} > {MAX_WAIVERS}. The layering is wrong; "
-              "move a module boundary instead of waiving another function.")
+        print(f"\nTOO MANY WAIVERS: {total_waivers} > {MAX_WAIVERS}. The layering is "
+              "wrong; move a module boundary instead of waiving another function.")
 
     print()
     if problems:
