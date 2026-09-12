@@ -87,6 +87,7 @@ LAYERS = [
     "hand",
     "capture",
     "deck",
+    "tokens",
     "_legacy",
     "api",
 ]
