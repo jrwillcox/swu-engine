@@ -1,0 +1,4 @@
+{
+ "_comment": "Functions whose body legitimately changed during the engine/actions.py split, with the reason. This file IS the review surface for the refactor: every entry is a place where 'pure motion' was not achievable, usually because a lower kernel module had to reach a higher layer and an import became function-local. Keep it short. scripts/refactor_parity.py fails if it exceeds 15 entries, because at that point the module boundaries are wrong and should be moved instead.",
+ "_format": "qualname: one-line reason"
+}

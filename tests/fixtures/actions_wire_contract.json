@@ -1,0 +1,396 @@
+{
+ "_comment": "web/serializers.py sends type(action).__name__ as the action 'kind' and asdict(action) as 'params', so every name below is part of the HTTP API the React frontend is written against. Moving a class between modules is safe; RENAMING a class or a field breaks the frontend.",
+ "count": 167,
+ "actions": {
+  "AcceptExhaust": [
+   "unit_id"
+  ],
+  "AcceptTrigger": [
+   "source_id",
+   "card_name"
+  ],
+  "AckLookHand": [],
+  "AllowEffect": [],
+  "AnswerTestDecision": [
+   "choice"
+  ],
+  "AssignDamage": [
+   "target_id"
+  ],
+  "AssignIndirectDamage": [
+   "target_id"
+  ],
+  "AttachSelfAsPilot": [
+   "vehicle_id"
+  ],
+  "AttackTwoUnits": [
+   "attacker_id",
+   "defender1_id",
+   "defender2_id"
+  ],
+  "AttackWithLeader": [],
+  "AttackWithUnit": [
+   "attacker_id",
+   "defender_id"
+  ],
+  "AutoResolveEffects": [],
+  "BottomTopCard": [],
+  "CaptureWithUnit": [
+   "captor_id",
+   "prey_id"
+  ],
+  "ChooseCaptureVictim": [
+   "target_id"
+  ],
+  "ChooseCullDamageTarget": [
+   "target_id"
+  ],
+  "ChooseDamageSource": [
+   "unit_id"
+  ],
+  "ChooseDamageTarget": [
+   "target_id"
+  ],
+  "ChooseDiscardDamageTarget": [
+   "target_id"
+  ],
+  "ChooseModalOption": [
+   "mode"
+  ],
+  "ChooseModalTarget": [
+   "target_id"
+  ],
+  "ChooseNumber": [
+   "number"
+  ],
+  "ChooseOwnTarget": [
+   "target_id"
+  ],
+  "ChoosePreventionSacrifice": [
+   "target_id"
+  ],
+  "ChooseRepeatedMode": [
+   "mode"
+  ],
+  "ChooseRepeatedTarget": [
+   "target_id"
+  ],
+  "ChooseRevealDeck": [
+   "deck_owner_id"
+  ],
+  "ChooseRevealHost": [
+   "host_id"
+  ],
+  "ChooseRevealPlayer": [
+   "player_id"
+  ],
+  "ChooseSacrificeTarget": [
+   "target_id"
+  ],
+  "ChooseSplitReturn": [
+   "instance_id"
+  ],
+  "ChooseTarget": [
+   "target_id"
+  ],
+  "ChooseUnitToDefeat": [
+   "target_id"
+  ],
+  "ChooseUnitToSpare": [
+   "target_id"
+  ],
+  "ChooseUseForcePayoffTarget": [
+   "target_id"
+  ],
+  "ChooseWookieeMode": [
+   "mode"
+  ],
+  "ChooseWookieeReadyUnit": [
+   "unit_id"
+  ],
+  "ClaimInitiative": [],
+  "ConfirmOpponentDamage": [],
+  "ContinueAttack": [
+   "attacker_id",
+   "defender_id"
+  ],
+  "CullRevealedCard": [
+   "instance_id"
+  ],
+  "DealExploitDamage": [
+   "target_id"
+  ],
+  "DeclineAmbush": [
+   "unit_id"
+  ],
+  "DeclineAttachSelfAsPilot": [],
+  "DeclineCaptureVictim": [],
+  "DeclineCapturedPlay": [],
+  "DeclineCombatPrevention": [],
+  "DeclineDiscard": [],
+  "DeclineDiscardForExperience": [],
+  "DeclineDisclose": [],
+  "DeclineExploitDamage": [],
+  "DeclineGrantedAttack": [],
+  "DeclineMoveUpgrade": [],
+  "DeclineNameAndDiscard": [],
+  "DeclineOpponentDamage": [],
+  "DeclinePlayFromHand": [],
+  "DeclinePlayUpgradeFromHand": [],
+  "DeclineReadyUnit": [],
+  "DeclineReplay": [],
+  "DeclineRescue": [],
+  "DeclineResourceFromDiscard": [],
+  "DeclineResourceUnitPlay": [],
+  "DeclineRevealResource": [],
+  "DeclineRevealedCard": [],
+  "DeclineSacrifice": [],
+  "DeclineStealUpgrade": [],
+  "DeclineTarget": [],
+  "DeclineTrigger": [
+   "source_id",
+   "card_name"
+  ],
+  "DeclineUseForce": [
+   "decline_penalty"
+  ],
+  "DeployLeader": [],
+  "DeployLeaderAsUpgrade": [
+   "vehicle_target_id"
+  ],
+  "DiscardForModal": [
+   "card_id"
+  ],
+  "DiscardForSearch": [
+   "instance_id"
+  ],
+  "DiscardRandomCard": [],
+  "DiscardRevealed": [
+   "card_id"
+  ],
+  "DiscardTopCard": [],
+  "DiscloseSelectCard": [
+   "instance_id"
+  ],
+  "DrawRevealedCard": [
+   "instance_id"
+  ],
+  "DrawTopCard": [],
+  "ExploitCommit": [],
+  "ExploitSacrifice": [
+   "unit_id"
+  ],
+  "FinishBottomFromDiscard": [],
+  "FinishCaptureCombined": [],
+  "FinishCombinedPowerPlay": [],
+  "FinishCull": [],
+  "FinishDamageDistribution": [],
+  "FinishDiscardForSearch": [],
+  "FinishExhaustCombined": [],
+  "FinishExhaustForBaseDamage": [],
+  "FinishModalDiscard": [],
+  "FinishMultiCapture": [],
+  "FinishPayResources": [],
+  "FinishPlot": [],
+  "FinishRecur": [],
+  "FinishRecurBuff": [],
+  "FinishResourceFromHand": [],
+  "FinishReturnFromDiscard": [],
+  "FinishSearch": [],
+  "FinishSelectDamage": [],
+  "FinishSelectToken": [],
+  "FinishSplitBounce": [],
+  "KeepHand": [],
+  "KeepRevealed": [
+   "card_id"
+  ],
+  "KeepTopCard": [],
+  "KeepUniqueCopy": [
+   "instance_id"
+  ],
+  "MoveUpgradeSelect": [
+   "upgrade_id"
+  ],
+  "MoveUpgradeTo": [
+   "dest_id"
+  ],
+  "NameAndDiscard": [
+   "card_name"
+  ],
+  "NameCard": [
+   "name"
+  ],
+  "Pass": [],
+  "PayRegroupUpkeep": [
+   "source_id"
+  ],
+  "PayResourceForToken": [],
+  "PayToAvoidExhaust": [
+   "unit_id"
+  ],
+  "PilotPlay": [
+   "instance_id",
+   "vehicle_target_id"
+  ],
+  "PlayCard": [
+   "instance_id",
+   "upgrade_target_id"
+  ],
+  "PlayEventFromHand": [
+   "instance_id"
+  ],
+  "PlayFromDiscard": [
+   "instance_id",
+   "upgrade_target_id",
+   "free",
+   "discount"
+  ],
+  "PlayFromHand": [
+   "instance_id"
+  ],
+  "PlayRevealedCard": [],
+  "PlayTopCard": [
+   "upgrade_target_id"
+  ],
+  "PlayUpgradeFromHand": [
+   "host_id",
+   "upgrade_id"
+  ],
+  "PlayViaPiloting": [
+   "instance_id",
+   "vehicle_target_id"
+  ],
+  "PlayViaSmuggle": [
+   "instance_id",
+   "upgrade_target_id"
+  ],
+  "PlotPlay": [
+   "instance_id",
+   "upgrade_target_id"
+  ],
+  "PutOnDeckBottom": [
+   "instance_id"
+  ],
+  "PutOnDeckTop": [
+   "instance_id"
+  ],
+  "ReadyUnit": [
+   "instance_id"
+  ],
+  "ReplayReturnedUnit": [
+   "instance_id"
+  ],
+  "RescueGuardedCard": [
+   "instance_id"
+  ],
+  "ResourceCard": [
+   "instance_id"
+  ],
+  "ReturnRegroupUpkeepUnit": [
+   "source_id"
+  ],
+  "RevealNextCard": [],
+  "RevealResourceForRamp": [
+   "resource_id"
+  ],
+  "SacrificeResource": [
+   "resource_id"
+  ],
+  "SayNo": [],
+  "SelectBottomDiscardCard": [
+   "instance_id"
+  ],
+  "SelectBuffTarget": [
+   "instance_id"
+  ],
+  "SelectCapturedToPlay": [
+   "instance_id"
+  ],
+  "SelectCombinedPowerUnit": [
+   "unit_id"
+  ],
+  "SelectCullCard": [
+   "instance_id"
+  ],
+  "SelectDamageTarget": [
+   "target_id"
+  ],
+  "SelectDiscardCard": [
+   "instance_id"
+  ],
+  "SelectDiscardForExperience": [
+   "instance_id"
+  ],
+  "SelectDiscardUnitForDamage": [
+   "instance_id"
+  ],
+  "SelectDistinctDiscardCard": [
+   "instance_id"
+  ],
+  "SelectExcessHandCardToDiscard": [
+   "instance_id"
+  ],
+  "SelectHandCardToBottom": [
+   "instance_id"
+  ],
+  "SelectHandCardToResource": [
+   "instance_id"
+  ],
+  "SelectHandCardToTop": [
+   "instance_id"
+  ],
+  "SelectModalOption": [
+   "option_idx"
+  ],
+  "SelectRecurUnit": [
+   "instance_id"
+  ],
+  "SelectResourceFromDiscard": [
+   "instance_id"
+  ],
+  "SelectResourceUnitToPlay": [
+   "instance_id"
+  ],
+  "SelectSearchCard": [
+   "instance_id"
+  ],
+  "SelectSplitBounceUnit": [
+   "instance_id"
+  ],
+  "SelectTokenTarget": [
+   "target_id"
+  ],
+  "SelectUnitToCaptureCombined": [
+   "target_id"
+  ],
+  "SelectUnitToExhaust": [
+   "target_id"
+  ],
+  "SelectUnitToExhaustCombined": [
+   "target_id"
+  ],
+  "SkipResource": [],
+  "SmugglePlay": [
+   "instance_id",
+   "upgrade_target_id"
+  ],
+  "StealUpgrade": [
+   "upgrade_id"
+  ],
+  "StopRevealing": [],
+  "TakeMultiligan": [],
+  "UseAbility": [
+   "source_id",
+   "ability_idx",
+   "actor_id"
+  ],
+  "UseAmbush": [
+   "attacker_id",
+   "target_id"
+  ],
+  "UseForceOption": [
+   "option",
+   "target_id"
+  ]
+ }
+}

@@ -1,0 +1,150 @@
+{
+ "_comment": "Seeded-game trace fingerprints, recorded before engine/actions.py was split into a package. A behaviour-preserving refactor reproduces these exactly. Regenerate only for an intended, reviewed behaviour change.",
+ "action_cap": 2000,
+ "decks": [
+  "starter_vader.json",
+  "starter_luke.json"
+ ],
+ "games": {
+  "1200": {
+   "winner": "P0",
+   "actions": 124,
+   "state": "df5e7c4c218b1f73",
+   "events": "b2d4d35926faa6f4",
+   "event_count": 272
+  },
+  "1350": {
+   "winner": "P0",
+   "actions": 117,
+   "state": "beaca3d2fad90c36",
+   "events": "d8a6038fba1d599a",
+   "event_count": 258
+  },
+  "5400": {
+   "winner": "P1",
+   "actions": 244,
+   "state": "f3be8ffaa4ae5869",
+   "events": "5ff45c1fa2ce02b5",
+   "event_count": 551
+  },
+  "1": {
+   "winner": "P1",
+   "actions": 239,
+   "state": "f7078cdcf97c3b9a",
+   "events": "b5f38468a95c6228",
+   "event_count": 542
+  },
+  "2": {
+   "winner": "P0",
+   "actions": 249,
+   "state": "8de4531325ca7703",
+   "events": "d8314e824eeb99fb",
+   "event_count": 523
+  },
+  "3": {
+   "winner": "P1",
+   "actions": 115,
+   "state": "4f14bb758cbd8c92",
+   "events": "1373e274543643e1",
+   "event_count": 252
+  },
+  "7": {
+   "winner": "P0",
+   "actions": 101,
+   "state": "3d25b98d1ea87169",
+   "events": "a15495cb798b879f",
+   "event_count": 219
+  },
+  "11": {
+   "winner": "P0",
+   "actions": 126,
+   "state": "c96f02a6e454d637",
+   "events": "73c57f09491dc816",
+   "event_count": 259
+  },
+  "42": {
+   "winner": "P1",
+   "actions": 125,
+   "state": "c3d23002c9d68585",
+   "events": "4aa4b10590f88494",
+   "event_count": 270
+  },
+  "99": {
+   "winner": "P0",
+   "actions": 132,
+   "state": "bef4dec78c2d9574",
+   "events": "d2b0f7cc985bbe39",
+   "event_count": 265
+  },
+  "101": {
+   "winner": "P1",
+   "actions": 220,
+   "state": "acc275a4dcfbdf7b",
+   "events": "35a802a7d5996b8d",
+   "event_count": 471
+  },
+  "256": {
+   "winner": "P0",
+   "actions": 144,
+   "state": "9dbe1bf95c032fb5",
+   "events": "4c37e4c7a00f199c",
+   "event_count": 311
+  },
+  "512": {
+   "winner": "P0",
+   "actions": 130,
+   "state": "a7395be2fed6d631",
+   "events": "27acf37ef69cf706",
+   "event_count": 267
+  },
+  "777": {
+   "winner": "P1",
+   "actions": 268,
+   "state": "f40fa5f00b314b21",
+   "events": "cea93d298fb82350",
+   "event_count": 569
+  },
+  "900": {
+   "winner": "P1",
+   "actions": 248,
+   "state": "088c219d3cef80c7",
+   "events": "0627469ee86dda7d",
+   "event_count": 527
+  },
+  "1024": {
+   "winner": "P1",
+   "actions": 246,
+   "state": "e99bc2e28187cf87",
+   "events": "abafa80b34eece47",
+   "event_count": 517
+  },
+  "2048": {
+   "winner": "P0",
+   "actions": 201,
+   "state": "0a7cf655fc232c02",
+   "events": "6bbf50f478af291e",
+   "event_count": 456
+  },
+  "3141": {
+   "winner": "P0",
+   "actions": 223,
+   "state": "c857304310f6cc26",
+   "events": "b82b33cb453cee68",
+   "event_count": 466
+  },
+  "4096": {
+   "winner": "P0",
+   "actions": 227,
+   "state": "110bb177a0457b9d",
+   "events": "c1326aa890a0a44f",
+   "event_count": 462
+  },
+  "9001": {
+   "winner": "P1",
+   "actions": 148,
+   "state": "de04f2d233837c97",
+   "events": "8e54e0708ae38df6",
+   "event_count": 319
+  }
+ }
+}
