@@ -85,6 +85,7 @@ LAYERS = [
     # from hand while PlayFromHand pushes an opponent-ready decision. Its docstring
     # records the measurement, so the seam does not get re-litigated.
     "hand",
+    "capture",
     "_legacy",
     "api",
 ]
