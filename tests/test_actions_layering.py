@@ -74,6 +74,10 @@ LAYERS = [
     "targeting",
     "upgrades",
     "modal",
+    # `distribute` is the damage DECISIONS -- where player-directed damage lands. The
+    # kernel's `damage` module, far below, is what actually happens when it lands. Two
+    # modules, one word, and the distinction is the point: this one never deals damage.
+    "distribute",
     "_legacy",
     "api",
 ]
