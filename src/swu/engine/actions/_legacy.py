@@ -36,6 +36,9 @@ from swu.engine.tokens import attach_token, defeat_shield
 from swu.engine.triggers import get_bus
 
 from swu.engine.actions.base import Action, IllegalActionError
+from swu.engine.actions.dispatch import (
+    decision_handler, register_decisions,
+)
 from swu.engine.actions.turn import (
     _starting_hand_modifier, _starting_hand_size,
 )
@@ -8092,606 +8095,515 @@ def _push_resolve_unique(
 # ── Internal: decision helpers ────────────────────────────────────────────────
 
 def _decision_legal_actions(state: GameState) -> list[Action]:
-    """Return legal actions when a pending decision is on the stack."""
+    """Return legal actions when a pending decision is on the stack.
+
+    A lookup in ``dispatch``, whose docstring records why a table is exactly
+    equivalent to the ``if top.kind == "..."`` chain this replaces: no arm fell
+    through and no kind was handled twice, so ordering was never load-bearing.
+    """
     top = state.pending_decisions[-1]
+    # Validates the decision's player the way the old chain did, by computing the
+    # deciding player up front for every kind. Only 10 of the 74 handlers actually
+    # want it, but `player_by_id` raises KeyError on an unknown id, so dropping the
+    # call for the other 64 would quietly stop a malformed decision from failing
+    # here. Kept as a check rather than passed along.
+    state.player_by_id(top.deciding_player_id)
+    handler = decision_handler(top.kind)
+    if handler is None:
+        return [AnswerTestDecision("unknown")]  # fallback; shouldn't be reached
+    return handler(state, top)
+
+
+# ── Ambush ────────────────────────────────────────────────────────────
+def _ambush_actions(state: GameState, top: PendingDecision) -> list[Action]:
     deciding_ps = state.player_by_id(top.deciding_player_id)
-
-    # ── Ambush ────────────────────────────────────────────────────────────
-    if top.kind == "ambush":
-        unit_id = top.context["unit_id"]
-        unit_ci = _find_in_arenas(deciding_ps, unit_id)
-        acts: list[Action] = []
-        if unit_ci is not None:
-            owner_idx = state.player_index(top.deciding_player_id)
-            enemy_ps = state.players[1 - owner_idx]
-            enemy_arena = (
-                enemy_ps.ground_arena
-                if unit_ci.zone.name == "GROUND_ARENA"
-                else enemy_ps.space_arena
-            )
-            saboteur = has_keyword(state, unit_ci, Keyword.SABOTEUR)
-            # Hidden units can't be attacked the phase they were played (Ambush is
-            # an attack), so drop them from the eligible defenders before Sentinel.
-            attackable = [u for u in enemy_arena
-                          if not _is_hidden_from_attack(state, u)
-                          and not _cannot_be_attacked(state, u)]
-            sentinels = [u for u in attackable if has_keyword(state, u, Keyword.SENTINEL)]
-            if saboteur or not sentinels:
-                targets = attackable
-            else:
-                targets = sentinels
-            for tgt in targets:
-                acts.append(UseAmbush(unit_id, tgt.instance_id))
-        acts.append(DeclineAmbush(top.context["unit_id"]))
-        return acts
-
-    # ── Exploit ───────────────────────────────────────────────────────────
-    if top.kind == "exploit":
-        acts = []
-        sacrificed = top.context["sacrificed_ids"]
-        if top.context["max_remaining"] > 0:
-            already_sacrificed = set(sacrificed)
-            for unit in deciding_ps.ground_arena + deciding_ps.space_arena:
-                if unit.instance_id not in already_sacrificed:
-                    acts.append(ExploitSacrifice(unit.instance_id))
-        # Only offer ExploitCommit when committing now is actually affordable.
-        # If it is not, the player MUST sacrifice more first (committing would
-        # raise IllegalActionError in _resolve_exploit_commit).  Auto-commit at
-        # max sacrifices is always affordable by the PlayCard affordability gate,
-        # and when there are no units to sacrifice the base cost was likewise
-        # gated affordable — so this never leaves the action list empty.
-        if deciding_ps.play_buffer:
-            buffered = deciding_ps.play_buffer[0]
-            cost_now = max(0, _play_cost(state, buffered, deciding_ps)
-                           - 2 * len(sacrificed))
-            if deciding_ps.available_resources >= cost_now:
-                acts.append(ExploitCommit())
-        else:
-            acts.append(ExploitCommit())
-        return acts
-
-    # ── Test (for unit-test infrastructure only) ──────────────────────────
-    if top.kind == "test":
-        options = top.context.get("options", ["yes", "no"])
-        return [AnswerTestDecision(opt) for opt in options]
-
-    # ── Phase 3: trigger_option ───────────────────────────────────────────
-    if top.kind == "trigger_option":
-        source_id = top.context.get("source_id", "")
-        found = state.find_instance(source_id)
-        card_name = found[1].card_def.display_name if found else ""
-        return [
-            AcceptTrigger(source_id, card_name),
-            DeclineTrigger(source_id, card_name),
-        ]
-
-    # ── Phase 3: resolve_effects ──────────────────────────────────────────
-    if top.kind == "resolve_effects":
-        from swu.abilities.resolver import resolve_effects_actions
-        return resolve_effects_actions(state, top)
-
-    # ── Effect-granted attack (e.g. Surprise Strike) ──────────────────────
-    if top.kind == "granted_attack":
+    unit_id = top.context["unit_id"]
+    unit_ci = _find_in_arenas(deciding_ps, unit_id)
+    acts: list[Action] = []
+    if unit_ci is not None:
         owner_idx = state.player_index(top.deciding_player_id)
         enemy_ps = state.players[1 - owner_idx]
-        attacks: list[Action] = list(
-            _filter_granted_attacks(state, top.context, deciding_ps, enemy_ps))
-        # "You may attack" (optional) always allows declining; a mandatory grant
-        # only offers a decline when no unit can attack (fizzle).
-        if top.context.get("optional") or not attacks:
-            attacks.append(DeclineGrantedAttack())
-        return attacks
+        enemy_arena = (
+            enemy_ps.ground_arena
+            if unit_ci.zone.name == "GROUND_ARENA"
+            else enemy_ps.space_arena
+        )
+        saboteur = has_keyword(state, unit_ci, Keyword.SABOTEUR)
+        # Hidden units can't be attacked the phase they were played (Ambush is
+        # an attack), so drop them from the eligible defenders before Sentinel.
+        attackable = [u for u in enemy_arena
+                      if not _is_hidden_from_attack(state, u)
+                      and not _cannot_be_attacked(state, u)]
+        sentinels = [u for u in attackable if has_keyword(state, u, Keyword.SENTINEL)]
+        if saboteur or not sentinels:
+            targets = attackable
+        else:
+            targets = sentinels
+        for tgt in targets:
+            acts.append(UseAmbush(unit_id, tgt.instance_id))
+    acts.append(DeclineAmbush(top.context["unit_id"]))
+    return acts
 
-    # ── Phase 3: pre_attack continuation ──────────────────────────────────
-    if top.kind == "pre_attack":
-        ctx = top.context
-        return [ContinueAttack(
-            attacker_id=ctx["attacker_id"],
-            defender_id=ctx.get("defender_id"),
-        )]
+# ── Exploit ───────────────────────────────────────────────────────────
+def _exploit_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    deciding_ps = state.player_by_id(top.deciding_player_id)
+    acts = []
+    sacrificed = top.context["sacrificed_ids"]
+    if top.context["max_remaining"] > 0:
+        already_sacrificed = set(sacrificed)
+        for unit in deciding_ps.ground_arena + deciding_ps.space_arena:
+            if unit.instance_id not in already_sacrificed:
+                acts.append(ExploitSacrifice(unit.instance_id))
+    # Only offer ExploitCommit when committing now is actually affordable.
+    # If it is not, the player MUST sacrifice more first (committing would
+    # raise IllegalActionError in _resolve_exploit_commit).  Auto-commit at
+    # max sacrifices is always affordable by the PlayCard affordability gate,
+    # and when there are no units to sacrifice the base cost was likewise
+    # gated affordable — so this never leaves the action list empty.
+    if deciding_ps.play_buffer:
+        buffered = deciding_ps.play_buffer[0]
+        cost_now = max(0, _play_cost(state, buffered, deciding_ps)
+                       - 2 * len(sacrificed))
+        if deciding_ps.available_resources >= cost_now:
+            acts.append(ExploitCommit())
+    else:
+        acts.append(ExploitCommit())
+    return acts
 
-    # ── Play a unit from hand as an ability (Admiral Ozzel, SOR_129) ───────
-    if top.kind == "play_from_hand":
-        cost_reduction = top.context.get("cost_reduction", 0)
-        # Mandatory if able: only affordable matching units are offered (the
-        # decision is pushed only when at least one such unit exists, and the
-        # state is unchanged since, so this list is non-empty).  ``up_to`` adds
-        # the decline, which is what makes "Play UP TO 3 units …" stoppable
-        # (Dathomiri Magicks ASH_104).
-        acts: list[Action] = [
-            PlayFromHand(ci.instance_id)
-            for ci in _play_from_hand_candidates(state, deciding_ps, top.context)
-        ]
-        if top.context.get("up_to"):
-            acts.append(DeclinePlayFromHand())
-        return acts
+# ── Test (for unit-test infrastructure only) ──────────────────────────
+def _test_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    options = top.context.get("options", ["yes", "no"])
+    return [AnswerTestDecision(opt) for opt in options]
 
-    # ── Play an event from hand as an ability (Bib Fortuna, SOR_177) ──────
-    if top.kind == "play_event_from_hand":
-        ctx = top.context
-        elig = ctx.get("eligible_ids")
-        return [
-            PlayEventFromHand(ci.instance_id)
-            for ci in _playable_events_from_hand(
-                state, deciding_ps, ctx.get("cost_reduction", 0),
-                free=bool(ctx.get("free")),
-                eligible_ids=set(elig) if elig is not None else None)
-        ]
+# ── Phase 3: trigger_option ───────────────────────────────────────────
+def _trigger_option_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    source_id = top.context.get("source_id", "")
+    found = state.find_instance(source_id)
+    card_name = found[1].card_def.display_name if found else ""
+    return [
+        AcceptTrigger(source_id, card_name),
+        DeclineTrigger(source_id, card_name),
+    ]
 
-    # ── Play a card using Smuggle as an ability (Lando Calrissian, SHD_17) ─
-    if top.kind == "play_via_smuggle":
-        cost_reduction = top.context.get("cost_reduction", 0)
-        acts: list[Action] = []
-        for ci in _smuggle_eligible_from_resources(state, deciding_ps, cost_reduction):
-            if isinstance(ci.card_def, Upgrade):
-                for target in _eligible_upgrade_targets(state, ci):
-                    acts.append(PlayViaSmuggle(ci.instance_id, target.instance_id))
-            else:
-                acts.append(PlayViaSmuggle(ci.instance_id))
-        return acts
+# ── Phase 3: resolve_effects ──────────────────────────────────────────
+def _resolve_effects_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    from swu.abilities.resolver import resolve_effects_actions
+    return resolve_effects_actions(state, top)
 
-    # ── Play a card using Piloting as an ability (Wedge Antilles, JTL_8) ───
-    if top.kind == "play_via_piloting":
-        cost_reduction = top.context.get("cost_reduction", 0)
-        return [
-            PlayViaPiloting(pilot.instance_id, host.instance_id)
-            for pilot, host in _piloting_eligible_from_hand(
-                state, deciding_ps, cost_reduction)
-        ]
+# ── Effect-granted attack (e.g. Surprise Strike) ──────────────────────
+def _granted_attack_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    deciding_ps = state.player_by_id(top.deciding_player_id)
+    owner_idx = state.player_index(top.deciding_player_id)
+    enemy_ps = state.players[1 - owner_idx]
+    attacks: list[Action] = list(
+        _filter_granted_attacks(state, top.context, deciding_ps, enemy_ps))
+    # "You may attack" (optional) always allows declining; a mandatory grant
+    # only offers a decline when no unit can attack (fizzle).
+    if top.context.get("optional") or not attacks:
+        attacks.append(DeclineGrantedAttack())
+    return attacks
 
-    # ── Opponent may ready a unit (Admiral Ozzel, SOR_129) ────────────────
-    if top.kind == "opponent_ready":
-        acts: list[Action] = [
-            ReadyUnit(u.instance_id)
-            for u in deciding_ps.ground_arena + deciding_ps.space_arena
-            if u.exhausted
-        ]
-        acts.append(DeclineReadyUnit())
-        return acts
+# ── Phase 3: pre_attack continuation ──────────────────────────────────
+def _pre_attack_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    ctx = top.context
+    return [ContinueAttack(
+        attacker_id=ctx["attacker_id"],
+        defender_id=ctx.get("defender_id"),
+    )]
 
-    # ── Opponent may say "no" to an effect (I Am Your Father, SOR_233) ────
-    if top.kind == "say_no":
-        # A PRICED refusal (Cikatro Vizago SEC_218: "An opponent may pay 1 resource.
-        # If they don't, draw that card") — saying no is only offered while the
-        # decider can actually pay for it.  A free refusal (the SOR_233 default) is
-        # always offered.
-        price = int(top.context.get("pay_to_refuse", 0) or 0)
-        if price:
-            decider = state.player_by_id(top.deciding_player_id)
-            if sum(1 for r in decider.resources if not r.exhausted) < price:
-                return [AllowEffect()]
-        return [AllowEffect(), SayNo()]
+# ── Play a unit from hand as an ability (Admiral Ozzel, SOR_129) ───────
+def _play_from_hand_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    deciding_ps = state.player_by_id(top.deciding_player_id)
+    cost_reduction = top.context.get("cost_reduction", 0)  # noqa: F841
+    # Mandatory if able: only affordable matching units are offered (the
+    # decision is pushed only when at least one such unit exists, and the
+    # state is unchanged since, so this list is non-empty).  ``up_to`` adds
+    # the decline, which is what makes "Play UP TO 3 units …" stoppable
+    # (Dathomiri Magicks ASH_104).
+    acts: list[Action] = [
+        PlayFromHand(ci.instance_id)
+        for ci in _play_from_hand_candidates(state, deciding_ps, top.context)
+    ]
+    if top.context.get("up_to"):
+        acts.append(DeclinePlayFromHand())
+    return acts
 
-    # ── Recurring regroup upkeep: pay 1 or return (Millennium Falcon SOR_193) ─
-    if top.kind == "regroup_upkeep":
-        return _regroup_upkeep_actions(state, top)
+# ── Play an event from hand as an ability (Bib Fortuna, SOR_177) ──────
+def _play_event_from_hand_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    deciding_ps = state.player_by_id(top.deciding_player_id)
+    ctx = top.context
+    elig = ctx.get("eligible_ids")
+    return [
+        PlayEventFromHand(ci.instance_id)
+        for ci in _playable_events_from_hand(
+            state, deciding_ps, ctx.get("cost_reduction", 0),
+            free=bool(ctx.get("free")),
+            eligible_ids=set(elig) if elig is not None else None)
+    ]
 
-    # ── Per-enemy pay 1 or exhaust (The Eye of Aldhani SEC_73) ────────────────
-    if top.kind == "pay_or_exhaust":
-        return _pay_or_exhaust_actions(state, top)
+# ── Play a card using Smuggle as an ability (Lando Calrissian, SHD_17) ─
+def _play_via_smuggle_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    deciding_ps = state.player_by_id(top.deciding_player_id)
+    cost_reduction = top.context.get("cost_reduction", 0)
+    acts: list[Action] = []
+    for ci in _smuggle_eligible_from_resources(state, deciding_ps, cost_reduction):
+        if isinstance(ci.card_def, Upgrade):
+            for target in _eligible_upgrade_targets(state, ci):
+                acts.append(PlayViaSmuggle(ci.instance_id, target.instance_id))
+        else:
+            acts.append(PlayViaSmuggle(ci.instance_id))
+    return acts
 
-    # ── Player-directed damage distribution ───────────────────────────────
-    if top.kind == "distribute_damage":
-        return _distribute_damage_actions(state, top)
+# ── Play a card using Piloting as an ability (Wedge Antilles, JTL_8) ───
+def _play_via_piloting_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    deciding_ps = state.player_by_id(top.deciding_player_id)
+    cost_reduction = top.context.get("cost_reduction", 0)
+    return [
+        PlayViaPiloting(pilot.instance_id, host.instance_id)
+        for pilot, host in _piloting_eligible_from_hand(
+            state, deciding_ps, cost_reduction)
+    ]
 
-    # ── Deck search-and-select (Tarkin SOR_84, Recruit SOR_123) ───────────
-    if top.kind == "deck_search":
-        return _deck_search_actions(state, top)
+# ── Opponent may ready a unit (Admiral Ozzel, SOR_129) ────────────────
+def _opponent_ready_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    deciding_ps = state.player_by_id(top.deciding_player_id)
+    acts: list[Action] = [
+        ReadyUnit(u.instance_id)
+        for u in deciding_ps.ground_arena + deciding_ps.space_arena
+        if u.exhausted
+    ]
+    acts.append(DeclineReadyUnit())
+    return acts
 
-    # ── Return cards from the discard pile to hand (Razor Crest SHD_44) ────
-    if top.kind == "return_from_discard":
-        return _return_from_discard_actions(state, top)
+# ── Opponent may say "no" to an effect (I Am Your Father, SOR_233) ────
+def _say_no_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    price = int(top.context.get("pay_to_refuse", 0) or 0)
+    if price:
+        decider = state.player_by_id(top.deciding_player_id)
+        if sum(1 for r in decider.resources if not r.exhausted) < price:
+            return [AllowEffect()]
+    return [AllowEffect(), SayNo()]
 
-    if top.kind == "resource_from_discard":
-        return _resource_from_discard_actions(state, top)
+# ── Choose N different-named discard cards, return 1 at random (Aphra SHD_15) ─
+def _select_distinct_return_random_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    return [SelectDistinctDiscardCard(cid)
+            for cid in _distinct_discard_candidates(state, top.context)]
 
-    if top.kind == "play_captured_card":
-        return _play_captured_actions(state, top)
+# ── Bottom up-to-N cards from a discard pile (Restock SOR_252) ─────────
+def _bottom_from_discard_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    ctx = top.context
+    selected = set(ctx["selected_ids"])
+    acts = [SelectBottomDiscardCard(cid) for cid in ctx["candidate_ids"]
+            if cid not in selected]
+    acts.append(FinishBottomFromDiscard())
+    return acts
 
-    if top.kind == "play_resource_units":
-        return _play_resource_units_actions(state, top)
+# ── Select up to N units, give each a token (Medal Ceremony SOR_245) ──
+def _select_token_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts = [SelectTokenTarget(tid) for tid in _select_token_targets(state, top.context)]
+    # "up to" — stopping early is always legal, EXCEPT for a mandatory clause
+    # with a pick still available ("An opponent gives 2 Advantage tokens to a
+    # unit they control", Sabine Wren ASH_6).  Still offered when nothing is
+    # eligible, so legal_actions can never come back empty.
+    if not (top.context.get("mandatory") and acts):
+        acts.append(FinishSelectToken())
+    return acts
 
-    if top.kind == "reveal_cull_draw":
-        return _reveal_cull_draw_actions(state, top)
+# ── Disclose: reveal hand cards bearing aspect icons (Karis/Syril) ────
+def _disclose_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts = [DiscloseSelectCard(tid)
+            for tid in _disclose_selectable(state, top.context)]
+    acts.append(DeclineDisclose())  # the "you may" — declining is always legal
+    return acts
 
-    if top.kind == "discard_for_experience":
-        return _discard_for_experience_actions(state, top)
+# ── Deal 1 damage to each of up to N units (IG-2000 JTL_140) ──────────
+def _select_damage_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts = [SelectDamageTarget(tid) for tid in _select_damage_targets(state, top.context)]
+    acts.append(FinishSelectDamage())  # "up to" — stopping early is always legal
+    return acts
 
-    # ── Choose N different-named discard cards, return 1 at random (Aphra SHD_15) ─
-    if top.kind == "select_distinct_return_random":
-        return [SelectDistinctDiscardCard(cid)
-                for cid in _distinct_discard_candidates(state, top.context)]
+# ── Receiving player assigns all indirect damage to one target ──────────
+def _assign_indirect_damage_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    return [AssignIndirectDamage(tid)
+            for tid in _assign_indirect_damage_targets(state, top.context)]
 
-    # ── Bottom up-to-N cards from a discard pile (Restock SOR_252) ─────────
-    if top.kind == "bottom_from_discard":
-        ctx = top.context
-        selected = set(ctx["selected_ids"])
-        acts = [SelectBottomDiscardCard(cid) for cid in ctx["candidate_ids"]
-                if cid not in selected]
-        acts.append(FinishBottomFromDiscard())
-        return acts
-
-    # ── Select up to N units, give each a token (Medal Ceremony SOR_245) ──
-    if top.kind == "select_token":
-        acts = [SelectTokenTarget(tid) for tid in _select_token_targets(state, top.context)]
-        # "up to" — stopping early is always legal, EXCEPT for a mandatory clause
-        # with a pick still available ("An opponent gives 2 Advantage tokens to a
-        # unit they control", Sabine Wren ASH_6).  Still offered when nothing is
-        # eligible, so legal_actions can never come back empty.
-        if not (top.context.get("mandatory") and acts):
-            acts.append(FinishSelectToken())
-        return acts
-
-    # ── Disclose: reveal hand cards bearing aspect icons (Karis/Syril) ────
-    if top.kind == "disclose":
-        acts = [DiscloseSelectCard(tid)
-                for tid in _disclose_selectable(state, top.context)]
-        acts.append(DeclineDisclose())  # the "you may" — declining is always legal
-        return acts
-
-    # ── Deal 1 damage to each of up to N units (IG-2000 JTL_140) ──────────
-    if top.kind == "select_damage":
-        acts = [SelectDamageTarget(tid) for tid in _select_damage_targets(state, top.context)]
-        acts.append(FinishSelectDamage())  # "up to" — stopping early is always legal
-        return acts
-
-    # ── Receiving player assigns all indirect damage to one target ──────────
-    if top.kind == "assign_indirect_damage":
-        return [AssignIndirectDamage(tid)
-                for tid in _assign_indirect_damage_targets(state, top.context)]
-
-    # ── Peek at top of deck (R2-D2 SOR_236, C-3PO SOR_238) ────────────────
-    if top.kind == "peek_top":
-        mode = top.context.get("mode")
-        if mode == "may_draw_or_discard_heal":
-            # Reinforcement Walker SOR_119: a mandatory binary — no KeepTopCard.
-            return [DrawTopCard(), DiscardTopCard()]
-        acts = [KeepTopCard()]
-        if mode == "may_bottom":
-            acts.append(BottomTopCard())
-        elif mode == "may_discard":
-            # "Look at the top card of a deck.  You may discard it" (Reanimated
-            # Night Trooper ASH_45) — the discard sibling of ``may_bottom``.
+# ── Peek at top of deck (R2-D2 SOR_236, C-3PO SOR_238) ────────────────
+def _peek_top_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    mode = top.context.get("mode")
+    if mode == "may_draw_or_discard_heal":
+        # Reinforcement Walker SOR_119: a mandatory binary — no KeepTopCard.
+        return [DrawTopCard(), DiscardTopCard()]
+    acts = [KeepTopCard()]
+    if mode == "may_bottom":
+        acts.append(BottomTopCard())
+    elif mode == "may_discard":
+        # "Look at the top card of a deck.  You may discard it" (Reanimated
+        # Night Trooper ASH_45) — the discard sibling of ``may_bottom``.
+        acts.append(DiscardTopCard())
+    elif mode == "may_draw":
+        acts.append(DrawTopCard())
+    elif mode in ("may_play_discard", "may_play"):
+        if mode == "may_play_discard":
             acts.append(DiscardTopCard())
-        elif mode == "may_draw":
-            acts.append(DrawTopCard())
-        elif mode in ("may_play_discard", "may_play"):
-            if mode == "may_play_discard":
-                acts.append(DiscardTopCard())
-            # The play cost may be reduced (or free) — apply the same reduction the
-            # PlayTopCard resolution will, so affordability and the offer agree.
-            reduction = int(top.context.get("cost_reduction", 0) or 0)
-            free = bool(top.context.get("free"))
-            ps = state.player_by_id(top.context["controller_id"])
-            if ps.deck:
-                ci = ps.deck[0]
-                cd = ci.card_def
-                if isinstance(cd, Upgrade):
-                    for host in _eligible_upgrade_targets(state, ci):
-                        base = _play_cost(state, ci, ps, target_host_id=host.instance_id)
-                        cost = 0 if free else max(0, base - reduction)
-                        if _affordable_with_credits(ps, cost, state):
-                            acts.append(PlayTopCard(host.instance_id))
-                elif isinstance(cd, (Unit, Event)):
-                    base = _play_cost(state, ci, ps)
+        # The play cost may be reduced (or free) — apply the same reduction the
+        # PlayTopCard resolution will, so affordability and the offer agree.
+        reduction = int(top.context.get("cost_reduction", 0) or 0)
+        free = bool(top.context.get("free"))
+        ps = state.player_by_id(top.context["controller_id"])
+        if ps.deck:
+            ci = ps.deck[0]
+            cd = ci.card_def
+            if isinstance(cd, Upgrade):
+                for host in _eligible_upgrade_targets(state, ci):
+                    base = _play_cost(state, ci, ps, target_host_id=host.instance_id)
                     cost = 0 if free else max(0, base - reduction)
                     if _affordable_with_credits(ps, cost, state):
-                        acts.append(PlayTopCard())
+                        acts.append(PlayTopCard(host.instance_id))
+            elif isinstance(cd, (Unit, Event)):
+                base = _play_cost(state, ci, ps)
+                cost = 0 if free else max(0, base - reduction)
+                if _affordable_with_credits(ps, cost, state):
+                    acts.append(PlayTopCard())
+    return acts
+
+# ── Choose a number (C-3PO SOR_238) ───────────────────────────────────
+def _choose_number_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    ctx = top.context
+    return [ChooseNumber(n)
+            for n in range(int(ctx["lo"]), int(ctx["hi"]) + 1)]
+
+# ── Look at an opponent's hand (Viper Probe Droid SOR_228) ────────────
+def _look_hand_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    return [AckLookHand()]
+
+# ── Modal "choose one" (Leia Organa SOR_189) ──────────────────────────
+def _modal_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    ctx = top.context
+    if ctx.get("stage") == "mode":
+        return [ChooseModalOption(m) for m in ctx["modes"]]
+    # stage "target": targets for the chosen mode, recomputed from state.
+    return [
+        ChooseModalTarget(t.instance_id)
+        for t in _modal_mode_targets(state, ctx["controller_id"], ctx["chosen_mode"])
+    ]
+
+# ── Opponent-decided modal: Let the Wookiee Win (SHD_205) ──────────────
+def _let_wookiee_win_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    ctx = top.context
+    if ctx.get("stage") == "mode":
+        return [ChooseWookieeMode("ready_resources"),
+                ChooseWookieeMode("ready_attack")]
+    # stage "ready": the controller picks which friendly unit to ready.
+    controller = state.player_by_id(ctx["controller_id"])
+    return [ChooseWookieeReadyUnit(u.instance_id)
+            for u in controller.ground_arena + controller.space_arena]
+
+# ── Reveal top, discard any, reorder the rest on top (For a Cause I
+#    Believe In, SOR_152) ─────────────────────────────────────────────────
+def _reveal_top_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts: list[Action] = []
+    for cid in top.context["pending"]:
+        acts.append(KeepRevealed(cid))
+        acts.append(DiscardRevealed(cid))
+    return acts
+
+# ── Reveal-until-stop, damage = combined cost (Don't Get Cocky SOR_223) ─
+def _reveal_cost_damage_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    ctx = top.context
+    ps = state.player_by_id(ctx["controller_id"])
+    n = len(ctx["revealed_ids"])
+    acts2: list[Action] = []
+    if n < int(ctx["max_reveals"]) and n < len(ps.deck):
+        acts2.append(RevealNextCard())
+    acts2.append(StopRevealing())
+    return acts2
+
+# ── Opponent chooses one of their cards, you may damage it (Grey
+#    Squadron Y-Wing SHD_246) ────────────────────────────────────────────
+def _opponent_chooses_target_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    ctx = top.context
+    if ctx.get("stage") == "choose":
+        return [ChooseOwnTarget(t) for t in _opponent_chosen_targets(state, ctx)]
+    # stage "confirm"
+    return [ConfirmOpponentDamage(), DeclineOpponentDamage()]
+
+# ── Controller picks up to 2 non-leader units; the opponent chooses which
+#    returns to hand, the other is bottomed (I Had No Choice SOR_187) ──────
+def _opponent_split_bounce_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    ctx = top.context
+    if ctx.get("stage") == "choose":
+        acts: list[Action] = [SelectSplitBounceUnit(t)
+                              for t in _split_bounce_candidates(state, ctx)]
+        acts.append(FinishSplitBounce())
         return acts
+    # stage "split" — opponent picks which of the two returns to hand
+    return [ChooseSplitReturn(cid) for cid in ctx["selected_ids"]]
 
-    # ── Choose a number (C-3PO SOR_238) ───────────────────────────────────
-    if top.kind == "choose_number":
-        ctx = top.context
-        return [ChooseNumber(n)
-                for n in range(int(ctx["lo"]), int(ctx["hi"]) + 1)]
+# ── Owner of a returned unit may replay it for free (Baylan Skoll
+#    LOF_185, Rio Durant LAW_93) ────────────────────────────────────────
+def _owner_may_replay_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    deciding_ps = state.player_by_id(top.deciding_player_id)
+    card_id = top.context.get("card_id")
+    acts: list[Action] = []
+    if any(c.instance_id == card_id for c in deciding_ps.hand):
+        acts.append(ReplayReturnedUnit(card_id))
+    acts.append(DeclineReplay())  # "may play it for free"
+    return acts
 
-    # ── Look at an opponent's hand (Viper Probe Droid SOR_228) ────────────
-    if top.kind == "look_hand":
-        return [AckLookHand()]
+# ── Owner of a chosen in-play unit puts it on top or bottom of their deck
+#    (Qui-Gon Jinn LOF_200) ─────────────────────────────────────────────────
+def _put_on_deck_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    card_id = top.context.get("card_id")
+    return [PutOnDeckTop(card_id), PutOnDeckBottom(card_id)]
 
-    # ── Modal "choose one" (Leia Organa SOR_189) ──────────────────────────
-    if top.kind == "modal":
-        ctx = top.context
-        if ctx.get("stage") == "mode":
-            return [ChooseModalOption(m) for m in ctx["modes"]]
-        # stage "target": targets for the chosen mode, recomputed from state.
-        return [
-            ChooseModalTarget(t.instance_id)
-            for t in _modal_mode_targets(state, ctx["controller_id"], ctx["chosen_mode"])
-        ]
+# ── Each player chooses one of their own non-leader units; defeat them
+#    (Merciless Contest TWI_238) ────────────────────────────────────────────
+def _each_player_defeats_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    ctx = top.context
+    current_player = ctx["order"][ctx["idx"]]
+    return [ChooseUnitToDefeat(t)
+            for t in _each_player_defeat_targets(state, ctx, current_player)]
 
-    # ── Opponent-decided modal: Let the Wookiee Win (SHD_205) ──────────────
-    if top.kind == "let_wookiee_win":
-        ctx = top.context
-        if ctx.get("stage") == "mode":
-            return [ChooseWookieeMode("ready_resources"),
-                    ChooseWookieeMode("ready_attack")]
-        # stage "ready": the controller picks which friendly unit to ready.
-        controller = state.player_by_id(ctx["controller_id"])
-        return [ChooseWookieeReadyUnit(u.instance_id)
-                for u in controller.ground_arena + controller.space_arena]
+# ── Name a card; opponent-owned non-leader copies lose all abilities while the
+#    namer is in play (Galen Erso P25_31 WhenPlayed) ─────────────────────────
+def _name_a_card_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    return [NameCard(n) for n in top.context["names"]]
 
-    # ── Reveal top, discard any, reorder the rest on top (For a Cause I
-    #    Believe In, SOR_152) ─────────────────────────────────────────────────
-    if top.kind == "reveal_top":
+# ── Opponent may give up a non-leader unit to be captured, else the source
+#    readies (Grand Admiral Thrawn SEC_193 WhenPlayed) ─────────────────────
+def _capture_or_ready_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts: list[Action] = [ChooseCaptureVictim(t)
+                          for t in _capture_or_ready_targets(state, top.context)]
+    acts.append(DeclineCaptureVictim())  # "An opponent MAY choose …"
+    return acts
+
+# ── Choose N friendly units to spare, defeat all other friendly units
+#    (Always Two LOF_42) ─────────────────────────────────────────────────────
+def _choose_units_sacrifice_rest_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    return [ChooseUnitToSpare(t)
+            for t in _choose_units_sacrifice_rest_targets(state, top.context)]
+
+# ── Unique Rule: keep one duplicate copy, defeat the rest (state-based) ──────
+def _resolve_unique_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    return [KeepUniqueCopy(t)
+            for t in _resolve_unique_candidates(state, top.context)]
+
+# ── Name a card in an opponent's hand; one copy is discarded (Chimaera
+#    SOR_185 On Attack) ─────────────────────────────────────────────────────
+def _name_and_discard_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    names = sorted(top.context.get("eligible_names")
+                   or {c["card_name"] for c in top.context["revealed_hand"]})
+    acts: list[Action] = [NameAndDiscard(n) for n in names]
+    if top.context.get("optional"):
+        acts.append(DeclineNameAndDiscard())
+    return acts
+
+# ── Opponent may discard a random card, else create tokens (Political
+#    Pressure TWI_222) ──────────────────────────────────────────────────────
+def _may_discard_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts: list[Action] = []
+    if state.player_by_id(top.context["opponent_id"]).hand:
+        acts.append(DiscardRandomCard())
+    acts.append(DeclineDiscard())
+    return acts
+
+# ── Exhaust any number of friendly units, deal base damage per (The
+#    Invisible Hand TWI_234) ──────────────────────────────────────────────
+def _exhaust_for_base_damage_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts = [SelectUnitToExhaust(tid)
+            for tid in _exhaust_for_base_damage_targets(state, top.context)]
+    acts.append(FinishExhaustForBaseDamage())  # "any number" — stop is legal
+    return acts
+
+def _exhaust_combined_cost_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts = [SelectUnitToExhaustCombined(tid)
+            for tid in _exhaust_combined_targets(state, top.context)]
+    acts.append(FinishExhaustCombined())  # "any number" — stop is legal
+    return acts
+
+def _capture_combined_hp_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts = [SelectUnitToCaptureCombined(tid)
+            for tid in _capture_combined_targets(state, top.context)]
+    acts.append(FinishCaptureCombined())  # "any number" — stop is legal
+    return acts
+
+# ── The defending player may rescue one of their own cards guarded by the
+#    attacker; if they do, the attacker's controller draws (Cad Bane TWI_187) ──
+def _rescue_guarded_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts = [RescueGuardedCard(cid)
+            for cid in _rescue_guarded_candidates(state, top.context)]
+    acts.append(DeclineRescue())  # "MAY rescue"
+    return acts
+
+# ── Choose any number of friendly units, each captures an enemy non-leader
+#    unit in the same arena (Finalizer SHD_92) ─────────────────────────────
+def _multi_capture_pairing_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts = [CaptureWithUnit(cap, prey)
+            for cap, prey in _multi_capture_pairs(state, top.context)]
+    # "EACH friendly unit captures …" (Let's Talk SEC_131) has no "any number":
+    # while a legal pair remains the controller must make it, so the stop is
+    # withheld and the decision still auto-resolves when the pairs run out.
+    if not (top.context.get("mandatory") and acts):
+        acts.append(FinishMultiCapture())  # "any number" — stop is legal
+    return acts
+
+# ── Choose any number of friendly units; their combined power caps a free
+#    play from hand, then they are defeated (Consolidation of Power TWI_89) ──
+def _combined_power_play_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts = [SelectCombinedPowerUnit(uid)
+            for uid in _combined_power_choices(state, top.context)]
+    acts.append(FinishCombinedPowerPlay())  # "any number" — stop is legal
+    return acts
+
+# ── For each exploited unit, you may deal its power to an enemy unit
+#    (Count Dooku TWI_138) ──────────────────────────────────────────────────
+def _per_exploit_damage_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts = [DealExploitDamage(tid)
+            for tid in _per_exploit_enemy_targets(state, top.context)]
+    acts.append(DeclineExploitDamage())  # "you may" — skipping is legal
+    return acts
+
+# ── Pay up to N resources, give that many Experience tokens to this unit
+#    (Curious Flock LOF_255) ─────────────────────────────────────────────────
+def _pay_resources_for_tokens_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts: list[Action] = []
+    if _pay_resources_for_tokens_can_pay(state, top.context):
+        acts.append(PayResourceForToken())
+    acts.append(FinishPayResources())  # "up to" — paying 0 is legal
+    return acts
+
+# ── Reveal a deck top, a chosen player plays it free, a different player
+#    makes Credits = its cost (Vermillion LAW_215) ──────────────────────────
+def _reveal_play_credit_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    ctx = top.context
+    stage = ctx.get("stage")
+    if stage == "choose_deck":
+        return [ChooseRevealDeck(pid)
+                for pid in ctx.get("deck_player_ids", [])
+                if state.player_by_id(pid).deck]
+    if stage == "choose_player":
+        return [ChooseRevealPlayer(ctx["controller_id"]),
+                ChooseRevealPlayer(ctx["opponent_id"])]
+    if stage == "may_play":
         acts: list[Action] = []
-        for cid in top.context["pending"]:
-            acts.append(KeepRevealed(cid))
-            acts.append(DiscardRevealed(cid))
+        if _revealed_is_playable(state, ctx):
+            acts.append(PlayRevealedCard())
+        acts.append(DeclineRevealedCard())
         return acts
-
-    # ── Reveal-until-stop, damage = combined cost (Don't Get Cocky SOR_223) ─
-    if top.kind == "reveal_cost_damage":
-        ctx = top.context
-        ps = state.player_by_id(ctx["controller_id"])
-        n = len(ctx["revealed_ids"])
-        acts2: list[Action] = []
-        if n < int(ctx["max_reveals"]) and n < len(ps.deck):
-            acts2.append(RevealNextCard())
-        acts2.append(StopRevealing())
-        return acts2
-
-    # ── Repeated-modal "discard up to N, an option per card" (Poe SHD_153) ─
-    if top.kind == "repeated_modal":
-        return _repeated_modal_actions(state, top)
-
-    # ── "Choose two, in any order" aspect events (SOR_155/107/203/58) ──────
-    if top.kind == "choose_two_modal":
-        return _choose_two_modal_actions(state, top)
-
-    # ── Optional resource sacrifice as a cost (Wrecker SHD_154) ────────────
-    if top.kind == "sacrifice_resource":
-        return _sacrifice_resource_actions(state, top)
-
-    # ── Reveal a resource, name-match a unique unit, return it + ramp
-    #    (Hunter SHD_9) ─────────────────────────────────────────────────────
-    if top.kind == "reveal_resource_ramp":
-        return _reveal_resource_ramp_actions(state, top)
-
-    # ── Interactive damage prevention (Queen Amidala SEC_101 — combat + ability) ──
-    if top.kind in ("combat_damage_prevention", "ability_damage_prevention"):
-        return _combat_damage_prevention_actions(state, top)
-
-    # ── Recycle a discarded unit, deal its power as damage (Sarlacc LAW_163) ─
-    if top.kind == "discard_unit_damage":
-        return _discard_unit_damage_actions(state, top)
-    if top.kind == "cull_for_damage":
-        return _cull_for_damage_actions(state, top)
-
-    # ── Discard a unit (cost), then search the deck for a named card
-    #    (Great Pit of Carkoon LAW_23) ─────────────────────────────────────────
-    if top.kind == "discard_for_search":
-        return _discard_for_search_actions(state, top)
-
-    # ── Recur up to N units from discard to deck bottom, buff that many
-    #    (Luminous Beings LOF_104) ──────────────────────────────────────────────
-    if top.kind == "recur_and_buff":
-        return _recur_and_buff_actions(state, top)
-
-    # ── Move an upgrade to another same-controller unit (Survivors'
-    #    Gauntlet SHD_64) ──────────────────────────────────────────────────
-    if top.kind == "move_upgrade":
-        return _move_upgrade_actions(state, top)
-
-    # ── Pay an upgrade's cost and take control of it (Pre Vizsla SHD_142) ──
-    if top.kind == "pay_and_steal_upgrade":
-        return _pay_and_steal_upgrade_actions(state, top)
-
-    # ── Attach an in-play unit as a Pilot upgrade (Poe Dameron JTLP_6) ──────
-    if top.kind == "pilot_self_attach":
-        return _pilot_self_attach_actions(state, top)
-
-    # ── Play a returned upgrade from hand for free, choosing a host (Jabba the
-    #    Hutt ASH_42) ────────────────────────────────────────────────────────
-    if top.kind == "play_upgrade_from_hand":
-        return _play_upgrade_from_hand_actions(state, top)
-
-    # ── Opponent chooses one of their cards, you may damage it (Grey
-    #    Squadron Y-Wing SHD_246) ────────────────────────────────────────────
-    if top.kind == "opponent_chooses_target":
-        ctx = top.context
-        if ctx.get("stage") == "choose":
-            return [ChooseOwnTarget(t) for t in _opponent_chosen_targets(state, ctx)]
-        # stage "confirm"
-        return [ConfirmOpponentDamage(), DeclineOpponentDamage()]
-
-    # ── Controller picks up to 2 non-leader units; the opponent chooses which
-    #    returns to hand, the other is bottomed (I Had No Choice SOR_187) ──────
-    if top.kind == "opponent_split_bounce":
-        ctx = top.context
-        if ctx.get("stage") == "choose":
-            acts: list[Action] = [SelectSplitBounceUnit(t)
-                                  for t in _split_bounce_candidates(state, ctx)]
-            acts.append(FinishSplitBounce())
-            return acts
-        # stage "split" — opponent picks which of the two returns to hand
-        return [ChooseSplitReturn(cid) for cid in ctx["selected_ids"]]
-
-    # ── Owner of a returned unit may replay it for free (Baylan Skoll
-    #    LOF_185, Rio Durant LAW_93) ────────────────────────────────────────
-    if top.kind == "owner_may_replay":
-        card_id = top.context.get("card_id")
-        acts: list[Action] = []
-        if any(c.instance_id == card_id for c in deciding_ps.hand):
-            acts.append(ReplayReturnedUnit(card_id))
-        acts.append(DeclineReplay())  # "may play it for free"
+    if stage == "choose_host":
+        acts = [ChooseRevealHost(h) for h in _revealed_upgrade_hosts(state, ctx)]
+        acts.append(DeclineRevealedCard())  # no legal host left → may still decline
         return acts
+    return [DeclineRevealedCard()]
 
-    # ── Owner of a chosen in-play unit puts it on top or bottom of their deck
-    #    (Qui-Gon Jinn LOF_200) ─────────────────────────────────────────────────
-    if top.kind == "put_on_deck":
-        card_id = top.context.get("card_id")
-        return [PutOnDeckTop(card_id), PutOnDeckBottom(card_id)]
-
-    # ── Each player chooses one of their own non-leader units; defeat them
-    #    (Merciless Contest TWI_238) ────────────────────────────────────────────
-    if top.kind == "each_player_defeats":
-        ctx = top.context
-        current_player = ctx["order"][ctx["idx"]]
-        return [ChooseUnitToDefeat(t)
-                for t in _each_player_defeat_targets(state, ctx, current_player)]
-
-    # ── Name a card; opponent-owned non-leader copies lose all abilities while the
-    #    namer is in play (Galen Erso P25_31 WhenPlayed) ─────────────────────────
-    if top.kind == "name_a_card":
-        return [NameCard(n) for n in top.context["names"]]
-
-    # ── Opponent may give up a non-leader unit to be captured, else the source
-    #    readies (Grand Admiral Thrawn SEC_193 WhenPlayed) ─────────────────────
-    if top.kind == "capture_or_ready":
-        acts: list[Action] = [ChooseCaptureVictim(t)
-                              for t in _capture_or_ready_targets(state, top.context)]
-        acts.append(DeclineCaptureVictim())  # "An opponent MAY choose …"
-        return acts
-
-    # ── Choose N friendly units to spare, defeat all other friendly units
-    #    (Always Two LOF_42) ─────────────────────────────────────────────────────
-    if top.kind == "choose_units_sacrifice_rest":
-        return [ChooseUnitToSpare(t)
-                for t in _choose_units_sacrifice_rest_targets(state, top.context)]
-
-    # ── Unique Rule: keep one duplicate copy, defeat the rest (state-based) ──────
-    if top.kind == "resolve_unique":
-        return [KeepUniqueCopy(t)
-                for t in _resolve_unique_candidates(state, top.context)]
-
-    # ── Put N cards from your hand on the bottom of your deck (Private
-    #    Manufacturing TWI_257) ──────────────────────────────────────────────
-    if top.kind == "bottom_from_hand":
-        return _bottom_from_hand_actions(state, top)
-
-    # ── Resource up to N cards from your hand, each entering ready (Sundari
-    #    Palace TS26_12) ─────────────────────────────────────────────────────────
-    if top.kind == "resource_from_hand":
-        return _resource_from_hand_actions(state, top)
-
-    # ── Each player discards down to a chosen hand size (Smoke and Cinders
-    #    SOR_174) ────────────────────────────────────────────────────────────────
-    if top.kind == "discard_excess_from_hand":
-        return _discard_excess_from_hand_actions(state, top)
-
-    # ── Name a card in an opponent's hand; one copy is discarded (Chimaera
-    #    SOR_185 On Attack) ─────────────────────────────────────────────────────
-    if top.kind == "name_and_discard":
-        names = sorted(top.context.get("eligible_names")
-                       or {c["card_name"] for c in top.context["revealed_hand"]})
-        acts: list[Action] = [NameAndDiscard(n) for n in names]
-        if top.context.get("optional"):
-            acts.append(DeclineNameAndDiscard())
-        return acts
-
-    # ── Opponent may discard a random card, else create tokens (Political
-    #    Pressure TWI_222) ──────────────────────────────────────────────────────
-    if top.kind == "may_discard":
-        acts: list[Action] = []
-        if state.player_by_id(top.context["opponent_id"]).hand:
-            acts.append(DiscardRandomCard())
-        acts.append(DeclineDiscard())
-        return acts
-
-    # ── Exhaust any number of friendly units, deal base damage per (The
-    #    Invisible Hand TWI_234) ──────────────────────────────────────────────
-    if top.kind == "exhaust_for_base_damage":
-        acts = [SelectUnitToExhaust(tid)
-                for tid in _exhaust_for_base_damage_targets(state, top.context)]
-        acts.append(FinishExhaustForBaseDamage())  # "any number" — stop is legal
-        return acts
-
-    if top.kind == "exhaust_combined_cost":
-        acts = [SelectUnitToExhaustCombined(tid)
-                for tid in _exhaust_combined_targets(state, top.context)]
-        acts.append(FinishExhaustCombined())  # "any number" — stop is legal
-        return acts
-
-    if top.kind == "capture_combined_hp":
-        acts = [SelectUnitToCaptureCombined(tid)
-                for tid in _capture_combined_targets(state, top.context)]
-        acts.append(FinishCaptureCombined())  # "any number" — stop is legal
-        return acts
-
-    # ── The defending player may rescue one of their own cards guarded by the
-    #    attacker; if they do, the attacker's controller draws (Cad Bane TWI_187) ──
-    if top.kind == "rescue_guarded":
-        acts = [RescueGuardedCard(cid)
-                for cid in _rescue_guarded_candidates(state, top.context)]
-        acts.append(DeclineRescue())  # "MAY rescue"
-        return acts
-
-    # ── Choose any number of friendly units, each captures an enemy non-leader
-    #    unit in the same arena (Finalizer SHD_92) ─────────────────────────────
-    if top.kind == "multi_capture_pairing":
-        acts = [CaptureWithUnit(cap, prey)
-                for cap, prey in _multi_capture_pairs(state, top.context)]
-        # "EACH friendly unit captures …" (Let's Talk SEC_131) has no "any number":
-        # while a legal pair remains the controller must make it, so the stop is
-        # withheld and the decision still auto-resolves when the pairs run out.
-        if not (top.context.get("mandatory") and acts):
-            acts.append(FinishMultiCapture())  # "any number" — stop is legal
-        return acts
-
-    # ── Choose any number of friendly units; their combined power caps a free
-    #    play from hand, then they are defeated (Consolidation of Power TWI_89) ──
-    if top.kind == "combined_power_play":
-        acts = [SelectCombinedPowerUnit(uid)
-                for uid in _combined_power_choices(state, top.context)]
-        acts.append(FinishCombinedPowerPlay())  # "any number" — stop is legal
-        return acts
-
-    # ── For each exploited unit, you may deal its power to an enemy unit
-    #    (Count Dooku TWI_138) ──────────────────────────────────────────────────
-    if top.kind == "per_exploit_damage":
-        acts = [DealExploitDamage(tid)
-                for tid in _per_exploit_enemy_targets(state, top.context)]
-        acts.append(DeclineExploitDamage())  # "you may" — skipping is legal
-        return acts
-
-    # ── "You may use the Force" optional rider (force-token, qui-gon-jinn:06):
-    #    The Will of the Force LOF_227 / Impossible Escape LOF_218 ────────────────
-    if top.kind == "use_force":
-        return _use_force_actions(state, top)
-
-    # ── Pay up to N resources, give that many Experience tokens to this unit
-    #    (Curious Flock LOF_255) ─────────────────────────────────────────────────
-    if top.kind == "pay_resources_for_tokens":
-        acts: list[Action] = []
-        if _pay_resources_for_tokens_can_pay(state, top.context):
-            acts.append(PayResourceForToken())
-        acts.append(FinishPayResources())  # "up to" — paying 0 is legal
-        return acts
-
-    # ── Reveal a deck top, a chosen player plays it free, a different player
-    #    makes Credits = its cost (Vermillion LAW_215) ──────────────────────────
-    if top.kind == "reveal_play_credit":
-        ctx = top.context
-        stage = ctx.get("stage")
-        if stage == "choose_deck":
-            return [ChooseRevealDeck(pid)
-                    for pid in ctx.get("deck_player_ids", [])
-                    if state.player_by_id(pid).deck]
-        if stage == "choose_player":
-            return [ChooseRevealPlayer(ctx["controller_id"]),
-                    ChooseRevealPlayer(ctx["opponent_id"])]
-        if stage == "may_play":
-            acts: list[Action] = []
-            if _revealed_is_playable(state, ctx):
-                acts.append(PlayRevealedCard())
-            acts.append(DeclineRevealedCard())
-            return acts
-        if stage == "choose_host":
-            acts = [ChooseRevealHost(h) for h in _revealed_upgrade_hosts(state, ctx)]
-            acts.append(DeclineRevealedCard())  # no legal host left → may still decline
-            return acts
-        return [DeclineRevealedCard()]
-
-    # ── Plot — play Plot cards from resources on a leader deploy (Garindan
-    #    SEC_186, Lurking Snub Fighter SEC_189) ────────────────────────────────
-    if top.kind == "plot":
-        allowed = set(top.context.get("plot_ids", []))
-        acts = _plot_play_actions(state, deciding_ps, allowed)
-        acts.append(FinishPlot())  # "you may" — declining the rest is always legal
-        return acts
-
-    return [AnswerTestDecision("unknown")]  # fallback; shouldn't be reached
+# ── Plot — play Plot cards from resources on a leader deploy (Garindan
+#    SEC_186, Lurking Snub Fighter SEC_189) ────────────────────────────────
+def _plot_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    deciding_ps = state.player_by_id(top.deciding_player_id)
+    allowed = set(top.context.get("plot_ids", []))
+    acts = _plot_play_actions(state, deciding_ps, allowed)
+    acts.append(FinishPlot())  # "you may" — declining the rest is always legal
+    return acts
 
 
 def _resolve_exploit_commit(s: GameState) -> GameState:
@@ -19474,3 +19386,86 @@ def _deploy_threshold(card: AnyCard) -> Optional[int]:
     if m:
         return int(m.group(1))
     return None
+
+
+# ── Decision-kind registration ─────────────────────────────────────────────
+# Every kind the old if-chain handled, now claimed explicitly. This block is what
+# moves with a family when it leaves this module: the handlers go, and so do their
+# rows. When `_legacy` is empty this list is empty too.
+register_decisions({
+    "ambush":                        _ambush_actions,
+    "exploit":                       _exploit_actions,
+    "test":                          _test_actions,
+    "trigger_option":                _trigger_option_actions,
+    "resolve_effects":               _resolve_effects_actions,
+    "granted_attack":                _granted_attack_actions,
+    "pre_attack":                    _pre_attack_actions,
+    "play_from_hand":                _play_from_hand_actions,
+    "play_event_from_hand":          _play_event_from_hand_actions,
+    "play_via_smuggle":              _play_via_smuggle_actions,
+    "play_via_piloting":             _play_via_piloting_actions,
+    "opponent_ready":                _opponent_ready_actions,
+    "say_no":                        _say_no_actions,
+    "regroup_upkeep":                _regroup_upkeep_actions,
+    "pay_or_exhaust":                _pay_or_exhaust_actions,
+    "distribute_damage":             _distribute_damage_actions,
+    "deck_search":                   _deck_search_actions,
+    "return_from_discard":           _return_from_discard_actions,
+    "resource_from_discard":         _resource_from_discard_actions,
+    "play_captured_card":            _play_captured_actions,
+    "play_resource_units":           _play_resource_units_actions,
+    "reveal_cull_draw":              _reveal_cull_draw_actions,
+    "discard_for_experience":        _discard_for_experience_actions,
+    "select_distinct_return_random": _select_distinct_return_random_actions,
+    "bottom_from_discard":           _bottom_from_discard_actions,
+    "select_token":                  _select_token_actions,
+    "disclose":                      _disclose_actions,
+    "select_damage":                 _select_damage_actions,
+    "assign_indirect_damage":        _assign_indirect_damage_actions,
+    "peek_top":                      _peek_top_actions,
+    "choose_number":                 _choose_number_actions,
+    "look_hand":                     _look_hand_actions,
+    "modal":                         _modal_actions,
+    "let_wookiee_win":               _let_wookiee_win_actions,
+    "reveal_top":                    _reveal_top_actions,
+    "reveal_cost_damage":            _reveal_cost_damage_actions,
+    "repeated_modal":                _repeated_modal_actions,
+    "choose_two_modal":              _choose_two_modal_actions,
+    "sacrifice_resource":            _sacrifice_resource_actions,
+    "reveal_resource_ramp":          _reveal_resource_ramp_actions,
+    "combat_damage_prevention":      _combat_damage_prevention_actions,
+    "ability_damage_prevention":     _combat_damage_prevention_actions,
+    "discard_unit_damage":           _discard_unit_damage_actions,
+    "cull_for_damage":               _cull_for_damage_actions,
+    "discard_for_search":            _discard_for_search_actions,
+    "recur_and_buff":                _recur_and_buff_actions,
+    "move_upgrade":                  _move_upgrade_actions,
+    "pay_and_steal_upgrade":         _pay_and_steal_upgrade_actions,
+    "pilot_self_attach":             _pilot_self_attach_actions,
+    "play_upgrade_from_hand":        _play_upgrade_from_hand_actions,
+    "opponent_chooses_target":       _opponent_chooses_target_actions,
+    "opponent_split_bounce":         _opponent_split_bounce_actions,
+    "owner_may_replay":              _owner_may_replay_actions,
+    "put_on_deck":                   _put_on_deck_actions,
+    "each_player_defeats":           _each_player_defeats_actions,
+    "name_a_card":                   _name_a_card_actions,
+    "capture_or_ready":              _capture_or_ready_actions,
+    "choose_units_sacrifice_rest":   _choose_units_sacrifice_rest_actions,
+    "resolve_unique":                _resolve_unique_actions,
+    "bottom_from_hand":              _bottom_from_hand_actions,
+    "resource_from_hand":            _resource_from_hand_actions,
+    "discard_excess_from_hand":      _discard_excess_from_hand_actions,
+    "name_and_discard":              _name_and_discard_actions,
+    "may_discard":                   _may_discard_actions,
+    "exhaust_for_base_damage":       _exhaust_for_base_damage_actions,
+    "exhaust_combined_cost":         _exhaust_combined_cost_actions,
+    "capture_combined_hp":           _capture_combined_hp_actions,
+    "rescue_guarded":                _rescue_guarded_actions,
+    "multi_capture_pairing":         _multi_capture_pairing_actions,
+    "combined_power_play":           _combined_power_play_actions,
+    "per_exploit_damage":            _per_exploit_damage_actions,
+    "use_force":                     _use_force_actions,
+    "pay_resources_for_tokens":      _pay_resources_for_tokens_actions,
+    "reveal_play_credit":            _reveal_play_credit_actions,
+    "plot":                          _plot_actions,
+})

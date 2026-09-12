@@ -1,4 +1,7 @@
 {
- "_comment": "Functions whose body legitimately changed during the engine/actions.py split, with the reason. This file IS the review surface for the refactor: every entry is a place where 'pure motion' was not achievable, usually because a lower kernel module had to reach a higher layer and an import became function-local. Keep it short. scripts/refactor_parity.py fails if it exceeds 15 entries, because at that point the module boundaries are wrong and should be moved instead.",
- "_format": "qualname: one-line reason"
+ "_comment": "Functions whose body legitimately changed during the engine/actions.py split, with the reason. This file IS the review surface for the refactor: every entry is a place where 'pure motion' was not achievable. Keep it short. scripts/refactor_parity.py fails if it exceeds 15 entries, because at that point the module boundaries are wrong and should be moved instead.",
+ "_format": "waivers: { qualname: one-line reason }. Keys starting with '_' are metadata. Qualnames MUST go inside \"waivers\" -- they were once kept at the top level, where every private '_name' was silently discarded as metadata and so could never be waived at all.",
+ "waivers": {
+  "_decision_legal_actions": "Became a dispatch-table lookup: the 601-line 'if top.kind == ...' chain over 75 kinds is now 75 register_decisions() rows. Changing this body IS the commit, so waiving it alone would leave the 601 moved lines unproved -- 'scripts/refactor_parity.py --decision-arms' proves them instead, arm by arm: 28 kinds because the arm was a bare 'return NAME(state, top)' and the table routes to that same NAME, and 47 because a handler's body dumps to an AST identical to the arm's. That gate also re-checks the two facts a table depends on (no arm fell through; no kind was handled twice), so it fails rather than quietly approving if either stops holding."
+ }
 }

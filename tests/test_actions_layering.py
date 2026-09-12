@@ -33,6 +33,11 @@ PKG = Path(__file__).resolve().parent.parent / "src" / "swu" / "engine" / "actio
 # extraction needed no upward reaches at all.
 LAYERS = [
     "base",
+    # `dispatch` is deliberately near the floor: it holds the decision-kind table and
+    # imports nothing, which is what lets a family module depend on it instead of the
+    # dispatcher depending on every family. If it ever imports a family, the fan-out
+    # it was built to remove is back.
+    "dispatch",
     "stats",
     "costs",
     "damage",
@@ -145,7 +150,7 @@ def test_the_intra_package_import_graph_is_acyclic():
     assert not cycle, "import cycle inside the actions package: " + " -> ".join(cycle)
 
 
-@pytest.mark.parametrize("module", ["base", "stats"])
+@pytest.mark.parametrize("module", ["base", "dispatch", "stats"])
 def test_the_bottom_modules_depend_on_nothing_in_the_package(module):
     """``base`` and ``stats`` are the floor; 206 definitions rest on ``base`` alone.
 
