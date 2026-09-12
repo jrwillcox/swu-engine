@@ -44,6 +44,12 @@ LAYERS = [
     "zones",
     "flow",
     "combat",
+    # `observers` sits directly below `turn` because the turn machinery is one of its
+    # callers: _start_action_phase and _regroup_rollover both fire scheduled effects,
+    # and _ready_all_cards notes every unit it readies. The 19 `_fire_*` functions run
+    # from `apply` in a fixed order that is behaviour rather than style, so they live
+    # in one module and move as one block or not at all.
+    "observers",
     "turn",
     "_legacy",
     "api",

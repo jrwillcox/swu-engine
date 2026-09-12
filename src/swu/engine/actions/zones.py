@@ -55,7 +55,6 @@ from swu.engine.actions.damage import (
     _bases_cannot_heal, _deal_damage_with_shield, _hp_lethal, base_damage_after_prevention, note_base_healed,
 )
 
-
 # ── apply convenience wrapper ─────────────────────────────────────────────────
 
 def note_upgrade_defeated(s: GameState, upgrade_ci: "CardInstance",
@@ -1037,3 +1036,81 @@ def _defeat_unit(s: GameState, owner_ps: PlayerState, ci: CardInstance,
     else:
         ci.zone = Zone.DISCARD
         owner_of_card.discard.append(ci)
+
+
+# ── Put a chosen in-play unit on the top or bottom of its owner's deck
+
+def _apply_put_on_deck(s: GameState, target_id: str, *, to_top: bool) -> GameState:
+    """Relocate an in-play unit to the top (``to_top``) or bottom of its owner's
+    deck.  Strips its non-token upgrades to their owners' discards and resets the
+    card (damage/exhaust/flags cleared, face_down) — a card out of play is a clean
+    card, the _apply_return_to_hand rule mirrored for the deck."""
+    result = s.find_instance(target_id)
+    if result is None:
+        return s
+    ps, ci = result
+    from swu.cards.models import TokenUpgrade
+    for upg in list(ci.attached_upgrades):
+        if not isinstance(upg.card_def, TokenUpgrade):
+            upg_owner = s.player_by_id(upg.owner_id)
+            upg.zone = Zone.DISCARD
+            upg_owner.discard.append(upg)
+    ci.attached_upgrades.clear()
+    ci.damage = 0
+    ci.exhausted = False
+    ci.face_down = True
+    ci.cannot_ready_this_round = False
+    ci.defeat_at_regroup = False
+    ci.return_to_owner_hand_at_regroup = False
+    ci.return_control_to_owner_at_regroup = False
+    ci.bottom_at_regroup = False
+    for arena in (ps.ground_arena, ps.space_arena):
+        if ci in arena:
+            arena.remove(ci)
+            break
+    ci.zone = Zone.DECK
+    owner_ps = s.player_by_id(ci.owner_id)
+    if to_top:
+        owner_ps.deck.insert(0, ci)  # deck[0] is the top (drawn via pop(0))
+    else:
+        owner_ps.deck.append(ci)     # bottom
+    # A relocated card no longer sources any 'while this unit is in play' permanent
+    # modifier it granted (Huyang TWI_110) — drop them for hygiene (the compute-time
+    # source-in-play guard already makes them inert).
+    s.modifiers = [
+        m for m in s.modifiers
+        if not (m.duration == "permanent" and m.source_instance_id == ci.instance_id)
+    ]
+    return s
+
+
+# ── Capture ───────────────────────────────────────────────────────────────────
+
+def _rescue_captured_card(s: GameState, captive_ci: CardInstance) -> bool:
+    """RESCUE ``captive_ci``: it leaves the capture pile for its OWNER'S HAND.
+
+    The CR rescue destination — unlike the leave-play RELEASE
+    (``_release_captured_cards``), which returns captives to their owner's arena.
+    Returns False if the card is not currently in a capture pile.  (Unexpected
+    Escape SHD_76, Cad Bane TWI_187.)
+    """
+    for ps in s.players:
+        if captive_ci not in ps.capture_pile:
+            continue
+        captor_id = captive_ci.captured_by
+        ps.capture_pile.remove(captive_ci)
+        owner_ps = s.player_by_id(captive_ci.owner_id)
+        captive_ci.captured_by = None
+        captive_ci.face_down = False
+        captive_ci.damage = 0
+        captive_ci.exhausted = False
+        captive_ci.zone = Zone.HAND
+        owner_ps.hand.append(captive_ci)
+        s.event_log.append(UnitReturnedFromCapture(
+            instance_id=captive_ci.instance_id,
+            card_name=captive_ci.card_def.display_name,
+            owner_id=captive_ci.owner_id,
+            captor_instance_id=captor_id,
+        ))
+        return True
+    return False
