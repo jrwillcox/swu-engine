@@ -1,15 +1,36 @@
-"""Transitional holding module for the not-yet-extracted parts of actions.
+"""The engine's action API: what a player may do, and what happens when they do it.
 
-This file is the remains of the single 24,788-line engine/actions.py, kept
-under one name while its sections are moved out into the layered kernel
-(base, costs, stats, zones, combat, observers, turn,
-api) and the per-family decisions/ modules.  It shrinks with every commit
-of the split and is deleted when it reaches zero.
+Two functions matter to callers, and everything else in this module exists to serve them:
 
-Nothing should import from here directly: the package facade in __init__.py
-re-exports every public name, and scripts/refactor_parity.py proves that each
-extraction moved code without changing it.  The real module documentation lives in
-__init__.py.
+* ``legal_actions(state)`` — every action the acting player may legally take right now.
+* ``apply(state, action)`` — take one, and return the resulting state.
+
+Those two are the whole surface the bots, the web API and the tests drive the game
+through. This module sits at the **top** of the package for that reason: it is allowed to
+know about every mechanic, and nothing is allowed to know about it.
+
+When a decision is on the stack the legal actions are whatever that *kind* of decision
+allows, and ``_decision_legal_actions`` answers that with a single ``dispatch`` table
+lookup. It used to be a 601-line ``if top.kind == …`` chain over seventy-five kinds, which
+is the specific reason this file could not be split before: one function naming a handler
+from every mechanic in the game forced the module holding it to depend on all of them. Now
+each family module claims its own kinds and the dispatcher consults the table, which is
+what let the families leave one at a time.
+
+Also here: the actions available with no decision pending -- playing a card, passing,
+resourcing, claiming initiative, mulliganing, deploying a leader (including as an upgrade)
+-- together with the guards that make those enumerations correct rather than optimistic
+(``_events_locked``, ``_cannot_play_from_hand``, ``_named_card_play_forbidden``,
+``_play_only_as_first_action_blocked``, ``_mulligan_forbidden``).
+
+⚠ **The Action class names in this module are a wire protocol, not an implementation
+detail.** ``web/serializers.py`` sends ``type(action).__name__`` as an action's ``kind`` and
+``asdict(action)`` as its ``params``, and the frontend hardcodes fourteen of those names --
+``PlayCard``, ``KeepHand``, ``TakeMultiligan``, ``ResourceCard``, ``ClaimInitiative`` and
+``ChooseTarget`` among them. Moving a class between modules is safe, because the name does
+not change. **Renaming a class, or renaming one of its dataclass fields, is a breaking
+frontend change** that no Python test will catch. ``tests/test_actions_contract.py`` pins
+the sorted set of names and field names against a golden list precisely so that it does.
 """
 from __future__ import annotations
 
@@ -29,38 +50,39 @@ from swu.engine.keywords import Keyword, has_keyword, keyword_value
 from swu.engine.state import CardInstance, GameState, Phase, PlayerState, Zone, ability_suppressed
 from swu.engine.triggers import get_bus
 
-from swu.engine.actions.base import Action, IllegalActionError
-from swu.engine.actions.shared import (
-    _attach_pilot, _deploy_leader_into_arena, _eligible_pilot_targets, _enumerate_discard_play_actions, _plot_eligible_resource_ids, _plot_play_actions, _take_from_hand, spend_force_token,
-)
-from swu.engine.actions.observers import (
-    _fire_base_damage_observers, _fire_bounty_observers, _fire_deck_discard_observers, _fire_draw_observers, _fire_force_observers, _fire_hand_discard_observers, _fire_heal_observers, _fire_noncombat_damage_observers, _fire_ready_observers, _fire_reveal_discard_observers, _fire_self_discard_observers, _fire_token_creation_observers, _fire_unit_entry_observers, _fire_upgrade_attach_observers, _fire_upgrade_defeat_observers,
+from swu.engine.actions.base import (
+    Action, IllegalActionError,
 )
 from swu.engine.actions.dispatch import (
     decision_handler, register_decisions,
 )
-from swu.engine.actions.turn import (
-    _advance_mulligan, _advance_setup_resources, _check_regroup_complete, _enter_regroup, _starting_hand_modifier, _starting_hand_size,
-)
-from swu.engine.actions.combat import (
-    _enumerate_attacks, _enumerate_two_unit_attacks, _filter_granted_attacks, _forced_attack_actions, _pre_attack_actions, note_hand_or_deck_discard, record_hand_discard,
-)
-from swu.engine.actions.flow import (
-    _assert_phase, _check_game_over, _switch_active_player,
-)
-from swu.engine.actions.zones import (
-    _attach_upgrade, _defeat_unit, _draw_cards, _eligible_upgrade_targets, _find_in_arenas, _find_upgrade_host, _push_resolve_unique, _put_unit_in_play, _resolve_event_ability, _sweep_defeated_units, note_upgrade_defeated,
+from swu.engine.actions.costs import (
+    _affordable_with_credits, _consume_play_discount, _consume_standing_discount, _defeat_credit, _discard_cost_candidates, _discard_cost_payable, _exhaust_resources, _pay_play_cost, _pilot_count, _pilot_limit, _piloting_cost, _piloting_discount_entry, _play_cost, _smuggle_cost, resource_cost_for,
 )
 from swu.engine.actions.damage import (
     base_damage_after_prevention,
 )
-from swu.engine.actions.costs import (
-    _affordable_with_credits, _consume_play_discount, _consume_standing_discount, _defeat_credit, _discard_cost_candidates, _discard_cost_payable, _exhaust_resources, _pay_play_cost, _pilot_count, _pilot_limit, _piloting_cost, _piloting_discount_entry, _play_cost, _smuggle_cost, resource_cost_for,
+from swu.engine.actions.zones import (
+    _attach_upgrade, _defeat_unit, _draw_cards, _eligible_upgrade_targets, _find_in_arenas, _find_upgrade_host, _push_resolve_unique, _put_unit_in_play, _resolve_event_ability, _sweep_defeated_units, note_upgrade_defeated,
+)
+from swu.engine.actions.flow import (
+    _assert_phase, _check_game_over, _switch_active_player,
+)
+from swu.engine.actions.shared import (
+    _attach_pilot, _deploy_leader_into_arena, _eligible_pilot_targets, _enumerate_discard_play_actions, _plot_eligible_resource_ids, _plot_play_actions, _take_from_hand, spend_force_token,
+)
+from swu.engine.actions.combat import (
+    _enumerate_attacks, _enumerate_two_unit_attacks, _filter_granted_attacks, _forced_attack_actions, note_hand_or_deck_discard, record_hand_discard,
+)
+from swu.engine.actions.observers import (
+    _fire_base_damage_observers, _fire_bounty_observers, _fire_deck_discard_observers, _fire_draw_observers, _fire_force_observers, _fire_hand_discard_observers, _fire_heal_observers, _fire_noncombat_damage_observers, _fire_ready_observers, _fire_reveal_discard_observers, _fire_self_discard_observers, _fire_token_creation_observers, _fire_unit_entry_observers, _fire_upgrade_attach_observers, _fire_upgrade_defeat_observers,
+)
+from swu.engine.actions.turn import (
+    _advance_mulligan, _advance_setup_resources, _check_regroup_complete, _enter_regroup, _starting_hand_modifier, _starting_hand_size,
 )
 
 
 # ── Setup actions ─────────────────────────────────────────────────────────────
-
 
 def _mulligan_forbidden(ps: "PlayerState") -> bool:
     """True if ``ps``'s base says "You can't take a mulligan" (Nabat Village
@@ -541,530 +563,7 @@ class DeclineGrantedAttack(Action):
         return "Decline granted attack"
 
 
-# ── Owner-may-replay a just-returned unit for free (Baylan Skoll LOF_185,
-#    Rio Durant LAW_93) ──────────────────────────────────────────────────────
-#
-# "Return a non-leader unit to its owner's hand.  Then, its owner may play it for
-# free."  A multi-decider decision: the returned unit's OWNER — who may be the
-# source's opponent — decides whether to replay it (the say_no SOR_233 /
-# opponent_chooses_target SHD_246 deciding-player shift).  The return has already
-# happened inline (via _apply_return_to_hand) before the decision is pushed by
-# push_owner_may_replay.
-
-
-# ── Put a chosen in-play unit on the top or bottom of its owner's deck
-#    (Qui-Gon Jinn LOF_200) ─────────────────────────────────────────────────────
-#
-# "You may choose a non-leader ground unit.  Its owner puts it on the top or
-# bottom of their deck."  A multi-decider decision: the source's controller picks
-# the unit (via the CustomEffect.target seam), but the chosen unit's OWNER — who
-# may be the source's OPPONENT — decides top vs bottom (only the owner should
-# order their own deck; the say_no SOR_233 / owner_may_replay LOF_185
-# deciding-player shift).  The unit leaves play as a RELOCATION (not a defeat — no
-# WhenDefeated fires), mirroring _apply_return_to_hand but with the deck as the
-# destination.
-
-
-# ── Opponent "say no" reaction (say_no decision) ──────────────────────────────
-#
-# "Deal N damage to an enemy unit unless its controller says 'no.' If they do,
-# draw M cards." (I Am Your Father, SOR_233).  The source's controller picks the
-# enemy unit (via the CustomEffect.target seam); the chosen unit's controller —
-# the OPPONENT — then resolves a 'say_no' decision: allow the effect (take the
-# damage) or say "no" (no damage, and the source's controller draws).  See
-# push_say_no.
-
-
-# ── Recurring regroup upkeep: "pay 1 or return to hand" (Millennium Falcon
-# SOR_193) ────────────────────────────────────────────────────────────────────
-#
-# "When you ready cards during the regroup phase: Either pay [1 resource] or
-# return this unit to her owner's hand."  Fired at regroup start by a
-# PhaseStartTrigger(phase="regroup") CustomEffect (the Contracted Hunter JTL_216
-# site) which calls push_regroup_upkeep; the source's controller then chooses.
-
-
-# ── Delayed action-phase-start scheduler + per-enemy pay-or-exhaust ────────────
-#
-# The Eye of Aldhani SEC_73/SECP_5 seam (a 1-cost Vigilance Event): "At the start
-# of the next action phase, for each enemy unit, its controller must pay 1 resource
-# or exhaust that unit."  Two primitives compose it:
-#
-#   (A) a DELAYED SCHEDULER — the event resolves in ACTION and goes to discard, so
-#       there is no in-play host for a PhaseStartTrigger.  push_eye_of_aldhani_
-#       schedule records a small serialisable entry in
-#       state.scheduled_action_phase_effects; _fire_scheduled_action_phase_effects
-#       drains it once at the next action-phase start (both _regroup_rollover and
-#       _start_action_phase call it), mirroring the defeat_at_regroup / granted_
-#       bounties "serialised flag swept at a phase boundary" shape.
-#   (B) a PER-ENEMY PAY-OR-EXHAUST decision — a multi-unit sibling of the
-#       regroup_upkeep decision (Millennium Falcon SOR_193), but the DECIDER is the
-#       enemy (each unit's controller) and the consequence is exhaust, not bounce.
-
-
-# ── Delayed "defeat a resource you control at the next action phase" ──────────
-#
-# Han Solo SOR_17: "… At the start of the next action phase, defeat a resource you
-# control."  Composes the same scheduled_action_phase_effects seam as Eye of
-# Aldhani — the leader's Action/On-Attack resolves in ACTION, so the delayed defeat
-# is recorded by controller_id and drained once at the next action-phase start.
-# Faithful simplification (the K-2SO SOR_145 auto-select precedent): resources are
-# interchangeable face-down cards, so one is auto-defeated (a face-down, un-special
-# resource is preferred) rather than prompting a choice.
-
-
-# ── Player-directed damage distribution (distribute_damage decision) ──────────
-#
-# A reusable decision primitive for "deal damage divided as you choose" effects
-# (Emperor Palpatine SOR_135, Overwhelming Barrage SOR_92, Maximum Firepower
-# SOR_234).  See push_distribute_damage / push_distribute_source_power /
-# push_sequence_damage for the three flavours and their context schema.
-
-
-# ── Deck search-and-select (deck_search decision) ─────────────────────────────
-#
-# A reusable "search the top N cards of your deck for matching cards, reveal and
-# draw the chosen ones, then put the rest on the bottom in a random order"
-# primitive (Grand Moff Tarkin SOR_84, Recruit SOR_123).  The controller selects
-# up to ``max_select`` of the eligible candidates; selection auto-finishes once
-# the cap is reached.  ``up_to`` distinguishes "up to N" (a FinishSearch is always
-# offered, so 0 picks is legal — Tarkin) from "for a <thing>" (mandatory if able,
-# so a pick is forced while a candidate remains — Recruit).  See push_deck_search.
-
-
-# ── Return cards from the discard pile to hand (return_from_discard decision) ──
-#
-# A reusable "return up to N matching cards from your discard pile to your hand"
-# primitive (Razor Crest SHD_44 — "You may return an upgrade from your discard
-# pile to your hand").  The discard pile is public, so the chosen cards are
-# visible to both players; the controller picks up to ``max_select`` of the
-# eligible cards, selection auto-finishes once the cap is reached, and a
-# FinishReturnFromDiscard is always offered (these effects are "you may" / "up
-# to", so taking 0 is legal).  See push_return_from_discard.  This is a
-# self-contained decision kind — it touches no core resolution or trigger
-# machinery (the deck_search / select_token "select up to N" pattern, but over
-# the discard pile rather than the deck/arena).
-
-
-# ── Put a chosen discard-pile card into play as a resource (resource_from_discard) ──
-#
-# The Marauder SHD_102 ("Choose a card in your discard pile.  Put it into play as a
-# resource if it shares a name with a unit you control") and Spark of Hope SHD_105
-# ("Choose a unit in your discard pile.  If it was defeated this phase, put it into
-# play as a resource").  Both are "choose a discard card, THEN a gate decides whether
-# it is resourced"; since choosing a non-qualifying card does nothing (there is no
-# cost or downside to the choice), the candidates are PRE-FILTERED to the qualifying
-# cards (the deck_search / return_from_discard "fizzle cleanly if none eligible"
-# convention), collapsing the card to "choose one qualifying discard card → put it
-# into play as a resource".  A self-contained decision kind (the return_from_discard
-# select-one pattern, but the chosen card lands in the resource zone facedown +
-# EXHAUSTED per CR §"PUT INTO PLAY AS A RESOURCE" — no "ready it" is printed — instead
-# of returning to hand).
-
-
-# ── Play a captured card for free under your control (play_captured_card) ─────
-#
-# Dryden Vos SHD_192 ("When Played: Choose a captured card guarded by a unit you
-# control.  You may play it for free under your control").  A captive lives in the
-# controller's own ``capture_pile`` (every captive there is guarded by one of their
-# units), so the candidates are simply the Unit captives in that pile.  A
-# self-contained decision kind mirroring the return_from_discard / resource_from_discard
-# select-one-from-a-zone pattern: the chosen unit is removed from the capture pile and
-# put into play under the controller (control follows the holder; owner unchanged) at
-# cost 0, firing its own When Played / keyword triggers (pop-then-act, so those land on
-# a clean stack).  ``up_to`` adds a decline for the "you may".
-
-
-# ── Reveal the top N; an opponent culls some; you draw one (reveal_cull_draw) ────
-#
-# Admiral Trench JTL_14 ("Reveal the top 4 cards of your deck.  An opponent discards
-# 2 of them.  Draw 1 of the remaining cards and discard the other.").  A two-stage
-# DECIDER-SHIFT over one fixed set of revealed cards (the say_no SOR_233 seat-flip,
-# but with a select-N stage on each side): the opponent culls first, then the
-# controller takes one of the survivors and the rest are discarded.  Neither stage
-# collapses to an optimal default — the opponent is denying the best cards while the
-# controller is keeping the best of what is left — so both are real prompts.
-#
-# The revealed cards stay in the deck while the decision is open (the deck_search
-# convention: nothing else can happen with a decision pending, and card conservation
-# holds without a set-aside zone).  Both players see every revealed identity: the
-# card says "Reveal", so the context carries them openly.
-
-
-# ── Play unit-resources revealed for free, one at a time (play_resource_units) ────
-#
-# Endless Legions SHD_109 ("Reveal any number of resources you control.  Play each
-# unit revealed this way for free (one at a time)").  Revealing a non-unit resource
-# is strictly pointless — no unit is played and the identity leaks to the opponent —
-# so the optimal-play collapse offers only the controller's Unit resources as
-# candidates.  A repeated single-select loop (the "one at a time" wording): each pick
-# removes that resource from the resource row and puts its unit into play for free
-# under the controller, then RE-PUSHES the loop with the remaining unit-resources so
-# the just-played unit's When Played / keyword triggers (pushed on top) fully resolve
-# BEFORE the next pick — faithful LIFO ordering, unlike playing a whole batch in one
-# apply().  DeclineResourceUnitPlay ends the loop (the "any number" — including zero —
-# lets the controller stop early).  A played resource is NOT replaced from the deck
-# (unlike Smuggle): the resource count genuinely drops, which is the card's tradeoff.
-
-
-# ── Discard a same-named hand card to give 2 Experience (discard_for_experience) ──
-#
-# Echo SHD_99 "When Played: You may discard a card from your hand.  Give 2 Experience
-# tokens to a unit in play with the same name as the discarded card." (Clone
-# name-matching.)  Modelled as one decision: the candidates are the controller's hand
-# cards whose name matches a FRIENDLY unit in play (discarding a non-matching card
-# gives no benefit — the pre-filter/fizzle convention, and the never-buff-enemy
-# principle keeps the token target friendly).  Selecting a hand card discards it and
-# gives 2 Experience to a matching friendly unit (auto-pick one when several share the
-# name — the K-2SO SOR_145 auto-select simplification); DeclineDiscardForExperience
-# covers the "you may".
-
-
-# ── Restock SOR_252: bottom up-to-N cards from a discard pile ─────────────────
-#
-# "Choose up to 4 cards in a discard pile.  Put them on the bottom of their owner's
-# deck in a random order."  A select-up-to-N decision over BOTH players' discard
-# piles (the card says "a discard pile" — either qualifies).  Each chosen card goes
-# to the bottom of ITS OWNER's deck; the collected picks are shuffled first so the
-# resulting bottom order is random (the deck_search bottoming pattern).
-
-
-# ── Choose N different-named discard cards, return 1 of them at random ─────────
-#
-# Doctor Aphra SHD_15 "When Deployed: Choose 3 cards in your discard pile with
-# different names.  If you do, return 1 of them at random to your hand."  Modelled
-# as a mandatory forced-choice decision (``select_distinct_return_random``): the
-# controller picks exactly ``count`` cards, each with a name distinct from those
-# already picked (the remaining candidates are filtered by name after every pick),
-# and on the last pick one of the chosen set is returned to hand at random.  Pushed
-# only when ≥ ``count`` distinct names exist in the discard (else "if you do" fails
-# and the effect does nothing) — so there is no decline/finish action; the player
-# always completes a full selection.
-
-
-# ── Peek at the top card of the deck (peek_top / choose_number decisions) ─────
-#
-# Two related "look at the top card of your deck" abilities (R2-D2 SOR_236,
-# C-3PO SOR_238).  The engine has full information, but the DECISION is the
-# player's, so each is modelled as a real choice point rather than auto-resolved:
-#   - R2-D2: a binary "leave on top" (KeepTopCard) vs "put on the bottom"
-#     (BottomTopCard) choice — a "peek_top" decision in mode "may_bottom".
-#   - C-3PO: first a "choose_number" decision (ChooseNumber); on resolution the
-#     top card is peeked and, only if its cost equals the chosen number, a
-#     "peek_top" decision in mode "may_draw" offers KeepTopCard vs DrawTopCard.
-#   - Ezra Bridger (SOR_192): mode "may_play_discard" — "Look at the top card of
-#     your deck. You may play it, discard it, or leave it on top" offers
-#     PlayTopCard (pay its cost, per legal host for an upgrade) / DiscardTopCard /
-#     KeepTopCard (leave on top).
-# See push_peek_top / push_choose_number.
-
-
-# ── Look at an opponent's hand (Viper Probe Droid SOR_228 / SEC_239) ──────────
-#
-# "When Played: Look at an opponent's hand."  A pure information effect — the
-# engine has full information already, but the *player* must actually be shown the
-# opponent's hand.  The redacted PlayerView hides the opponent's hand entirely, so
-# the old implementation (a HandInspected log entry with only a count) left the
-# human unable to see anything.  Modelled as a private informational decision: the
-# revealed hand's card identities are carried in the deciding (inspecting) player's
-# decision context — which view_for only sends to that player — so the UI can show
-# them, and the opponent never sees the reveal.  IMPORTANT: only card_id + name are
-# stored, NOT the opponent's hand instance_ids (those are hidden info; surfacing an
-# opponent hand instance_id in the inspector's view would trip the hidden-info
-# leak invariant, which keys on instance_id).
-
-
-# ── Modal "choose one" decision (Leia Organa SOR_189) ─────────────────────────
-#
-# A "modal" decision presents the controller with a "choose one" effect, then a
-# target choice for the selected mode.  Leia Organa ("Either ready a resource or
-# exhaust a unit") is the first user.  A mode whose legal targets are
-# interchangeable (``_MODAL_FUNGIBLE_MODES``, e.g. "ready a resource") skips the
-# target step and resolves on an arbitrary target.  See push_modal.
-
-
-# ── Let the Wookiee Win (SHD_205): an OPPONENT-decided modal ───────────────────
-#
-# "An opponent chooses one: [You ready up to 6 resources] / [You ready a friendly
-# unit.  If it's a Wookiee unit, attack with it.  It gets +2/+0 for this attack]."
-# A cross-decider two-stage decision (the opponent_chooses_target SHD_246 decider-
-# shift precedent): stage "mode" is decided by the OPPONENT, stage "ready" (only for
-# the second mode) by the CONTROLLER.  push_modal is controller-only and its modes
-# don't chain a granted attack, so this is its own decision kind.
-
-
-# ── Reveal-top "discard any, reorder the rest on top" (For a Cause I Believe In,
-#    SOR_152) ───────────────────────────────────────────────────────────────────
-#
-# After the reveal damage is dealt up front (see push_reveal_top_discard_reorder),
-# the controller resolves the revealed top-N cards one at a time: DiscardRevealed
-# sends a card to the discard pile; KeepRevealed marks it to be put back on top.
-# The order of KeepRevealed calls is the resulting top order (first kept = top).
-# When every revealed card has been resolved the kept cards are reordered to the
-# top of the deck and the decision pops.
-
-
-# ── Reveal-until-stop, damage equal to the combined cost (Don't Get Cocky,
-#    SOR_223) ────────────────────────────────────────────────────────────────
-#
-# "Choose a unit.  One at a time, reveal cards from your deck until you choose to
-# stop or have revealed ``max_reveals`` cards.  If the combined cost of the
-# revealed cards is ``threshold`` or less, deal that much damage to the chosen
-# unit.  Put the revealed cards on the bottom of your deck in a random order."
-# A push-your-luck loop: RevealNextCard reveals the next top card (adding its cost
-# to a running tally shown to the deciding player); StopRevealing (or hitting the
-# cap / exhausting the deck) finishes.  On finish the tallied damage is dealt
-# (pop-then-deal) only when the tally is within ``threshold``, then every revealed
-# card is bottomed in a seeded-random order (the deck_search bottoming convention).
-
-
-# ── Repeated-modal "discard up to N, a different option per card" ──────────────
-#
-# Poe Dameron (SHD_153): "On Attack: Discard up to 3 cards from your hand. For
-# each card discarded this way, choose a different option: Deal 2 damage to a
-# unit or base / Defeat an upgrade / An opponent discards a card."  One
-# 'repeated_modal' decision drives three stages (see push_repeated_modal):
-#   * stage "discard"       — DiscardForModal(card_id) discards a hand card (up to
-#                             the cap = min(max_discards, #modes)); FinishModalDiscard
-#                             stops early (the "up to" lets the controller take fewer).
-#   * stage "choose_mode"   — ChooseRepeatedMode(mode) picks one not-yet-used
-#                             option; a targeted mode advances to "choose_target",
-#                             a no-target one is recorded immediately.
-#   * stage "choose_target" — ChooseRepeatedTarget(target_id) records the target.
-# Choices are RECORDED into ctx["plan"], not applied, until one option per discard
-# has been chosen; then the decision is popped and the planned effects are applied
-# in order — so a defeat/damage trigger lands on a clean stack (mirroring
-# push_distribute_damage's "pop, then deal" gotcha).
-
-
-# ── Sacrifice-a-resource as an optional cost ──────────────────────────────────
-#
-# Wrecker (SHD_154): "When Played: You may defeat a friendly resource. If you do,
-# deal 5 damage to a ground unit."  One 'sacrifice_resource' decision drives two
-# stages (see push_sacrifice_resource_for_damage):
-#   * stage "decide" — SacrificeResource(resource_id) defeats one of the
-#                      controller's resources and advances to the damage target;
-#                      DeclineSacrifice() pops the decision and does nothing ("may").
-#   * stage "target" — ChooseSacrificeTarget(target_id) deals the stored damage to
-#                      the chosen unit and pops.
-# The damage is dealt AFTER the decision pops (the "pop, then deal" gotcha shared
-# with push_distribute_damage / push_repeated_modal) so a defeat trigger lands on
-# a clean stack.  The decision is only pushed when the controller has ≥1 resource
-# AND ≥1 legal damage target (sacrificing for nothing is never offered).
-
-
-# ── Reveal a resource, name-match a friendly unique unit, return it + ramp ─────
-#
-# Hunter (SHD_9): both the undeployed "Action [1 resource, Exhaust]" and the
-# deployed "On Attack: You may …" read the same text — "Reveal a resource you
-# control. If it shares a name with a friendly unique unit, return the resource to
-# its owner's hand and put the top card of your deck into play as a resource."
-# One single-stage 'reveal_resource_ramp' decision drives it: the controller picks
-# which matching resource to reveal (RevealResourceForRamp), which returns that
-# resource to its owner's hand and ramps the controller's deck top; or declines
-# (DeclineRevealResource, offered only on the optional "may" side).  Only resources
-# that actually name-match a friendly unique unit are offered as candidates (a
-# non-matching reveal accomplishes nothing), and the decision is pushed only when
-# ≥1 such candidate exists — so it is never a dead choice.  No change to core
-# resolution or the trigger machinery: a self-contained decision kind, like
-# sacrifice_resource / opponent_chooses_target.
-
-
-# ── New primitive: opponent-chooses-target (Grey Squadron Y-Wing SHD_246) ─────
-#
-# Grey Squadron Y-Wing (SHD_246): "On Attack: An opponent chooses a unit or base
-# they control. You may deal 2 damage to it."  One 'opponent_chooses_target'
-# decision drives two stages whose *deciding player differs* (the say_no SOR_233
-# precedent of handing a decision to the opponent):
-#   * stage "choose"  — the OPPONENT picks one of their own units or base via
-#                       ChooseOwnTarget(target_id).  Mandatory (always ≥1: a base
-#                       is always present), so no decline is offered.
-#   * stage "confirm" — control returns to the source's controller, who MAY deal
-#                       the stored damage via ConfirmOpponentDamage(), or pass it
-#                       up with DeclineOpponentDamage() ("you may").
-# The damage is dealt AFTER the decision pops (the "pop, then deal" gotcha shared
-# with push_distribute_damage / push_sacrifice_resource_for_damage) so a defeat
-# trigger lands on a clean stack.  This adds no change to core resolution or the
-# trigger machinery — only a new self-contained decision kind that shifts the
-# deciding player between its two stages, exactly as say_no does.
-
-
-# ── New primitive: each-player-defeats-a-unit (Merciless Contest TWI_238) ─────
-#
-# "Each player chooses a non-leader unit they control. Defeat those units."  One
-# 'each_player_defeats' decision walks the players in turn (the source's
-# controller first, then the opponent), each choosing one of their OWN matching
-# units via ChooseUnitToDefeat — a per-stage deciding-player shift (the say_no
-# SOR_233 / opponent_chooses_target SHD_246 precedent).  A player with no eligible
-# unit is skipped; if neither has one the decision is never pushed (the event
-# fizzles).  After every eligible player has chosen, the decision pops and the
-# chosen units are defeated together (the "pop, then defeat" gotcha shared with
-# push_distribute_damage) so a WhenDefeated trigger lands on a clean stack.  This
-# adds no change to core resolution or the trigger machinery — only a new
-# self-contained decision kind that shifts the deciding player per stage.
-
-
-# ── Opponent chooses one of their own non-leader units to be captured by the
-#    source, or declines (then the source readies) — Grand Admiral Thrawn
-#    SEC_193 WhenPlayed ──────────────────────────────────────────────────────
-#
-# "An opponent may choose a non-leader unit they control.  If they do, this unit
-# captures that unit.  If they don't, ready this unit."  A self-contained
-# 'capture_or_ready' decision decided by the OPPONENT (the deciding-player shift of
-# each_player_defeats TWI_238 / opponent_chooses_target SHD_246), whose payoff is
-# capture-or-ready rather than defeat/damage, and which the opponent may decline.
-# The capture / ready happens after the decision pops (the "pop, then act" gotcha —
-# a clean stack).  Pushed only when the opponent has ≥1 non-leader unit; with none
-# they "can't choose" so "they don't" ⇒ the source readies inline (no decision).
-
-
-# ── Opponent may discard a random card, else the controller gets an effect
-#    (Political Pressure TWI_222) ──────────────────────────────────────────────
-#
-# "Choose an opponent. They may discard a random card from their hand. If they
-# don't, create 2 Battle Droid tokens."  A self-contained 'may_discard' decision
-# handed to the OPPONENT (the say_no SOR_233 deciding-player-shift precedent): the
-# opponent either discards a random card (RNG-chosen — the text says "random") to
-# prevent the else-effect, or declines, in which case the source's controller gets
-# the else-effect (create N token units).  See push_may_discard_else_tokens.
-
-
-# ── Exhaust any number of friendly units, deal base damage per unit exhausted
-#    (The Invisible Hand TWI_234 On Attack) ───────────────────────────────────
-#
-# "Exhaust any number of friendly Separatist units. Deal 1 damage to the
-# defending player's base for each unit exhausted this way."  A self-contained
-# multi-select decision (the Medal Ceremony SOR_245 select_token "any number"
-# shape, but exhausting instead of token-giving, with a scaling base-damage
-# payoff): the controller picks ready friendly units matching the trait filter one
-# at a time, each exhausted as it is chosen (so it falls out of the eligible set),
-# or finishes early ("any number" includes 0).  On finish the decision pops and
-# ``damage_per`` × (units exhausted) is dealt to the recorded defending base (the
-# "pop, then deal" gotcha so a base-defeat trigger lands on a clean stack).
-
-
-# ── Exhaust any number of units with combined cost ≤ N (Qui-Gon Jinn's Lightsaber
-#    LOF_201) ───────────────────────────────────────────────────────────────────
-#
-# "You may exhaust any number of units with combined cost 6 or less."  A
-# self-contained multi-select decision (the Invisible Hand TWI_234 select-shape,
-# but budget-bounded instead of trait-filtered, with NO payoff and no
-# friendly/enemy restriction — the controller points it at enemy units).  Each
-# pick exhausts the unit inline and spends its printed cost against the budget; a
-# unit is eligible only while it is ready and its printed cost ≤ the remaining
-# budget.  "Any number" includes 0 — FinishExhaustCombined is always offered.
-
-
-# ── Capture any number of enemy non-leader units with combined remaining HP ≤ N
-#    (Dismantle the Conspiracy SEC_106) ─────────────────────────────────────────
-#
-# "A friendly unit captures any number of enemy non-leader units with a total of
-# 7 or less remaining HP."  The exhaust_combined_cost select-shape, but the weight
-# is each candidate's *remaining* HP and the pick captures the unit (under the
-# pre-chosen friendly captor) instead of exhausting it.  A unit is eligible only
-# while it is an enemy non-leader whose remaining HP ≤ the remaining budget.  "Any
-# number" includes 0 — FinishCaptureCombined is always offered.
-
-
-# ── Multi-capture pairing: choose any number of friendly units, each captures an
-#    enemy non-leader unit in the same arena (Finalizer SHD_92) ──────────────────
-#
-# "When Played: Choose any number of friendly units.  Each of those units captures
-# an enemy non-leader unit in the same arena."  A single-phase pair-selection
-# decision: each step picks a (captor, prey) PAIR — a friendly unit not yet used as
-# a captor and an enemy non-leader in its arena not yet captured — and captures the
-# prey under the captor inline.  Each friendly unit captures at most one enemy (a
-# used captor drops out); each enemy is captured once (a used prey drops out).  "Any
-# number" includes 0, so FinishMultiCapture is always offered while up; the decision
-# auto-resolves once no legal pair remains.
-
-
-# ── Choose any number of friendly units, play a unit free up to their combined
-#    power, then defeat the chosen ones (Consolidation of Power TWI_89) ─────────
-#
-# A select-any-number loop (the multi_capture_pairing shape) whose payoff is a
-# DYNAMIC cap: the combined effective power of the chosen units becomes the
-# ``cost_max`` of a free ``play_from_hand``.  The chosen units are defeated AFTER
-# that play — threaded through the play decision's new ``then_defeat_ids`` — so a
-# unit's power still counts while it is being spent, which is the whole trade.
-
-
-# ── Pay up to N resources, give that many Experience tokens to this unit
-#    (Curious Flock LOF_255) ─────────────────────────────────────────────────────
-#
-# "When Played: Pay up to 6 resources.  For each resource paid this way, give an
-# Experience token to this unit."  A self-contained "pay any number up to N"
-# decision: the controller repeatedly pays one ready resource (resources are
-# fungible — no target choice), each payment exhausting a resource AND giving one
-# Experience token to the source unit INLINE (an Experience token never triggers a
-# defeat, so there is no "pop, then act" concern).  "Up to" includes 0, so a
-# FinishPayResources is always offered.  The decision auto-resolves once the cap is
-# reached or no ready resource remains.
-
-
-# ── Count Dooku TWI_138 — per-exploited-unit optional damage ──────────────────
-#
-# "When Played: For each unit you exploited while playing this card, you may deal
-# damage to an enemy unit equal to the power of the exploited unit."
-#
-# A self-contained "per_exploit_damage" decision: one chunk per exploited unit,
-# each carrying a fixed damage amount (that unit's power, snapshotted at sacrifice
-# time and threaded through the play event_ctx).  For each chunk in order, the
-# controller may deal it to ONE enemy unit (``DealExploitDamage``) or skip it
-# (``DeclineExploitDamage`` — the "you may").  Target choices are RECORDED into a
-# plan while the decision walks the chunks (no damage dealt during choosing, so
-# the board — and thus the enemy-target set — is static); once every chunk is
-# decided the decision pops and all planned damage is dealt in order.  This
-# "record, then pop, then deal" shape (cf. each_player_defeats / repeated_modal)
-# keeps any defeat trigger off the stack until the decision is gone and avoids any
-# mid-decision re-push on a dirty stack.
-
-
-# ── New primitive: reveal-a-deck-top, a chosen player plays it free, a different
-#    player makes Credits = its cost (Vermillion LAW_215) ─────────────────────
-#
-# "When Attack Ends: If this unit survived, reveal the top card of a deck, then
-# choose a player.  They may play the revealed card for free.  If they do, a
-# different player creates Credit tokens equal to that card's cost."
-#
-# One 'reveal_play_credit' decision drives up to four stages with a mid-sequence
-# decider shift (the say_no SOR_233 / opponent_chooses_target SHD_246 precedent):
-#   * "choose_deck"   — the source's controller picks which player's deck to
-#                       reveal the top card of (ChooseRevealDeck), among the
-#                       non-empty decks.
-#   * "choose_player" — the controller picks the player who *may* play the
-#                       revealed card (ChooseRevealPlayer); control shifts to that
-#                       player.
-#   * "may_play"      — the chosen player plays the card for free
-#                       (PlayRevealedCard, offered only when it is playable) or
-#                       declines (DeclineRevealedCard — the card stays on top of
-#                       its deck).
-#   * "choose_host"   — only when the revealed card is an Upgrade and it is being
-#                       played: the chosen player picks a legal host
-#                       (ChooseRevealHost).
-# When the card is played, the OTHER player (the one who did not play it) creates
-# Credit tokens equal to its printed cost.  The played card is removed from the
-# revealed deck and played under the chosen player's *control* (its owner_id is
-# unchanged — control is implicit in this engine, the Stolen Landspeeder SHD_161
-# convention), for free (cost 0), routed through the normal play paths so its
-# own keyword / When Played abilities fire.  See push_reveal_play_credit.
-
-
 # ── New primitive: select-up-to-N units, give each a token (Medal Ceremony) ───
-#
-# Medal Ceremony (SOR_245): "Give an Experience token to each of up to 3 REBEL
-# units that attacked this phase."  A single 'select_token' decision lets the
-# controller pick *distinct* units one at a time (SelectTokenTarget) up to the
-# cap, or stop early (FinishSelectToken — the "up to").  A token is given the
-# moment a unit is chosen (tokens are independent, so selection order is
-# irrelevant); a chosen unit is excluded from later picks so a unit cannot be
-# selected twice.  The eligible set is recomputed each step from the stored spec
-# criteria via the resolver's target matcher, so the same predicate machinery
-# ("attacked_this_phase", trait/controller filters) governs eligibility.  This
-# adds no change to core resolution or the trigger machinery — only a new
-# self-contained decision kind (the deck_search "select up to N" pattern, but
-# over in-play units).
-
 
 @dataclass
 class DeployLeader(Action):
@@ -1189,7 +688,6 @@ class DeployLeaderAsUpgrade(Action):
 
 # ── Decision-resolving actions ────────────────────────────────────────────────
 
-
 @dataclass
 class AnswerTestDecision(Action):
     """Resolve a 'test' pending decision — only used in unit tests."""
@@ -1213,7 +711,6 @@ class AnswerTestDecision(Action):
 
 
 # ── Phase 3 decision-resolving actions ───────────────────────────────────────
-
 
 @dataclass
 class ChooseTarget(Action):
@@ -2077,12 +1574,6 @@ def _resolve_unique_duplicates(s: GameState) -> None:
                 return
 
 
-# ── Game creation ─────────────────────────────────────────────────────────────
-
-
-# ── Effective-stats layer ─────────────────────────────────────────────────────
-
-
 # ── Internal: decision helpers ────────────────────────────────────────────────
 
 def _decision_legal_actions(state: GameState) -> list[Action]:
@@ -2105,23 +1596,22 @@ def _decision_legal_actions(state: GameState) -> list[Action]:
     return handler(state, top)
 
 
-# ── Ambush ────────────────────────────────────────────────────────────
-
-# ── Exploit ───────────────────────────────────────────────────────────
-
 # ── Test (for unit-test infrastructure only) ──────────────────────────
+
 def _test_actions(state: GameState, top: PendingDecision) -> list[Action]:
     options = top.context.get("options", ["yes", "no"])
     return [AnswerTestDecision(opt) for opt in options]
 
-# ── Phase 3: trigger_option ───────────────────────────────────────────
 
 # ── Phase 3: resolve_effects ──────────────────────────────────────────
+
 def _resolve_effects_actions(state: GameState, top: PendingDecision) -> list[Action]:
     from swu.abilities.resolver import resolve_effects_actions
     return resolve_effects_actions(state, top)
 
+
 # ── Effect-granted attack (e.g. Surprise Strike) ──────────────────────
+
 def _granted_attack_actions(state: GameState, top: PendingDecision) -> list[Action]:
     deciding_ps = state.player_by_id(top.deciding_player_id)
     owner_idx = state.player_index(top.deciding_player_id)
@@ -2134,91 +1624,8 @@ def _granted_attack_actions(state: GameState, top: PendingDecision) -> list[Acti
         attacks.append(DeclineGrantedAttack())
     return attacks
 
-# ── Phase 3: pre_attack continuation ──────────────────────────────────
-
-# ── Play a unit from hand as an ability (Admiral Ozzel, SOR_129) ───────
-
-# ── Play an event from hand as an ability (Bib Fortuna, SOR_177) ──────
-
-# ── Play a card using Smuggle as an ability (Lando Calrissian, SHD_17) ─
-
-# ── Play a card using Piloting as an ability (Wedge Antilles, JTL_8) ───
-
-# ── Opponent may ready a unit (Admiral Ozzel, SOR_129) ────────────────
-
-# ── Opponent may say "no" to an effect (I Am Your Father, SOR_233) ────
-
-# ── Choose N different-named discard cards, return 1 at random (Aphra SHD_15) ─
-
-# ── Bottom up-to-N cards from a discard pile (Restock SOR_252) ─────────
-
-# ── Select up to N units, give each a token (Medal Ceremony SOR_245) ──
-
-# ── Disclose: reveal hand cards bearing aspect icons (Karis/Syril) ────
-
-# ── Deal 1 damage to each of up to N units (IG-2000 JTL_140) ──────────
-
-# ── Receiving player assigns all indirect damage to one target ──────────
-
-# ── Peek at top of deck (R2-D2 SOR_236, C-3PO SOR_238) ────────────────
-
-# ── Choose a number (C-3PO SOR_238) ───────────────────────────────────
-
-# ── Look at an opponent's hand (Viper Probe Droid SOR_228) ────────────
-
-# ── Modal "choose one" (Leia Organa SOR_189) ──────────────────────────
-
-# ── Opponent-decided modal: Let the Wookiee Win (SHD_205) ──────────────
-
-# ── Reveal top, discard any, reorder the rest on top (For a Cause I
-
-# ── Reveal-until-stop, damage = combined cost (Don't Get Cocky SOR_223) ─
-
-# ── Opponent chooses one of their cards, you may damage it (Grey
-
-# ── Controller picks up to 2 non-leader units; the opponent chooses which
-
-# ── Owner of a returned unit may replay it for free (Baylan Skoll
-
-# ── Owner of a chosen in-play unit puts it on top or bottom of their deck
-
-# ── Each player chooses one of their own non-leader units; defeat them
-
-# ── Name a card; opponent-owned non-leader copies lose all abilities while the
-
-# ── Opponent may give up a non-leader unit to be captured, else the source
-
-# ── Choose N friendly units to spare, defeat all other friendly units
-
-# ── Unique Rule: keep one duplicate copy, defeat the rest (state-based) ──────
-
-# ── Name a card in an opponent's hand; one copy is discarded (Chimaera
-
-# ── Opponent may discard a random card, else create tokens (Political
-
-# ── Exhaust any number of friendly units, deal base damage per (The
-
-
-# ── The defending player may rescue one of their own cards guarded by the
-
-# ── Choose any number of friendly units, each captures an enemy non-leader
-
-# ── Choose any number of friendly units; their combined power caps a free
-
-# ── For each exploited unit, you may deal its power to an enemy unit
-
-# ── Pay up to N resources, give that many Experience tokens to this unit
-
-# ── Reveal a deck top, a chosen player plays it free, a different player
-
-# ── Plot — play Plot cards from resources on a leader deploy (Garindan
-
-
-# ── Attack pipeline helpers ───────────────────────────────────────────────────
-
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
-
 
 def _play_only_as_first_action_blocked(state: GameState, ci: CardInstance,
                                        ps: PlayerState) -> bool:
@@ -2268,405 +1675,7 @@ def _cannot_play_from_hand(ci: CardInstance) -> bool:
     return any(isinstance(sp, CannotPlayFromHand) for sp in get_abilities(sc, cn))
 
 
-# ── Play-a-card-from-hand-as-an-ability subsystem (Admiral Ozzel, SOR_129) ────
-
-
-    # else: nothing playable and no follow-up — caller hands the turn over.
-
-
-# ── Play an EVENT from hand as an ability (Bib Fortuna SOR_177) ────────────────
-# The event sibling of the units-only ``push_play_from_hand`` subsystem.  Events
-# never enter play — they resolve via ``_resolve_event_ability`` and go to discard —
-# so this is a distinct decision kind rather than a flag on the unit path.
-
-
-# ── Play a card using Smuggle as an ability (Lando Calrissian SHD_17) ──────────
-# The Smuggle sibling of ``push_play_event_from_hand``: an ability that plays a card
-# from the RESOURCE zone using its Smuggle keyword at a cost reduction, WITHOUT handing
-# the turn over (the ability's own resolution governs), then optionally defeats one of
-# the controller's resources.  Reuses the SmugglePlay mechanics wholesale.
-
-
-# ── Play a card using Piloting as an ability (Wedge Antilles JTL_8) ────────────
-# The Piloting sibling of ``push_play_via_smuggle``: an ability that plays a card
-# from HAND using its Piloting keyword at a cost reduction, WITHOUT handing the
-# turn over.  Reuses the PilotPlay mechanics (``_piloting_cost`` / ``_attach_pilot``)
-# wholesale, so the pilot's own upgrade triggers and stat contribution are
-# unchanged.
-
-
-# ── Deck search-and-select push helper (Tarkin SOR_84, Recruit SOR_123) ───────
-
-
-# ── Peek-at-top-of-deck push helpers (R2-D2 SOR_236, C-3PO SOR_238) ───────────
-
-
-# ── Modal "choose one" push helper (Leia Organa SOR_189) ──────────────────────
-
-
-# ── Let the Wookiee Win push helper (SHD_205) ─────────────────────────────────
-
-
-# ── Reveal-top push helper (For a Cause I Believe In, SOR_152) ────────────────
-
-
-# ── Repeated-modal push helper (Poe Dameron SHD_153) ──────────────────────────
-
-
-# ── Sacrifice-a-resource push helper (Wrecker SHD_154) ────────────────────────
-
-
-# ── Cull any number of your own cards, then deal that many damage ─────────────
-#
-# "Discard any number of cards from your hand.  Deal damage to a unit or base equal
-# to the number of cards discarded this way." (Darth Vader LAW_11, On Attack) and
-# its token twin "Defeat any number of friendly tokens.  Deal damage to a unit equal
-# to the number of tokens defeated this way." (Han Solo LAW_17, On Attack).  The
-# same kind also drives Han's undeployed "Action [Exhaust, defeat a friendly token]:
-# Deal 1 damage to a unit" with ``min_count=max_count=1`` — a cost whose only
-# interesting part is WHICH token the controller gives up.
-#
-# One self-contained two-stage decision, modelled on ``discard_unit_damage``: stage
-# "select" repeats (SelectCullCard) until the controller finishes (FinishCull,
-# offered once ``min_count`` picks are in), then stage "target" picks the damage
-# recipient (ChooseCullDamageTarget).  NOTHING is culled while the decision is open —
-# the picks are recorded and the discards/defeats are applied after the pop, together
-# with the damage, so a defeat trigger never lands on top of an open decision (the
-# push_distribute_damage rule, and the same choice push_select_token's defeat mode
-# makes).  No change to core resolution or the trigger machinery.
-
-
-# ── Interactive combat-damage prevention (Queen Amidala SEC_101) ────────────────
-#
-# "If damage would be dealt to this unit, you may defeat another friendly unit that
-# shares a trait with this unit.  If you do, prevent that damage."  THIS SESSION
-# implements the COMBAT-damage half: a pre-step2 checkpoint (``_armed_combat_
-# preventions``) fired from ``_resolve_unit_combat`` that, when a combatant carries
-# the ``InteractiveDamagePrevention`` marker and would take >0 unshielded combat
-# damage AND has an eligible trait-sharing friendly to sacrifice, pushes a
-# ``combat_damage_prevention`` decision UNDER any OnAttack-trigger decisions and just
-# ABOVE the existing ``pre_attack`` continuation.  The decision's controller either
-# picks a friendly trait-sharing unit to defeat (arming the protected unit's one-shot
-# ``prevent_next_combat_damage`` flag, read at ``_deal_damage_with_shield``) or
-# declines.  The existing ``ContinueAttack`` then resumes ``_resolve_unit_combat_step2``
-# — no combat-pipeline rewrite.  Ability/indirect damage prevention (the synchronous
-# sinks) is the DEFERRED second half (see ``InteractiveDamagePrevention``'s docstring).
-
-
-# ── Interactive ABILITY-damage prevention (Queen Amidala SEC_101 — the DAMAGE half's
-# ability sink; combat is the flag mechanism above) ──────────────────────────────────
-#
-# Unlike combat (which has a natural pre-step2 checkpoint), ability damage is dealt
-# SYNCHRONOUSLY from many call sites through the single sink ``resolver._apply_deal_
-# damage``.  So prevention is DEFERRED, not pre-armed: when that sink is about to deal
-# >0 damage to a marked, unshielded unit with an eligible sacrifice, it pushes an
-# ``ability_damage_prevention`` decision (carrying the deferred damage payload) and
-# returns WITHOUT dealing — the established nested-decision pattern (SOR_233 / Calculated
-# Lethality SHD_39; ``apply_resolve_effects`` and every top-level "pop, then deal"
-# resolver already resume a decision pushed mid-resolution).  On resolve the controller
-# either defeats a friendly trait-sharing unit (the damage is DROPPED) or declines (the
-# deferred damage is re-applied with ``_skip_prevention=True`` so it does not re-defer).
-# Reuses the combat half's ``_has_interactive_damage_prevention`` /
-# ``_prevention_sacrifice_targets`` helpers and the ``ChoosePreventionSacrifice`` /
-# ``DeclineCombatPrevention`` actions (both broadened to this kind).
-
-
-# ── Recycle-a-discarded-unit-for-scaling-damage (The Sarlacc of Carkoon LAW_163)
-#
-# "On Attack: Put a unit from your discard pile on the bottom of your deck.  Deal
-# damage equal to that unit's power to an enemy ground unit."  A self-contained
-# two-stage decision (the push_sacrifice_resource_for_damage shape — choose, then
-# deal):
-#   * stage "select" — SelectDiscardUnitForDamage(instance_id) bottoms a chosen
-#     unit from the controller's discard pile and records its printed power as the
-#     damage magnitude (a card in discard carries no in-play stats, so its printed
-#     power is its power).  Mandatory if able: the decision is only pushed when the
-#     discard pile holds ≥1 unit, and no decline is offered.
-#   * stage "target" — ChooseDiscardDamageTarget(target_id) deals the recorded
-#     damage to the chosen enemy ground unit, then pops.  If no enemy ground unit
-#     exists the select stage pops directly (the recycle still happens, no damage).
-# The damage is dealt AFTER the decision pops (the push_distribute_damage "pop,
-# then deal" gotcha) so a defeat trigger lands on a clean stack.  No change to core
-# resolution or the trigger/decision machinery (a new self-contained decision kind).
-
-
-# ── Discard-a-unit-as-a-cost, then search the deck (Great Pit of Carkoon LAW_23)
-#
-# "Epic Action [discard a unit from your hand]: Search your deck for a card named
-# <search_name>, reveal it, and draw it."  The discard cost lets the controller
-# *choose* which unit to discard (the DiscardFromHand effect's first-card
-# simplification is for opponent discards, not a self-paid cost), so it is a small
-# self-contained decision kind: stage-less, one action per discardable hand unit.
-# Choosing one discards it (the cost is mandatory — no decline; the epic is gated
-# upstream by CONTROLLER_HAS_UNIT_IN_HAND so it is never activated with nothing to
-# discard), pops this decision, then runs the deck search via push_deck_search
-# (whole-deck window for a named tutor; the un-taken cards are bottomed in a
-# seeded-random order, which doubles as the post-search shuffle).  No change to
-# core resolution or the trigger/decision machinery.
-
-
-# ── Recur-from-discard then buff (Luminous Beings LOF_104) ────────────────────
-#
-# "Put up to N <trait> units from your discard pile on the bottom of your deck in
-# a random order.  Give that many units +P/+H for this phase."  A self-contained
-# two-stage decision (the push_sacrifice_resource_for_damage "choose, then act"
-# shape, extended to two select-up-to lists):
-#   stage "recur"  — pick up to N matching units from the discard pile, one at a
-#                    time, or finish early; on finish they go to the bottom of the
-#                    deck in a random (rng) order and K = the number chosen.
-#   stage "buff"   — pick up to K distinct in-play units, each gets a +P/+H
-#                    this-phase modifier; finish (or auto-finish at K / when no
-#                    eligible unit remains).
-# No new decision-machinery — a new self-contained decision kind, the allowed
-# small-primitive path.
-
-
-# ── Opponent-chooses-target push helper (Grey Squadron Y-Wing SHD_246) ────────
-
-
-# ── I Had No Choice SOR_187 — controller picks up to 2 non-leader units, the
-#    opponent chooses which one returns to its owner's hand; the other is put on
-#    the bottom of its owner's deck ("opponent_split_bounce") ──────────────────
-#
-# A two-stage decider-shift decision (the opponent_chooses_target SHD_246 / say_no
-# SOR_233 pattern).  Stage "choose": the source's controller selects up to 2
-# non-leader units (any controller).  Stage "split": when two were chosen, control
-# shifts to the OPPONENT, who picks which returns to its owner's hand — the other
-# is put on the bottom of its owner's deck.  Choosing 0 fizzles; choosing exactly 1
-# returns that one to hand (there is no "other" to bottom) and skips the opponent
-# stage.  The relocations reuse ``_apply_return_to_hand`` and ``_apply_put_on_deck``
-# after the decision pops ("pop, then act", so any board fallout sweeps on a clean
-# stack).
-
-
-# ── Each player chooses one of their own non-leader units; defeat them all
-#    (Merciless Contest TWI_238) ──────────────────────────────────────────────
-
-
-# ── Name a card; each non-leader card an opponent owns with that name loses all
-#    abilities while the namer is in play (Galen Erso P25_31 WhenPlayed) ─────────
-#
-# A self-contained 'name_a_card' decision decided by the source's controller.  The
-# option list is the distinct NON-leader card names among the OPPONENT's cards in
-# PUBLIC zones (arenas + their attached upgrades + discard + base).  Restricting to
-# public copies keeps the option list bounded AND avoids leaking the opponent's
-# hidden hand/deck to the naming player; the "including those not in play" clause is
-# still honoured because the effect is a passive name-based read
-# (state.is_name_suppressed), so a hidden copy of a publicly-named card is suppressed
-# the instant it is played.  DOCUMENTED SIMPLIFICATION: a card with NO public copy
-# cannot be named (the naming fizzles if the opponent has no public non-leader card).
-
-
-# ── Opponent chooses one of their own non-leader units to be captured, else the
-#    source readies (Grand Admiral Thrawn SEC_193 WhenPlayed) ──────────────────
-
-
-# ── Choose N friendly units, buff each, then defeat all OTHER friendly units
-#    (Always Two LOF_42) ───────────────────────────────────────────────────────
-#
-# "Choose 2 friendly unique Sith units.  If you do, give 2 Shield and 2 Experience
-# tokens to each chosen unit.  Defeat all other friendly units."  A self-contained
-# 'choose_units_sacrifice_rest' decision (the each_player_defeats TWI_238
-# "select one at a time, then pop, then defeat" shape + the select_token
-# recompute-eligible loop): the controller picks distinct matching units one at a
-# time until ``required_count`` are chosen; then the decision pops, each chosen unit
-# gets the tokens, and every OTHER friendly arena unit is defeated (the "pop, then
-# defeat" gotcha so a WhenDefeated trigger lands on a clean stack).  Choosing is
-# mandatory ("Choose 2", not "you may") — no decline; the decision is pushed only
-# when ≥ required_count units are eligible, so with too few the whole thing fizzles
-# (the "If you do" clause fails and nothing is defeated).
-
-
-# ── Unique Rule: keep one of the duplicate copies, defeat the rest
-#    (state-based, pushed by _resolve_unique_duplicates) ───────────────────────
-
-
-# ── Put N cards from your hand on the bottom of your deck in any order
-#    (Private Manufacturing TWI_257) ─────────────────────────────────────────
-#
-# "put 2 cards from your hand on the bottom of your deck in any order" lets the
-# controller choose *which* cards and the *order* they go on the bottom.  A
-# stage-less self-contained decision: one SelectHandCardToBottom per hand card,
-# picked one at a time (the pick order == bottom-placement order, so "in any
-# order" falls out).  The cost is mandatory (no decline) — the controller must
-# bottom exactly ``min(count, hand size)`` cards; the decision auto-pops once that
-# many have been placed.
-
-
-# ── Each player discards down to a chosen hand size (Smoke and Cinders SOR_174) ─
-#
-# "Each player discards all but 2 cards (of their choice) from their hand."  A
-# self-contained symmetric decision reusing the each_player_defeats TWI_238
-# order/idx walk: one 'discard_excess_from_hand' decision walks the players in turn
-# (the event's controller first, then the opponent), each discarding cards of their
-# choice one at a time via SelectExcessHandCardToDiscard until their hand is down to
-# ``keep`` cards.  A player already at/below ``keep`` is skipped; if neither has
-# excess the decision is never pushed (the event fizzles).  Records the
-# reveal/discard-observer instruction (Padmé SEC_16) once per player who discards
-# ≥1.  Adds no change to core resolution or the trigger machinery — only a new
-# self-contained decision kind that shifts the deciding player per stage.
-
-
-# ── Name a card; an opponent reveals their hand and discards a card of that name
-#    (Chimaera SOR_185 On Attack) ─────────────────────────────────────────────
-#
-# "Name a card.  An opponent reveals their hand and discards a card with that name
-# from it."  Because the reveal is part of the effect (the controller sees the
-# opponent's hand), this is modelled as the optimal-play collapse of "name blind,
-# then reveal": a private 'name_and_discard' decision carrying the opponent's hand
-# card identities (card_id + name only — never their hidden instance_ids, the
-# look_hand precedent) lets the controller pick a name present in that hand; one
-# opponent card of that name is then discarded.  A rational controller always names a
-# card actually in hand, so offering only present names (never whiffing) is the
-# strictly-optimal encoding — a documented simplification of the printed "name blind".
-# Pushed only when the opponent holds ≥1 card; an empty hand fizzles.
-
-
-# ── Opponent may discard a random card, else create token units (Political
-#    Pressure TWI_222) ─────────────────────────────────────────────────────────
-
-
-# ── Disclose (reveal cards from hand bearing aspect icons; if you do, a payoff) ─
-#
-# "You may disclose <aspects> (reveal cards from your hand with these aspect icons
-#  among them). If you do, <payoff>."  A self-contained multi-select decision (the
-#  select_token 'pick a covering set one at a time' shape): the discloser picks
-#  hand cards, each contributing ≥1 still-needed aspect icon, until the required
-#  aspect multiset is covered (auto-resolving the payoff), or declines (the "you
-#  may").  Revealing does NOT move the cards — it is public info only; the
-#  mechanical effect is the payoff.  Payoffs are dispatched by a small string key +
-#  JSON-serialisable args so the decision context round-trips.  The primitive is the
-#  disclose gate; individual payoffs reuse existing seams (create-token-unit /
-#  may_discard-else-damage).  Serves Karis Nemik SEC_148 + Syril Karn SEC_133 and
-#  broadly unblocks the ~40 other SEC "You may disclose …" cards.
-
-
-# ── Exhaust any number of friendly units, deal base damage per (The Invisible
-#    Hand TWI_234 On Attack) ───────────────────────────────────────────────────
-
-
-# ── The DEFENDING player may rescue one of their own cards guarded by a unit;
-#    if they do, that unit's controller draws (Cad Bane TWI_187 On Attack) ──────
-#
-# "On Attack: The defending player may rescue a card they own guarded by this unit.
-# If they do, draw 2 cards."  A binary decision handed to the OPPONENT (the say_no
-# SOR_233 / owner_may_replay LOF_185 deciding-player shift): a genuine tradeoff, so
-# it cannot collapse to an optimal-play default — getting the card back costs the
-# defender two cards of tempo for the attacker.  The candidates are only captives
-# the DECIDER owns (rescuing an enemy's captive is never something they would do,
-# and the card says "a card they own"), each guarded by the source.  The payoff
-# ("draw 2") goes to the source's controller, the unattributed-subject convention.
-
-
-# ── New primitive: "you may use the Force" optional rider (force-token,
-#    qui-gon-jinn:06) ─────────────────────────────────────────────────────────
-#
-# "You may use the Force (lose your Force token).  If you do, <rider>."  A single
-# 'use_force' decision (decided by the source's controller) lets them pay a cost —
-# always the Force token, and for Impossible Escape ALSO the alternative "exhaust a
-# friendly unit" — for a rider effect.  Two LOF cards use it:
-#   * The Will of the Force LOF_227 — rider "discard_random": the player who owns
-#     the just-returned unit discards a random card; resolves with no target.
-#   * Impossible Escape LOF_218 — costs {force, exhaust_friendly}, rider
-#     "exhaust_enemy_draw": draw a card, then exhaust an enemy unit if able (a
-#     second "payoff" stage with a target).
-# Stages: "choose" (UseForceOption / DeclineUseForce) → optionally "payoff"
-# (ChooseUseForcePayoffTarget).  Declining is always legal (every use is "may").
-
-
-# ── Reveal-a-deck-top / a chosen player plays it free / a different player makes
-#    Credits = its cost (Vermillion LAW_215) ─────────────────────────────────
-
-
-# ── New primitive: move-an-upgrade (Survivors' Gauntlet SHD_64) ───────────────
-#
-# Survivors' Gauntlet (SHD_64): "When Played/On Attack: You may attach an upgrade
-# on a unit to another eligible unit controlled by the same player."  This is a
-# *relocation* of an existing in-play upgrade (not a replay — no WhenPlayed
-# re-fire): one 'move_upgrade' decision drives two stages:
-#   * stage "pick_upgrade" — MoveUpgradeSelect(upgrade_id) chooses an upgrade in
-#                            play that has at least one alternative legal host
-#                            controlled by the same player as its current host;
-#                            DeclineMoveUpgrade() pops and does nothing ("you may").
-#   * stage "pick_dest"    — MoveUpgradeTo(dest_id) detaches the upgrade from its
-#                            current host and attaches it to the chosen destination,
-#                            then pops.
-# The relocation reuses the existing attach-eligibility machinery
-# (_eligible_upgrade_targets / _upgrade_target_spec).  Token upgrades
-# (Shield/Experience) are excluded, matching the engine-wide kind="upgrade"
-# convention (Disabling Fang Fighter SHD_166 etc.).  The decision is only pushed
-# when at least one upgrade can actually be moved, so "you may" with nothing to do
-# is never offered.  A self-contained new decision kind — no change to core
-# resolution or the trigger/decision machinery.
-
-
-# ── New primitive: pay-and-steal-an-upgrade (Pre Vizsla SHD_142) ──────────────
-#
-# Pre Vizsla (SHD_142): "When Played/On Attack: You may pay the cost of an upgrade
-# attached to another non-Vehicle unit. If you do, take control of that upgrade and
-# attach it to this unit, if able. If it can't attach to this unit, defeat it
-# instead."  A single-stage 'pay_and_steal_upgrade' decision:
-#   * StealUpgrade(upgrade_id) — pay the upgrade's printed cost (ready resources),
-#     then RELOCATE it onto Pre Vizsla ("take control" is implicit — control follows
-#     the host) if its "Attach to …" restriction admits Pre Vizsla, else DEFEAT it.
-#   * DeclineStealUpgrade() — the "you may".
-# Candidates are real (non-token) Upgrade cards on ANY unit other than the source
-# whose host is not a Vehicle, restricted to those the source's controller can
-# afford.  Pilots-as-upgrades (a Unit card_def living in attached_upgrades) are
-# excluded — kind="upgrade" convention; stealing a pilot is a documented uncovered
-# corner.  The decision is pushed only when at least one affordable candidate
-# exists, so the optional ability is never offered when it could do nothing.  A
-# relocation, not a play — no UpgradePlayed re-fires.  Reuses the attach-eligibility
-# machinery (_upgrade_target_spec / _spec_matches_ci) and _apply_defeat_unit.
-
-
-# ── Attach an in-play unit as a Pilot upgrade (Poe Dameron JTLP_6) ────────────
-#
-# The unit-becomes-upgrade relocation primitive — the sibling of `_attach_pilot`
-# (which attaches a HAND unit as a pilot) and `_relocate_upgrade` (move_upgrade,
-# which relocates an in-play upgrade).  Here an IN-PLAY unit's CardInstance is
-# relocated from its arena into a friendly Vehicle's `attached_upgrades` as a
-# Pilot.  It is a relocation, NOT a play, so no UpgradePlayed re-fires.
-
-
-# ── Play an upgrade from hand for free, choosing a host (Jabba the Hutt ASH_42) ─
-#
-# The upgrade sibling of the units-only ``push_play_from_hand`` subsystem: "play a
-# specific upgrade from your hand for free, choosing a legal host".  A single-stage
-# host-selection decision (the ``move_upgrade`` / ``pilot_self_attach`` shape) —
-# the upgrade is fixed (the one just returned to hand); the player only picks its
-# host, or declines ("you may play it for free").  Reuses ``_eligible_upgrade_targets``
-# for legal hosts and ``_attach_upgrade`` for the play itself (which fires
-# UpgradePlayed → the upgrade's own WhenPlayed triggers).
-
-
-# ── Select-up-to-N units, give each a token push helper (Medal Ceremony) ──────
-
-
-# ── select_damage: deal 1 damage to each of up to N units (IG-2000 JTL_140) ─
-
-
-# ── choose_two_modal: "Choose two, in any order" aspect events ────────────────
-# The SOR aspect events (Aggression SOR_155, Command SOR_107, Cunning SOR_203,
-# Vigilance SOR_58) each read "Choose two, in any order:" over four options.  Each
-# card is registered with N+1 specs: idx 0 = the EventAbility controller (a thin
-# CustomEffect calling push_choose_modal), idx 1..4 = the four options, each a
-# TriggerAbility whose ``.effects`` is that option's effect list.  The option
-# specs are NEVER fired as real triggers (an event card is never in play, so
-# _collect_triggers can't reach them) and NEVER resolved by _resolve_event_ability
-# (it only processes EventAbility specs) — they are reached ONLY from here, which
-# delegates each chosen option to the standard resolve_effects machinery.  So this
-# decision kind is purely a SELECTOR; all targeting is the existing resolver's.
-
-
-# ── assign_indirect_damage: receiving player assigns unpreventable damage ─────
-
-
-# ── Player-directed damage distribution push helpers ──────────────────────────
-
-
 # ── distribute_damage decision helpers ───────────────────────────────────────
-
 
 def _consume_exploit_grant(state: GameState, ci: CardInstance,
                            ps: PlayerState) -> int:
@@ -2786,26 +1795,6 @@ def _enumerate_pilot_plays(state: GameState, ps: PlayerState) -> list[Action]:
 
 
 # ── Credit-token economy (jabba-the-hutt:07) ───────────────────────────────────
-# A Credit token is defeated (removed) while paying a resource cost to pay 1 less.
-# Credits live in their own pile (PlayerState.credits) and never count as normal
-# resources.  Spending is NEED-BASED and automatic: ready resources are exhausted
-# first, and a credit is defeated only to cover a shortfall (cost > ready
-# resources).  This is deterministic (no decision kind) and strategically sound —
-# a credit is never wasted on a play affordable from ready resources alone — at
-# the cost of one minor agency simplification: a player cannot *choose* to spend a
-# credit they do not strictly need (e.g. to keep a resource ready, or to
-# deliberately trigger a "if you defeated a Credit" rider on an otherwise
-# affordable play).  With zero credits the behaviour is byte-identical to the old
-# resource-only payment, so the normal game is unaffected.
-#
-# SCOPE: credit-spend is wired into the card-play paths that pay from the
-# controller's resources for value — PlayCard (units/upgrades/events; the
-# non-Exploit branch) and the play-from-hand subsystem (PlayFromHand, e.g. Jabba
-# the Hutt LAW_15's deployed action).  It is NOT wired into Smuggle/Plot (which
-# pay from the *other* resources), the Exploit cost reduction, or activated-ability
-# PayResources costs — no shipped card combines credits with those, and keeping
-# them resource-only is the surgical choice.
-
 
 def change_resource_control(
     s: GameState, resource_ci: CardInstance, new_controller_id: str,
@@ -2867,30 +1856,6 @@ def _revert_orphaned_resource_control(s: GameState) -> None:
 
 
 # ── Capture ───────────────────────────────────────────────────────────────────
-# Capture removes an enemy unit from play and places it facedown "under" the
-# capturing unit (modelled as the capturing player's CAPTURE_PILE, with the
-# captured card's instance tagged ``captured_by`` = the captor's instance_id and
-# its owner_id unchanged).  When the captor leaves play the captured cards return
-# to their owner's arena under their owner's control.  The CAPTURE_PILE zone and
-# ``PlayerState.capture_pile`` already exist and are wired into conservation,
-# serialisation, and lookup, so capture reuses all of that — it is purely a new
-# effect (registry.CaptureUnit) + these two helpers + a release call on leave-play.
-#
-# ASSUMPTION (documented for review): a returned captured unit re-enters its
-# owner's arena **ready** (exhausted=False) with damage cleared, and does NOT
-# re-fire enter-play triggers (Ambush / WhenPlayed) — capture-return is treated
-# as a relocation, not a fresh play.  The pre-Capture CR (v1.1) does not cover
-# this; flip the exhausted flag below if a newer CR says otherwise.
-#
-# LIMITATIONS (no shipped card exercises these; flagged for a future session):
-#   * Capture does NOT collect a captured unit's Bounty — the Bounty convention
-#     models "when defeated or captured" as a WhenDefeated trigger only, so a
-#     bounty fires on defeat but not on capture.
-#   * Release is wired into _defeat_unit only.  The single shipped captor is The
-#     Mandalorian (a Leader), which leaves play only by defeat; a future captor
-#     bounced to hand / control-changed while holding captives would need a
-#     release call on those paths too.
-
 
 def _defeat_attached_upgrade(s: GameState, upgrade_ci: CardInstance) -> None:
     """Defeat a single attached upgrade: detach it from its host and send it to its
@@ -2960,14 +1925,9 @@ def _deploy_threshold(card: AnyCard) -> Optional[int]:
         return int(m.group(1))
     return None
 
-
 # ── Decision-kind registration ─────────────────────────────────────────────
-# Every kind the old if-chain handled, now claimed explicitly. This block is what
-# moves with a family when it leaves this module: the handlers go, and so do their
-# rows. When `_legacy` is empty this list is empty too.
 register_decisions({
     "test":                          _test_actions,
     "resolve_effects":               _resolve_effects_actions,
     "granted_attack":                _granted_attack_actions,
-    "pre_attack":                    _pre_attack_actions,
 })

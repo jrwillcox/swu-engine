@@ -3278,4 +3278,11 @@ register_decisions({
     "ambush":                        _ambush_actions,
     "combat_damage_prevention":      _combat_damage_prevention_actions,
     "ability_damage_prevention":     _combat_damage_prevention_actions,
+    # `pre_attack` arrived late and separately, which is worth a word. Its handler
+    # moved here during the kernel pass, when only handlers were being moved and the
+    # registration block was still one list in `_legacy`; so the row stayed behind and
+    # `_legacy` went on naming a handler it no longer held. Nothing failed, because
+    # `_registrations()` reads the whole package -- which is exactly why a row must
+    # travel with its handler rather than be left to be noticed.
+    "pre_attack":                    _pre_attack_actions,
 })

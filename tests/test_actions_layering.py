@@ -91,7 +91,9 @@ LAYERS = [
     "sacrifice",
     "discard",
     "reveal",
-    "_legacy",
+    # `api` is the top: legal_actions/apply may know about every mechanic, and nothing
+    # may know about them. `_legacy` used to sit just below this line -- it was the
+    # holding pen the 24,788-line module drained into, and it is gone.
     "api",
 ]
 

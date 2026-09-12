@@ -243,7 +243,7 @@ from swu.engine.actions.turn import (  # noqa: F401
     _starting_hand_size,
     create_game,
 )
-from swu.engine.actions._legacy import (  # noqa: F401
+from swu.engine.actions.api import (  # noqa: F401
     AnswerTestDecision,
     AttackWithLeader,
     AutoResolveEffects,
