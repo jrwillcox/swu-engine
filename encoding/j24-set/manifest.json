@@ -1,0 +1,26 @@
+{
+  "deck_slug": "j24-set",
+  "source": {
+    "deck": null,
+    "set_code": "J24"
+  },
+  "total_deck_cards": 6,
+  "playable_deck_cards": 6,
+  "groups": [
+    {
+      "gid": "j24-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "J24_5"
+      ],
+      "done": 1,
+      "total": 1
+    }
+  ]
+}

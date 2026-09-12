@@ -1,0 +1,106 @@
+{
+  "deck_slug": "darth-maul",
+  "source": {
+    "deck": "tests/fixtures/darth_maul.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": [
+    {
+      "gid": "darth-maul:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_38",
+        "SOR_137",
+        "LOF_138",
+        "TWI_138",
+        "LOF_160"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "darth-maul:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_02_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_59"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "darth-maul:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_63",
+        "LOF_140",
+        "LOF_233"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "darth-maul:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "New primitive: force-token",
+      "keyword": "",
+      "file": "group_04_new_primitive_force_token.md",
+      "depends_on": [],
+      "new_primitives": [
+        "force-token"
+      ],
+      "cards": [
+        "LOF_9",
+        "LOF_21",
+        "LOF_31",
+        "LOF_35",
+        "LOF_39",
+        "LOF_41",
+        "LOF_67"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "darth-maul:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "New primitive: force-token",
+      "keyword": "",
+      "file": "group_05_new_primitive_force_token.md",
+      "depends_on": [],
+      "new_primitives": [
+        "force-token"
+      ],
+      "cards": [
+        "LOF_129",
+        "LOF_137",
+        "LOF_156",
+        "LOF_229",
+        "LOF_231"
+      ],
+      "done": 5,
+      "total": 5
+    }
+  ]
+}

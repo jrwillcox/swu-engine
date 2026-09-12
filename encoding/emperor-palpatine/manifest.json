@@ -1,0 +1,10 @@
+{
+  "deck_slug": "emperor-palpatine",
+  "source": {
+    "deck": "tests/fixtures/emperor_palpatine.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": []
+}

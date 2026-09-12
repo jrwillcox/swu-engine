@@ -1,0 +1,270 @@
+{
+  "deck_slug": "ts26-set",
+  "source": {
+    "deck": null,
+    "set_code": "TS26"
+  },
+  "total_deck_cards": 84,
+  "playable_deck_cards": 84,
+  "groups": [
+    {
+      "gid": "ts26-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_3",
+        "TS26_11",
+        "TS26_12",
+        "TS26_15",
+        "TS26_19",
+        "TS26_23",
+        "TS26_24"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "ts26-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_25",
+        "TS26_29",
+        "TS26_32",
+        "TS26_58",
+        "TS26_62",
+        "TS26_64",
+        "TS26_67"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "ts26-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_03_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_69",
+        "TS26_70",
+        "TS26_71",
+        "TS26_72",
+        "TS26_73"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "ts26-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_04_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_8",
+        "TS26_26",
+        "TS26_33",
+        "TS26_37",
+        "TS26_39",
+        "TS26_46",
+        "TS26_57"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "ts26-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_05_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_68"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "ts26-set:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_06_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_1",
+        "TS26_2",
+        "TS26_4",
+        "TS26_5",
+        "TS26_6",
+        "TS26_7",
+        "TS26_9"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "ts26-set:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_07_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_10",
+        "TS26_13",
+        "TS26_16",
+        "TS26_18",
+        "TS26_20",
+        "TS26_22",
+        "TS26_28"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "ts26-set:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_08_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_30",
+        "TS26_31",
+        "TS26_35",
+        "TS26_38",
+        "TS26_40",
+        "TS26_41",
+        "TS26_42"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "ts26-set:09",
+      "seq": 9,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_09_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_47",
+        "TS26_49",
+        "TS26_50",
+        "TS26_51",
+        "TS26_52",
+        "TS26_53",
+        "TS26_54"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "ts26-set:10",
+      "seq": 10,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_10_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_55",
+        "TS26_59",
+        "TS26_60",
+        "TS26_61",
+        "TS26_63",
+        "TS26_75",
+        "TS26_76"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "ts26-set:11",
+      "seq": 11,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_11_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_77",
+        "TS26_78",
+        "TS26_81",
+        "TS26_82",
+        "TS26_83",
+        "TS26_84"
+      ],
+      "done": 6,
+      "total": 6
+    },
+    {
+      "gid": "ts26-set:12",
+      "seq": 12,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_12_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_14",
+        "TS26_27",
+        "TS26_34",
+        "TS26_36",
+        "TS26_43",
+        "TS26_48",
+        "TS26_56"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "ts26-set:13",
+      "seq": 13,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_13_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TS26_66",
+        "TS26_80"
+      ],
+      "done": 2,
+      "total": 2
+    }
+  ]
+}

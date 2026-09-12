@@ -1,0 +1,3704 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SWU Home Game \u2014 Web UI",
+    "description": "Thin HTTP client surface over the frozen swu.engine contract.",
+    "version": "0.5.0"
+  },
+  "paths": {
+    "/api/auth/check": {
+      "post": {
+        "summary": "Auth Check",
+        "operationId": "auth_check_api_auth_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "summary": "Auth Register",
+        "operationId": "auth_register_api_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Auth Login",
+        "operationId": "auth_login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "summary": "Auth Logout",
+        "operationId": "auth_logout_api_auth_logout_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Auth Logout Api Auth Logout Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "summary": "Auth Me",
+        "operationId": "auth_me_api_auth_me_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/users": {
+      "get": {
+        "summary": "Auth Users",
+        "operationId": "auth_users_api_auth_users_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserSummary"
+                  },
+                  "title": "Response Auth Users Api Auth Users Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/reset": {
+      "post": {
+        "summary": "Auth Reset",
+        "operationId": "auth_reset_api_auth_reset_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Auth Reset Api Auth Reset Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bugs": {
+      "post": {
+        "summary": "Create Bug",
+        "operationId": "create_bug_api_bugs_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBugRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugThread"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Bugs",
+        "operationId": "list_bugs_api_bugs_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BugSummary"
+                  },
+                  "title": "Response List Bugs Api Bugs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bugs/unread-count": {
+      "get": {
+        "summary": "Bugs Unread Count",
+        "operationId": "bugs_unread_count_api_bugs_unread_count_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCount"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bugs/{bug_id}": {
+      "get": {
+        "summary": "Get Bug",
+        "operationId": "get_bug_api_bugs__bug_id__get",
+        "parameters": [
+          {
+            "name": "bug_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bug Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugThread"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bugs/{bug_id}/reply": {
+      "post": {
+        "summary": "Reply Bug",
+        "operationId": "reply_bug_api_bugs__bug_id__reply_post",
+        "parameters": [
+          {
+            "name": "bug_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bug Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugThread"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bugs/{bug_id}/read": {
+      "post": {
+        "summary": "Read Bug",
+        "operationId": "read_bug_api_bugs__bug_id__read_post",
+        "parameters": [
+          {
+            "name": "bug_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bug Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugThread"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bugs/{bug_id}/reporter-archive": {
+      "post": {
+        "summary": "Reporter Archive Bug",
+        "description": "The reporter tidies their own inbox \u2014 toggles the cosmetic ``reporter_archived``\nflag.  Never moves the folder, so it's independent of the admin's disk archive and\ninvisible to his triage view.",
+        "operationId": "reporter_archive_bug_api_bugs__bug_id__reporter_archive_post",
+        "parameters": [
+          {
+            "name": "bug_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bug Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReporterArchiveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugThread"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bugs/{bug_id}/screenshot": {
+      "get": {
+        "summary": "Bug Screenshot",
+        "operationId": "bug_screenshot_api_bugs__bug_id__screenshot_get",
+        "parameters": [
+          {
+            "name": "bug_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bug Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bugs/{bug_id}/game": {
+      "get": {
+        "summary": "Bug Game",
+        "description": "Serve the report's replay bundle (game.json) so an admin can open the reported\ngame in the ReplayViewer (Stage 4).  Owner-or-admin, like the screenshot.",
+        "operationId": "bug_game_api_bugs__bug_id__game_get",
+        "parameters": [
+          {
+            "name": "bug_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bug Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/bugs": {
+      "get": {
+        "summary": "Admin List Bugs",
+        "operationId": "admin_list_bugs_api_admin_bugs_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTriage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/bugs/{bug_id}/status": {
+      "post": {
+        "summary": "Admin Set Status",
+        "operationId": "admin_set_status_api_admin_bugs__bug_id__status_post",
+        "parameters": [
+          {
+            "name": "bug_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bug Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugThread"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/bugs/{bug_id}/archive": {
+      "post": {
+        "summary": "Admin Archive Bug",
+        "operationId": "admin_archive_bug_api_admin_bugs__bug_id__archive_post",
+        "parameters": [
+          {
+            "name": "bug_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bug Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugThread"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games": {
+      "post": {
+        "summary": "Create Game Endpoint",
+        "operationId": "create_game_endpoint_api_games_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewGameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewGameResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{game_id}/state": {
+      "get": {
+        "summary": "Get State",
+        "operationId": "get_state_api_games__game_id__state_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{game_id}/actions": {
+      "get": {
+        "summary": "Get Actions",
+        "operationId": "get_actions_api_games__game_id__actions_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{game_id}/actions/{action_id}": {
+      "post": {
+        "summary": "Apply Action",
+        "operationId": "apply_action_api_games__game_id__actions__action_id__post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{game_id}/advance": {
+      "post": {
+        "summary": "Advance",
+        "operationId": "advance_api_games__game_id__advance_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{game_id}": {
+      "delete": {
+        "summary": "Delete Game",
+        "operationId": "delete_game_api_games__game_id__delete",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Delete Game Api Games  Game Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{game_id}/save": {
+      "post": {
+        "summary": "Save Game",
+        "operationId": "save_game_api_games__game_id__save_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "slot",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Slot"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Save Game Api Games  Game Id  Save Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/saves": {
+      "get": {
+        "summary": "List Saves",
+        "operationId": "list_saves_api_saves_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response List Saves Api Saves Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/saves/{slot}/load": {
+      "post": {
+        "summary": "Load Game",
+        "operationId": "load_game_api_saves__slot__load_post",
+        "parameters": [
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slot"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewGameResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{game_id}/replay": {
+      "get": {
+        "summary": "Export Replay",
+        "description": "Export a shareable, deterministic replay bundle for this game.",
+        "operationId": "export_replay_api_games__game_id__replay_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Export Replay Api Games  Game Id  Replay Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/replay": {
+      "post": {
+        "summary": "Replay Steps Endpoint",
+        "description": "Reconstruct per-step board snapshots from a replay bundle so the UI can\nscrub forward/back.  Body: {\"bundle\": <replay bundle>} (or the bundle itself).",
+        "operationId": "replay_steps_endpoint_api_replay_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Replay Steps Endpoint Api Replay Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks": {
+      "get": {
+        "summary": "List Decks",
+        "description": "Official decks (built-in + graduated) plus, when a bearer token is\nsupplied, the caller's *complete* custom decks appended and tagged\n``kind=\"custom\"``.  Anonymous callers get official decks only.",
+        "operationId": "list_decks_api_decks_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeckChoice"
+                  },
+                  "title": "Response List Decks Api Decks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks/custom": {
+      "get": {
+        "summary": "List Custom Decks",
+        "operationId": "list_custom_decks_api_decks_custom_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeckSummary"
+                  },
+                  "title": "Response List Custom Decks Api Decks Custom Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Custom Deck",
+        "operationId": "create_custom_deck_api_decks_custom_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomDeckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomDeck"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks/custom/{deck_id}": {
+      "get": {
+        "summary": "Get Custom Deck",
+        "operationId": "get_custom_deck_api_decks_custom__deck_id__get",
+        "parameters": [
+          {
+            "name": "deck_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Deck Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomDeck"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Patch Custom Deck",
+        "operationId": "patch_custom_deck_api_decks_custom__deck_id__patch",
+        "parameters": [
+          {
+            "name": "deck_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Deck Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchCustomDeckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomDeck"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Custom Deck",
+        "operationId": "delete_custom_deck_api_decks_custom__deck_id__delete",
+        "parameters": [
+          {
+            "name": "deck_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Deck Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Delete Custom Deck Api Decks Custom  Deck Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks/custom/{deck_id}/cards": {
+      "post": {
+        "summary": "Custom Deck Card Delta",
+        "description": "Granular +/- for the Explorer's fast add: bump a pool card's count by\n``delta`` (a count reaching \u22640 removes it).  Over-cap is allowed (drafts) and\nsurfaced via the deck's derived ``errors``.",
+        "operationId": "custom_deck_card_delta_api_decks_custom__deck_id__cards_post",
+        "parameters": [
+          {
+            "name": "deck_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Deck Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardDeltaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomDeck"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/catalog/cards": {
+      "get": {
+        "summary": "Explorer Cards",
+        "description": "The whole card catalog for the explorer screen, with filter facets and a\nper-card ``playable`` (\"Available to play\") flag.",
+        "operationId": "explorer_cards_api_catalog_cards_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplorerResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/import/swudb": {
+      "post": {
+        "summary": "Import Swudb",
+        "description": "Import a SWUDB decklist (pasted ``deck`` JSON, or a ``ref`` url/id), report\nlegality + which cards aren't playable yet, and write a fixture the planner\ncan consume.  Body: {\"deck\": <swudb json>} or {\"ref\": \"<url|id>\"}, \"name\"?.",
+        "operationId": "import_swudb_api_import_swudb_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Payload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Import Swudb Api Import Swudb Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cards/{card_id}/image": {
+      "get": {
+        "summary": "Card Image",
+        "operationId": "card_image_api_cards__card_id__image_get",
+        "parameters": [
+          {
+            "name": "card_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Card Id"
+            }
+          },
+          {
+            "name": "face",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(front|back)$",
+              "default": "front",
+              "title": "Face"
+            }
+          },
+          {
+            "name": "variant",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(hyperspace|hyperspace_foil|showcase)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Variant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Api Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionModel": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "title": "Action Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_id",
+          "kind",
+          "label",
+          "params"
+        ],
+        "title": "ActionModel"
+      },
+      "AdminTriage": {
+        "properties": {
+          "needs_you": {
+            "items": {
+              "$ref": "#/components/schemas/BugSummary"
+            },
+            "type": "array",
+            "title": "Needs You",
+            "default": []
+          },
+          "waiting_on_reporter": {
+            "items": {
+              "$ref": "#/components/schemas/BugSummary"
+            },
+            "type": "array",
+            "title": "Waiting On Reporter",
+            "default": []
+          },
+          "resolved": {
+            "items": {
+              "$ref": "#/components/schemas/BugSummary"
+            },
+            "type": "array",
+            "title": "Resolved",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "AdminTriage",
+        "description": "All users' active threads, bucketed on the signal the admin triages on:\n\"does this need me to prompt Claude?\"."
+      },
+      "AuthRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "AuthRequest"
+      },
+      "AuthResponse": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "admin": {
+            "type": "boolean",
+            "title": "Admin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "username",
+          "admin"
+        ],
+        "title": "AuthResponse"
+      },
+      "BugMessage": {
+        "properties": {
+          "from": {
+            "type": "string",
+            "title": "From"
+          },
+          "ts": {
+            "type": "string",
+            "title": "Ts"
+          },
+          "read_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Read By",
+            "default": []
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected"
+          },
+          "actual": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from",
+          "ts"
+        ],
+        "title": "BugMessage"
+      },
+      "BugSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "author": {
+            "type": "string",
+            "title": "Author"
+          },
+          "created": {
+            "type": "string",
+            "title": "Created"
+          },
+          "updated": {
+            "type": "string",
+            "title": "Updated"
+          },
+          "last_from": {
+            "type": "string",
+            "title": "Last From"
+          },
+          "unread": {
+            "type": "integer",
+            "title": "Unread"
+          },
+          "reporter_archived": {
+            "type": "boolean",
+            "title": "Reporter Archived"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          },
+          "has_screenshot": {
+            "type": "boolean",
+            "title": "Has Screenshot"
+          },
+          "has_game": {
+            "type": "boolean",
+            "title": "Has Game"
+          },
+          "expected": {
+            "type": "string",
+            "title": "Expected",
+            "default": ""
+          },
+          "actual": {
+            "type": "string",
+            "title": "Actual",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "author",
+          "created",
+          "updated",
+          "last_from",
+          "unread",
+          "reporter_archived",
+          "archived",
+          "has_screenshot",
+          "has_game"
+        ],
+        "title": "BugSummary"
+      },
+      "BugThread": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "author": {
+            "type": "string",
+            "title": "Author"
+          },
+          "created": {
+            "type": "string",
+            "title": "Created"
+          },
+          "reporter_archived": {
+            "type": "boolean",
+            "title": "Reporter Archived",
+            "default": false
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived",
+            "default": false
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context",
+            "default": {}
+          },
+          "has_screenshot": {
+            "type": "boolean",
+            "title": "Has Screenshot",
+            "default": false
+          },
+          "has_game": {
+            "type": "boolean",
+            "title": "Has Game",
+            "default": false
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/BugMessage"
+            },
+            "type": "array",
+            "title": "Messages",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "author",
+          "created"
+        ],
+        "title": "BugThread"
+      },
+      "CardDeltaRequest": {
+        "properties": {
+          "card_id": {
+            "type": "integer",
+            "title": "Card Id"
+          },
+          "delta": {
+            "type": "integer",
+            "title": "Delta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "card_id",
+          "delta"
+        ],
+        "title": "CardDeltaRequest"
+      },
+      "CardModel": {
+        "properties": {
+          "instance_id": {
+            "type": "string",
+            "title": "Instance Id"
+          },
+          "card_id": {
+            "type": "integer",
+            "title": "Card Id"
+          },
+          "card_name": {
+            "type": "string",
+            "title": "Card Name"
+          },
+          "card_type": {
+            "type": "string",
+            "title": "Card Type"
+          },
+          "owner_id": {
+            "type": "string",
+            "title": "Owner Id"
+          },
+          "zone": {
+            "type": "string",
+            "title": "Zone"
+          },
+          "exhausted": {
+            "type": "boolean",
+            "title": "Exhausted"
+          },
+          "damage": {
+            "type": "integer",
+            "title": "Damage"
+          },
+          "face_down": {
+            "type": "boolean",
+            "title": "Face Down"
+          },
+          "deployed": {
+            "type": "boolean",
+            "title": "Deployed"
+          },
+          "epic_action_spent": {
+            "type": "boolean",
+            "title": "Epic Action Spent"
+          },
+          "effective_power": {
+            "type": "integer",
+            "title": "Effective Power"
+          },
+          "effective_hp": {
+            "type": "integer",
+            "title": "Effective Hp"
+          },
+          "upgrade_power": {
+            "type": "integer",
+            "title": "Upgrade Power",
+            "default": 0
+          },
+          "upgrade_hp": {
+            "type": "integer",
+            "title": "Upgrade Hp",
+            "default": 0
+          },
+          "cost": {
+            "type": "integer",
+            "title": "Cost",
+            "default": 0
+          },
+          "aspect_penalty": {
+            "type": "integer",
+            "title": "Aspect Penalty",
+            "default": 0
+          },
+          "smuggle_base": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smuggle Base"
+          },
+          "smuggle_penalty": {
+            "type": "integer",
+            "title": "Smuggle Penalty",
+            "default": 0
+          },
+          "attached_upgrades": {
+            "items": {
+              "$ref": "#/components/schemas/CardModel"
+            },
+            "type": "array",
+            "title": "Attached Upgrades",
+            "default": []
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords",
+            "default": []
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "back_image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Back Image Url"
+          },
+          "variants": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CardVariantImages"
+            },
+            "type": "object",
+            "title": "Variants",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "instance_id",
+          "card_id",
+          "card_name",
+          "card_type",
+          "owner_id",
+          "zone",
+          "exhausted",
+          "damage",
+          "face_down",
+          "deployed",
+          "epic_action_spent",
+          "effective_power",
+          "effective_hp"
+        ],
+        "title": "CardModel"
+      },
+      "CardVariantImages": {
+        "properties": {
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "back_image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Back Image Url"
+          }
+        },
+        "type": "object",
+        "title": "CardVariantImages"
+      },
+      "CheckRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username"
+        ],
+        "title": "CheckRequest"
+      },
+      "CheckResponse": {
+        "properties": {
+          "exists": {
+            "type": "boolean",
+            "title": "Exists"
+          },
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "exists",
+          "allowed"
+        ],
+        "title": "CheckResponse"
+      },
+      "CreateBugRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "expected": {
+            "type": "string",
+            "title": "Expected",
+            "default": ""
+          },
+          "actual": {
+            "type": "string",
+            "title": "Actual",
+            "default": ""
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context",
+            "default": {}
+          },
+          "screenshot_b64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screenshot B64"
+          },
+          "game": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "CreateBugRequest"
+      },
+      "CreateCustomDeckRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CreateCustomDeckRequest"
+      },
+      "CustomDeck": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner"
+          },
+          "leader_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leader Id"
+          },
+          "base_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Id"
+          },
+          "cards": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Cards",
+            "default": {}
+          },
+          "created": {
+            "type": "string",
+            "title": "Created"
+          },
+          "updated": {
+            "type": "string",
+            "title": "Updated"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 0
+          },
+          "required": {
+            "type": "integer",
+            "title": "Required",
+            "default": 50
+          },
+          "complete": {
+            "type": "boolean",
+            "title": "Complete",
+            "default": false
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "owner",
+          "created",
+          "updated"
+        ],
+        "title": "CustomDeck"
+      },
+      "DeckChoice": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "leader_name": {
+            "type": "string",
+            "title": "Leader Name"
+          },
+          "base_name": {
+            "type": "string",
+            "title": "Base Name"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "official"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "leader_name",
+          "base_name"
+        ],
+        "title": "DeckChoice"
+      },
+      "DeckSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "required": {
+            "type": "integer",
+            "title": "Required",
+            "default": 50
+          },
+          "complete": {
+            "type": "boolean",
+            "title": "Complete"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "count",
+          "complete"
+        ],
+        "title": "DeckSummary"
+      },
+      "EventModel": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "data"
+        ],
+        "title": "EventModel"
+      },
+      "ExplorerCard": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "card_number": {
+            "type": "string",
+            "title": "Card Number"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "rarity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rarity"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost"
+          },
+          "power": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power"
+          },
+          "hp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hp"
+          },
+          "unique": {
+            "type": "boolean",
+            "title": "Unique",
+            "default": false
+          },
+          "aspects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aspects",
+            "default": []
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords",
+            "default": []
+          },
+          "traits": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Traits",
+            "default": []
+          },
+          "arenas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Arenas",
+            "default": []
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "playable": {
+            "type": "boolean",
+            "title": "Playable"
+          },
+          "decks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Decks",
+            "default": []
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "back_image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Back Image Url"
+          },
+          "variants": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CardVariantImages"
+            },
+            "type": "object",
+            "title": "Variants",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "set_code",
+          "card_number",
+          "name",
+          "type",
+          "status",
+          "playable"
+        ],
+        "title": "ExplorerCard"
+      },
+      "ExplorerDeck": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "ExplorerDeck"
+      },
+      "ExplorerResponse": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/ExplorerCard"
+            },
+            "type": "array",
+            "title": "Cards"
+          },
+          "sets": {
+            "items": {
+              "$ref": "#/components/schemas/SetChoice"
+            },
+            "type": "array",
+            "title": "Sets"
+          },
+          "types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Types"
+          },
+          "aspects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aspects"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          },
+          "traits": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Traits"
+          },
+          "decks": {
+            "items": {
+              "$ref": "#/components/schemas/ExplorerDeck"
+            },
+            "type": "array",
+            "title": "Decks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cards",
+          "sets",
+          "types",
+          "aspects",
+          "keywords",
+          "traits",
+          "decks"
+        ],
+        "title": "ExplorerResponse",
+        "description": "Full card catalog plus the distinct values for each filter facet."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MeResponse": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "admin": {
+            "type": "boolean",
+            "title": "Admin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "admin"
+        ],
+        "title": "MeResponse"
+      },
+      "NewGameRequest": {
+        "properties": {
+          "human": {
+            "$ref": "#/components/schemas/SeatConfig"
+          },
+          "bot": {
+            "$ref": "#/components/schemas/SeatConfig"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "difficulty": {
+            "type": "string",
+            "title": "Difficulty",
+            "default": "normal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "human",
+          "bot"
+        ],
+        "title": "NewGameRequest"
+      },
+      "NewGameResponse": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "view": {
+            "$ref": "#/components/schemas/PlayerViewModel"
+          },
+          "awaiting": {
+            "type": "string",
+            "title": "Awaiting"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "winner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionModel"
+            },
+            "type": "array",
+            "title": "Actions"
+          },
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "view",
+          "awaiting",
+          "actor_id",
+          "winner",
+          "prompt",
+          "actions",
+          "player_id"
+        ],
+        "title": "NewGameResponse"
+      },
+      "PatchCustomDeckRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "leader_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leader Id"
+          },
+          "base_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Id"
+          },
+          "cards": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "title": "PatchCustomDeckRequest",
+        "description": "Partial edit.  A field left out is unchanged; an explicit ``null`` on\n``leader_id``/``base_id`` clears that slot.  The route uses\n``model_fields_set`` to tell \"omitted\" from \"explicitly null\"."
+      },
+      "PendingDecisionModel": {
+        "properties": {
+          "deciding_player_id": {
+            "type": "string",
+            "title": "Deciding Player Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context"
+          },
+          "is_mine": {
+            "type": "boolean",
+            "title": "Is Mine"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deciding_player_id",
+          "kind",
+          "context",
+          "is_mine"
+        ],
+        "title": "PendingDecisionModel"
+      },
+      "PlayerViewModel": {
+        "properties": {
+          "viewer_id": {
+            "type": "string",
+            "title": "Viewer Id"
+          },
+          "phase": {
+            "type": "string",
+            "title": "Phase"
+          },
+          "round_number": {
+            "type": "integer",
+            "title": "Round Number"
+          },
+          "active_player_id": {
+            "type": "string",
+            "title": "Active Player Id"
+          },
+          "initiative_holder_id": {
+            "type": "string",
+            "title": "Initiative Holder Id"
+          },
+          "my": {
+            "$ref": "#/components/schemas/ZoneModel"
+          },
+          "opponent": {
+            "$ref": "#/components/schemas/ZoneModel"
+          },
+          "event_log_tail": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Event Log Tail"
+          },
+          "pending_decisions": {
+            "items": {
+              "$ref": "#/components/schemas/PendingDecisionModel"
+            },
+            "type": "array",
+            "title": "Pending Decisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "viewer_id",
+          "phase",
+          "round_number",
+          "active_player_id",
+          "initiative_holder_id",
+          "my",
+          "opponent",
+          "event_log_tail",
+          "pending_decisions"
+        ],
+        "title": "PlayerViewModel"
+      },
+      "ReplyRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "ReplyRequest"
+      },
+      "ReporterArchiveRequest": {
+        "properties": {
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          }
+        },
+        "type": "object",
+        "required": [
+          "archived"
+        ],
+        "title": "ReporterArchiveRequest",
+        "description": "The reporter's cosmetic inbox archive toggle (never moves the folder)."
+      },
+      "ResetRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "new_password": {
+            "type": "string",
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "new_password"
+        ],
+        "title": "ResetRequest"
+      },
+      "SeatConfig": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "human"
+          },
+          "deck": {
+            "type": "string",
+            "title": "Deck"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deck"
+        ],
+        "title": "SeatConfig"
+      },
+      "SetChoice": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "SetChoice"
+      },
+      "Snapshot": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "view": {
+            "$ref": "#/components/schemas/PlayerViewModel"
+          },
+          "awaiting": {
+            "type": "string",
+            "title": "Awaiting"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "winner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionModel"
+            },
+            "type": "array",
+            "title": "Actions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "view",
+          "awaiting",
+          "actor_id",
+          "winner",
+          "prompt",
+          "actions"
+        ],
+        "title": "Snapshot",
+        "description": "Everything the frontend needs to render and decide what to offer next."
+      },
+      "StatusRequest": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "StatusRequest"
+      },
+      "StepResult": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "view": {
+            "$ref": "#/components/schemas/PlayerViewModel"
+          },
+          "awaiting": {
+            "type": "string",
+            "title": "Awaiting"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "winner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionModel"
+            },
+            "type": "array",
+            "title": "Actions"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventModel"
+            },
+            "type": "array",
+            "title": "Events",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "view",
+          "awaiting",
+          "actor_id",
+          "winner",
+          "prompt",
+          "actions"
+        ],
+        "title": "StepResult",
+        "description": "A snapshot plus the ordered events produced by the step that led to it."
+      },
+      "UnreadCount": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count"
+        ],
+        "title": "UnreadCount"
+      },
+      "UserSummary": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "admin": {
+            "type": "boolean",
+            "title": "Admin"
+          },
+          "registered": {
+            "type": "boolean",
+            "title": "Registered"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "admin",
+          "registered"
+        ],
+        "title": "UserSummary"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "ZoneModel": {
+        "properties": {
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "deck_count": {
+            "type": "integer",
+            "title": "Deck Count"
+          },
+          "hand": {
+            "items": {
+              "$ref": "#/components/schemas/CardModel"
+            },
+            "type": "array",
+            "title": "Hand"
+          },
+          "hand_count": {
+            "type": "integer",
+            "title": "Hand Count"
+          },
+          "discard": {
+            "items": {
+              "$ref": "#/components/schemas/CardModel"
+            },
+            "type": "array",
+            "title": "Discard"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/CardModel"
+            },
+            "type": "array",
+            "title": "Resources"
+          },
+          "resource_count": {
+            "type": "integer",
+            "title": "Resource Count"
+          },
+          "available_resources": {
+            "type": "integer",
+            "title": "Available Resources"
+          },
+          "credits": {
+            "type": "integer",
+            "title": "Credits",
+            "default": 0
+          },
+          "has_force_token": {
+            "type": "boolean",
+            "title": "Has Force Token",
+            "default": false
+          },
+          "ground_arena": {
+            "items": {
+              "$ref": "#/components/schemas/CardModel"
+            },
+            "type": "array",
+            "title": "Ground Arena"
+          },
+          "space_arena": {
+            "items": {
+              "$ref": "#/components/schemas/CardModel"
+            },
+            "type": "array",
+            "title": "Space Arena"
+          },
+          "base_zone": {
+            "items": {
+              "$ref": "#/components/schemas/CardModel"
+            },
+            "type": "array",
+            "title": "Base Zone"
+          },
+          "is_eliminated": {
+            "type": "boolean",
+            "title": "Is Eliminated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "deck_count",
+          "hand",
+          "hand_count",
+          "discard",
+          "resources",
+          "resource_count",
+          "available_resources",
+          "ground_arena",
+          "space_arena",
+          "base_zone",
+          "is_eliminated"
+        ],
+        "title": "ZoneModel"
+      }
+    }
+  }
+}

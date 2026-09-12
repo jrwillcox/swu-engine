@@ -1,0 +1,5 @@
+# Frontend build context (web/). node_modules is reinstalled with `npm ci` inside
+# the image; dist is rebuilt with `npm run build`.
+node_modules/
+dist/
+.vite/

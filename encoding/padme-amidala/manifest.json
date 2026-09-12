@@ -1,0 +1,103 @@
+{
+  "deck_slug": "padme-amidala",
+  "source": {
+    "deck": "tests/fixtures/padme_amidala.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": [
+    {
+      "gid": "padme-amidala:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_01_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_94",
+        "SEC_197"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "padme-amidala:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_02_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_96",
+        "SEC_98",
+        "SEC_99",
+        "JTL_111",
+        "SEC_111",
+        "SEC_116",
+        "JTL_123"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "padme-amidala:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_129",
+        "SEC_201",
+        "SEC_234"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "padme-amidala:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_04_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_106",
+        "SEC_115",
+        "SEC_120",
+        "SEC_127",
+        "SEC_208",
+        "SEC_248",
+        "SEC_256"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "padme-amidala:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "New primitive: reveal-or-discard-trigger",
+      "keyword": "",
+      "file": "group_05_new_primitive_reveal_or_discard_trigger.md",
+      "depends_on": [],
+      "new_primitives": [
+        "reveal-or-discard-trigger"
+      ],
+      "cards": [
+        "SEC_16"
+      ],
+      "done": 1,
+      "total": 1
+    }
+  ]
+}

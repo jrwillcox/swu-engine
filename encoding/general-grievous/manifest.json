@@ -1,0 +1,125 @@
+{
+  "deck_slug": "general-grievous",
+  "source": {
+    "deck": "tests/fixtures/general_grievous.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": [
+    {
+      "gid": "general-grievous:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_238"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "general-grievous:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_02_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_86",
+        "TWI_226",
+        "TWI_257"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "general-grievous:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_15",
+        "TWI_82",
+        "TWI_104",
+        "TWI_124",
+        "TWI_179",
+        "TWI_180",
+        "TWI_184"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "general-grievous:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_04_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_206",
+        "TWI_217",
+        "TWI_221",
+        "TWI_236"
+      ],
+      "done": 4,
+      "total": 4
+    },
+    {
+      "gid": "general-grievous:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "New primitive: create-token-unit",
+      "keyword": "",
+      "file": "group_05_new_primitive_create_token_unit.md",
+      "depends_on": [],
+      "new_primitives": [
+        "create-token-unit"
+      ],
+      "cards": [
+        "TWI_79",
+        "TWI_80",
+        "TWI_83",
+        "TWI_84",
+        "TWI_112",
+        "TWI_190",
+        "TWI_218"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "general-grievous:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "New primitive: create-token-unit",
+      "keyword": "",
+      "file": "group_06_new_primitive_create_token_unit.md",
+      "depends_on": [],
+      "new_primitives": [
+        "create-token-unit"
+      ],
+      "cards": [
+        "TWI_222",
+        "TWI_229",
+        "TWI_234",
+        "TWI_237"
+      ],
+      "done": 4,
+      "total": 4
+    }
+  ]
+}

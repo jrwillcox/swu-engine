@@ -1,0 +1,422 @@
+{
+  "deck_slug": "sor-set",
+  "source": {
+    "deck": null,
+    "set_code": "SOR"
+  },
+  "total_deck_cards": 252,
+  "playable_deck_cards": 252,
+  "groups": [
+    {
+      "gid": "sor-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_6",
+        "SOR_11",
+        "SOR_13",
+        "SOR_17",
+        "SOR_25",
+        "SOR_38",
+        "SOR_41"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_52",
+        "SOR_75",
+        "SOR_77",
+        "SOR_85",
+        "SOR_90",
+        "SOR_121",
+        "SOR_133"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_03_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_134",
+        "SOR_138",
+        "SOR_146",
+        "SOR_153",
+        "SOR_158",
+        "SOR_167",
+        "SOR_170"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_04_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_173",
+        "SOR_179",
+        "SOR_182",
+        "SOR_223",
+        "SOR_235"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "sor-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_05_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_31",
+        "SOR_42",
+        "SOR_67",
+        "SOR_91",
+        "SOR_96",
+        "SOR_101",
+        "SOR_102"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_06_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_105",
+        "SOR_115",
+        "SOR_147",
+        "SOR_150",
+        "SOR_163",
+        "SOR_171",
+        "SOR_175"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_07_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_181",
+        "SOR_183",
+        "SOR_187",
+        "SOR_188",
+        "SOR_199",
+        "SOR_200",
+        "SOR_201"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_08_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_202",
+        "SOR_206",
+        "SOR_209",
+        "SOR_246",
+        "SOR_252"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "sor-set:09",
+      "seq": 9,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_09_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_1",
+        "SOR_2",
+        "SOR_3",
+        "SOR_4",
+        "SOR_7",
+        "SOR_8",
+        "SOR_9"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:10",
+      "seq": 10,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_10_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_12",
+        "SOR_15",
+        "SOR_16",
+        "SOR_18",
+        "SOR_19",
+        "SOR_28",
+        "SOR_35"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:11",
+      "seq": 11,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_11_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_36",
+        "SOR_37",
+        "SOR_39",
+        "SOR_47",
+        "SOR_50",
+        "SOR_55",
+        "SOR_57"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:12",
+      "seq": 12,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_12_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_60",
+        "SOR_65",
+        "SOR_68",
+        "SOR_70",
+        "SOR_73",
+        "SOR_76",
+        "SOR_80"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:13",
+      "seq": 13,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_13_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_82",
+        "SOR_94",
+        "SOR_100",
+        "SOR_106",
+        "SOR_108",
+        "SOR_109",
+        "SOR_110"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:14",
+      "seq": 14,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_14_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_114",
+        "SOR_116",
+        "SOR_118",
+        "SOR_119",
+        "SOR_148",
+        "SOR_149",
+        "SOR_154"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:15",
+      "seq": 15,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_15_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_156",
+        "SOR_159",
+        "SOR_161",
+        "SOR_166",
+        "SOR_168",
+        "SOR_169",
+        "SOR_178"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:16",
+      "seq": 16,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_16_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_191",
+        "SOR_208",
+        "SOR_211",
+        "SOR_214",
+        "SOR_215",
+        "SOR_221",
+        "SOR_249"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:17",
+      "seq": 17,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_17_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_34",
+        "SOR_54",
+        "SOR_56",
+        "SOR_61",
+        "SOR_62",
+        "SOR_71",
+        "SOR_72"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:18",
+      "seq": 18,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_18_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_93",
+        "SOR_104",
+        "SOR_122",
+        "SOR_127",
+        "SOR_140",
+        "SOR_151",
+        "SOR_160"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:19",
+      "seq": 19,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_19_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_174",
+        "SOR_177",
+        "SOR_185",
+        "SOR_190",
+        "SOR_197",
+        "SOR_212",
+        "SOR_216"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sor-set:20",
+      "seq": 20,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_20_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_224",
+        "SOR_248"
+      ],
+      "done": 2,
+      "total": 2
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "deck_slug": "lofp-set",
+  "source": {
+    "deck": null,
+    "set_code": "LOFP"
+  },
+  "total_deck_cards": 20,
+  "playable_deck_cards": 20,
+  "groups": [
+    {
+      "gid": "lofp-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOFP_11"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "lofp-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_02_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOFP_1",
+        "LOFP_12"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "lofp-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_03_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOFP_5",
+        "LOFP_8"
+      ],
+      "done": 2,
+      "total": 2
+    }
+  ]
+}

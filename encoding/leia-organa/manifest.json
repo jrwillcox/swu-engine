@@ -1,0 +1,103 @@
+{
+  "deck_slug": "leia-organa",
+  "source": {
+    "deck": "tests/fixtures/leia_organa.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": [
+    {
+      "gid": "leia-organa:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_41",
+        "LAW_45",
+        "JTL_250"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "leia-organa:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_02_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_119",
+        "LAW_145",
+        "LAW_166"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "leia-organa:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_10",
+        "LAW_35",
+        "LAW_37",
+        "LAW_67",
+        "SEC_93",
+        "SEC_103",
+        "LAW_105"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "leia-organa:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_04_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_111",
+        "LAW_142",
+        "LAW_147",
+        "LAW_152",
+        "LAW_167",
+        "SEC_252"
+      ],
+      "done": 6,
+      "total": 6
+    },
+    {
+      "gid": "leia-organa:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_05_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_20",
+        "LAW_104",
+        "LAW_108"
+      ],
+      "done": 3,
+      "total": 3
+    }
+  ]
+}

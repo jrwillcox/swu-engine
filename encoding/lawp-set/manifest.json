@@ -1,0 +1,43 @@
+{
+  "deck_slug": "lawp-set",
+  "source": {
+    "deck": null,
+    "set_code": "LAWP"
+  },
+  "total_deck_cards": 20,
+  "playable_deck_cards": 20,
+  "groups": [
+    {
+      "gid": "lawp-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAWP_17"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "lawp-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_02_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAWP_4",
+        "LAWP_6",
+        "LAWP_9"
+      ],
+      "done": 3,
+      "total": 3
+    }
+  ]
+}

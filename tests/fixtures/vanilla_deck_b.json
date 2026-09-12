@@ -1,0 +1,96 @@
+{
+  "leader": {
+    "id": "SOR_5",
+    "count": 1
+  },
+  "base": {
+    "id": "SOR_29",
+    "count": 1
+  },
+  "deck": [
+    {
+      "id": "ASH_110",
+      "count": 1
+    },
+    {
+      "id": "IBH_60",
+      "count": 1
+    },
+    {
+      "id": "JTL_47",
+      "count": 1
+    },
+    {
+      "id": "JTL_58",
+      "count": 3
+    },
+    {
+      "id": "LAW_126",
+      "count": 2
+    },
+    {
+      "id": "LAW_65",
+      "count": 1
+    },
+    {
+      "id": "LOF_142",
+      "count": 1
+    },
+    {
+      "id": "LOF_178",
+      "count": 3
+    },
+    {
+      "id": "SEC_213",
+      "count": 3
+    },
+    {
+      "id": "SEC_259",
+      "count": 3
+    },
+    {
+      "id": "SHD_101",
+      "count": 3
+    },
+    {
+      "id": "SOR_37",
+      "count": 3
+    },
+    {
+      "id": "SOR_39",
+      "count": 3
+    },
+    {
+      "id": "SOR_59",
+      "count": 3
+    },
+    {
+      "id": "TS26_20",
+      "count": 3
+    },
+    {
+      "id": "TS26_37",
+      "count": 3
+    },
+    {
+      "id": "TWI_240",
+      "count": 3
+    },
+    {
+      "id": "TWI_247",
+      "count": 3
+    },
+    {
+      "id": "TWI_45",
+      "count": 3
+    },
+    {
+      "id": "TWI_93",
+      "count": 3
+    },
+    {
+      "id": "TWI_96",
+      "count": 1
+    }
+  ]
+}

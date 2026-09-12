@@ -1,0 +1,61 @@
+{
+  "deck_slug": "jtlp-set",
+  "source": {
+    "deck": null,
+    "set_code": "JTLP"
+  },
+  "total_deck_cards": 20,
+  "playable_deck_cards": 20,
+  "groups": [
+    {
+      "gid": "jtlp-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTLP_11",
+        "JTLP_18"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "jtlp-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_02_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTLP_4",
+        "JTLP_8",
+        "JTLP_16"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "jtlp-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTLP_3",
+        "JTLP_5",
+        "JTLP_13"
+      ],
+      "done": 3,
+      "total": 3
+    }
+  ]
+}

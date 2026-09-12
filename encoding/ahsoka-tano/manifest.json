@@ -1,0 +1,124 @@
+{
+  "deck_slug": "ahsoka-tano",
+  "source": {
+    "deck": "tests/fixtures/ahsoka_tano.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": [
+    {
+      "gid": "ahsoka-tano:01",
+      "seq": 1,
+      "kind": "keyword",
+      "theme": "Coordinate keyword",
+      "keyword": "Coordinate",
+      "file": "group_01_coordinate_keyword.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_11",
+        "TWI_90",
+        "TWI_106",
+        "TWI_114",
+        "TWI_147",
+        "TWI_158",
+        "TWI_164",
+        "TWI_240",
+        "TWI_243"
+      ],
+      "done": 9,
+      "total": 9
+    },
+    {
+      "gid": "ahsoka-tano:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_171",
+        "TWI_174"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "ahsoka-tano:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_03_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_107",
+        "TWI_246"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "ahsoka-tano:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_04_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_91",
+        "TWI_92",
+        "TWI_109",
+        "TWI_123",
+        "TWI_126",
+        "TWI_142",
+        "TWI_248"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "ahsoka-tano:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "New primitive: create-token-unit",
+      "keyword": "",
+      "file": "group_05_new_primitive_create_token_unit.md",
+      "depends_on": [],
+      "new_primitives": [
+        "create-token-unit"
+      ],
+      "cards": [
+        "TWI_94",
+        "TWI_97",
+        "TWI_144",
+        "TWI_251"
+      ],
+      "done": 4,
+      "total": 4
+    },
+    {
+      "gid": "ahsoka-tano:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "New primitive: scaling-magnitude",
+      "keyword": "",
+      "file": "group_06_new_primitive_scaling_magnitude.md",
+      "depends_on": [],
+      "new_primitives": [
+        "scaling-magnitude"
+      ],
+      "cards": [
+        "TWI_99"
+      ],
+      "done": 1,
+      "total": 1
+    }
+  ]
+}

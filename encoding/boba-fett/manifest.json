@@ -1,0 +1,86 @@
+{
+  "deck_slug": "boba-fett",
+  "source": {
+    "deck": "tests/fixtures/boba_fett.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": [
+    {
+      "gid": "boba-fett:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_9",
+        "SOR_131",
+        "JTL_132",
+        "JTL_133",
+        "JTL_139",
+        "JTL_140",
+        "JTL_144"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "boba-fett:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_181",
+        "JTL_183",
+        "JTL_187",
+        "JTL_189",
+        "JTL_230",
+        "JTL_237",
+        "JTL_240"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "boba-fett:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_141",
+        "SOR_184",
+        "SOR_186"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "boba-fett:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_04_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_165",
+        "JTL_185"
+      ],
+      "done": 2,
+      "total": 2
+    }
+  ]
+}

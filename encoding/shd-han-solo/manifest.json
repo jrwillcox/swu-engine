@@ -1,0 +1,185 @@
+{
+  "deck_slug": "shd-han-solo",
+  "source": {
+    "deck": "tests/fixtures/shd_han_solo.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": [
+    {
+      "gid": "shd-han-solo:01",
+      "seq": 1,
+      "kind": "keyword",
+      "theme": "Smuggle keyword",
+      "keyword": "Smuggle",
+      "file": "group_01_smuggle_keyword.md",
+      "depends_on": [],
+      "new_primitives": [
+        "grant-keyword-to-resources"
+      ],
+      "cards": [
+        "SHD_148",
+        "SHD_149",
+        "SHD_160",
+        "SHD_174",
+        "SHD_175",
+        "SHD_248",
+        "SHD_252"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-han-solo:02",
+      "seq": 2,
+      "kind": "keyword",
+      "theme": "Bounty keyword",
+      "keyword": "Bounty",
+      "file": "group_02_bounty_keyword.md",
+      "depends_on": [],
+      "new_primitives": [
+        "control-change"
+      ],
+      "cards": [
+        "SHD_161",
+        "SHD_165"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "shd-han-solo:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_03_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_249"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "shd-han-solo:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_04_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_168",
+        "SHD_247"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "shd-han-solo:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "New primitive: play-from-hand-act-on-result",
+      "keyword": "",
+      "file": "group_05_new_primitive_play_from_hand_act_on_result.md",
+      "depends_on": [],
+      "new_primitives": [
+        "play-from-hand-act-on-result"
+      ],
+      "cards": [
+        "SHD_13"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "shd-han-solo:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "New primitive: repeated-modal-per-X",
+      "keyword": "",
+      "file": "group_06_new_primitive_repeated_modal_per_x.md",
+      "depends_on": [],
+      "new_primitives": [
+        "repeated-modal-per-X"
+      ],
+      "cards": [
+        "SHD_153"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "shd-han-solo:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "New primitive: sacrifice-resource-cost",
+      "keyword": "",
+      "file": "group_07_new_primitive_sacrifice_resource_cost.md",
+      "depends_on": [],
+      "new_primitives": [
+        "sacrifice-resource-cost"
+      ],
+      "cards": [
+        "SHD_154"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "shd-han-solo:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "New primitive: scaling-magnitude",
+      "keyword": "",
+      "file": "group_08_new_primitive_scaling_magnitude.md",
+      "depends_on": [],
+      "new_primitives": [
+        "scaling-magnitude"
+      ],
+      "cards": [
+        "SHD_159"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "shd-han-solo:09",
+      "seq": 9,
+      "kind": "ability",
+      "theme": "New primitive: granted-attack-restricted-attacker",
+      "keyword": "",
+      "file": "group_09_new_primitive_granted_attack_restricted_attacker.md",
+      "depends_on": [],
+      "new_primitives": [
+        "granted-attack-restricted-attacker"
+      ],
+      "cards": [
+        "SHD_179"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "shd-han-solo:10",
+      "seq": 10,
+      "kind": "ability",
+      "theme": "New primitive: opponent-chooses-target",
+      "keyword": "",
+      "file": "group_10_new_primitive_opponent_chooses_target.md",
+      "depends_on": [],
+      "new_primitives": [
+        "opponent-chooses-target"
+      ],
+      "cards": [
+        "SHD_246"
+      ],
+      "done": 1,
+      "total": 1
+    }
+  ]
+}

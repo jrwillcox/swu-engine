@@ -1,0 +1,32 @@
+{
+  "leader": {"id": "SEC_1"},
+  "base": {"id": "SEC_22"},
+  "deck": [
+    {"id": "SEC_79", "count": 3},
+    {"id": "SEC_55", "count": 3},
+    {"id": "SEC_111", "count": 1},
+    {"id": "SEC_81", "count": 1},
+    {"id": "JTL_33", "count": 3},
+    {"id": "SEC_27", "count": 3},
+    {"id": "LOF_82", "count": 2},
+    {"id": "SEC_82", "count": 2},
+    {"id": "SEC_31", "count": 1},
+    {"id": "SEC_83", "count": 3},
+    {"id": "SEC_241", "count": 3},
+    {"id": "SEC_84", "count": 2},
+    {"id": "SEC_33", "count": 2},
+    {"id": "SEC_85", "count": 1},
+    {"id": "SEC_34", "count": 3},
+    {"id": "SEC_87", "count": 1},
+    {"id": "SEC_36", "count": 3},
+    {"id": "SEC_92", "count": 1},
+    {"id": "SEC_37", "count": 1},
+    {"id": "SEC_245", "count": 1},
+    {"id": "SEC_70", "count": 2},
+    {"id": "SEC_124", "count": 2},
+    {"id": "SEC_123", "count": 2},
+    {"id": "SEC_76", "count": 1},
+    {"id": "SEC_77", "count": 2},
+    {"id": "LOF_43", "count": 1}
+  ]
+}

@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev,web]"
+
+      - name: Lint
+        run: ruff check .
+
+      # Scoped to the typed core (src/swu/abilities + engine/state.py) by the
+      # `files` key in [tool.mypy]; see the comment there.
+      - name: Typecheck (typed core)
+        run: mypy
+
+      # NOTE ON SCOPE: data/swu.db is not in the repository — the card corpus is
+      # the publisher's IP and is rebuilt locally by scripts/ (see README). The
+      # DB-backed tests skip cleanly without it, so this job proves the package
+      # imports, the lint is clean and the DB-free suite passes. The full
+      # 5,600-test run happens locally after a pipeline build.
+      - name: Tests (DB-free tier)
+        run: pytest -q
+
+      - name: Import check
+        run: |
+          python -c "import swu.engine.actions, swu.abilities.registry, swu.abilities.resolver"
+          python -c "import swu.web.app"
+
+  web:
+    name: Front end
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches web/.nvmrc and the >=20.19 floor in web/package.json
+          # (Vite 7 requires it).
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test

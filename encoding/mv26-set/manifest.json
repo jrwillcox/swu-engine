@@ -1,0 +1,26 @@
+{
+  "deck_slug": "mv26-set",
+  "source": {
+    "deck": null,
+    "set_code": "MV26"
+  },
+  "total_deck_cards": 2,
+  "playable_deck_cards": 2,
+  "groups": [
+    {
+      "gid": "mv26-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_01_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "MV26_2"
+      ],
+      "done": 1,
+      "total": 1
+    }
+  ]
+}

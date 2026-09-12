@@ -1,0 +1,500 @@
+{
+  "deck_slug": "sec-set",
+  "source": {
+    "deck": null,
+    "set_code": "SEC"
+  },
+  "total_deck_cards": 264,
+  "playable_deck_cards": 264,
+  "groups": [
+    {
+      "gid": "sec-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_2",
+        "SEC_3",
+        "SEC_5",
+        "SEC_10",
+        "SEC_13",
+        "SEC_14",
+        "SEC_39"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_42",
+        "SEC_50",
+        "SEC_53",
+        "SEC_78",
+        "SEC_136",
+        "SEC_139",
+        "SEC_143"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_03_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_144",
+        "SEC_149",
+        "SEC_150",
+        "SEC_152",
+        "SEC_155",
+        "SEC_156",
+        "SEC_162"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_04_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_163",
+        "SEC_164",
+        "SEC_165",
+        "SEC_168",
+        "SEC_169",
+        "SEC_171",
+        "SEC_180"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_05_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_182",
+        "SEC_183",
+        "SEC_240",
+        "SEC_242",
+        "SEC_244",
+        "SEC_246",
+        "SEC_247"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_06_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_254",
+        "SEC_263",
+        "SEC_264"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "sec-set:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_07_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_17",
+        "SEC_62",
+        "SEC_72",
+        "SEC_75",
+        "SEC_90",
+        "SEC_105",
+        "SEC_112"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_08_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_125",
+        "SEC_128",
+        "SEC_187",
+        "SEC_200",
+        "SEC_205",
+        "SEC_211",
+        "SEC_218"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:09",
+      "seq": 9,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_09_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_230",
+        "SEC_232",
+        "SEC_233"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "sec-set:10",
+      "seq": 10,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_10_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_4",
+        "SEC_6",
+        "SEC_7",
+        "SEC_8",
+        "SEC_9",
+        "SEC_11",
+        "SEC_15"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:11",
+      "seq": 11,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_11_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_18",
+        "SEC_29",
+        "SEC_32",
+        "SEC_40",
+        "SEC_41",
+        "SEC_47",
+        "SEC_54"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:12",
+      "seq": 12,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_12_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_59",
+        "SEC_63",
+        "SEC_64",
+        "SEC_65",
+        "SEC_69",
+        "SEC_71",
+        "SEC_74"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:13",
+      "seq": 13,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_13_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_89",
+        "SEC_91",
+        "SEC_95",
+        "SEC_102",
+        "SEC_104",
+        "SEC_107",
+        "SEC_108"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:14",
+      "seq": 14,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_14_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_109",
+        "SEC_110",
+        "SEC_119",
+        "SEC_122",
+        "SEC_134",
+        "SEC_135",
+        "SEC_137"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:15",
+      "seq": 15,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_15_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_140",
+        "SEC_151",
+        "SEC_154",
+        "SEC_157",
+        "SEC_172",
+        "SEC_174",
+        "SEC_177"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:16",
+      "seq": 16,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_16_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_179",
+        "SEC_190",
+        "SEC_196",
+        "SEC_202",
+        "SEC_204",
+        "SEC_207",
+        "SEC_212"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:17",
+      "seq": 17,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_17_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_215",
+        "SEC_216",
+        "SEC_219",
+        "SEC_220",
+        "SEC_221",
+        "SEC_225",
+        "SEC_228"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:18",
+      "seq": 18,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_18_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_229",
+        "SEC_231",
+        "SEC_235",
+        "SEC_236",
+        "SEC_243",
+        "SEC_249",
+        "SEC_257"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:19",
+      "seq": 19,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_19_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_260",
+        "SEC_261"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "sec-set:20",
+      "seq": 20,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_20_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_12",
+        "SEC_38",
+        "SEC_45",
+        "SEC_46",
+        "SEC_48",
+        "SEC_52",
+        "SEC_56"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:21",
+      "seq": 21,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_21_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_61",
+        "SEC_67",
+        "SEC_97",
+        "SEC_126",
+        "SEC_131",
+        "SEC_132",
+        "SEC_141"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:22",
+      "seq": 22,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_22_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_145",
+        "SEC_153",
+        "SEC_159",
+        "SEC_175",
+        "SEC_178",
+        "SEC_181",
+        "SEC_185"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:23",
+      "seq": 23,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_23_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_191",
+        "SEC_192",
+        "SEC_194",
+        "SEC_195",
+        "SEC_203",
+        "SEC_206",
+        "SEC_210"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "sec-set:24",
+      "seq": 24,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_24_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_223",
+        "SEC_224",
+        "SEC_227",
+        "SEC_253",
+        "SEC_255"
+      ],
+      "done": 5,
+      "total": 5
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "leader": {"id": "SOR_10"},
+  "base": {"id": "SOR_23"},
+  "deck": [
+    {"id": "SOR_128", "count": 3},
+    {"id": "SOR_225", "count": 2},
+    {"id": "SOR_79",  "count": 1},
+    {"id": "SOR_129", "count": 1},
+    {"id": "SOR_130", "count": 2},
+    {"id": "SOR_226", "count": 3},
+    {"id": "SOR_227", "count": 2},
+    {"id": "SOR_228", "count": 2},
+    {"id": "SOR_83",  "count": 3},
+    {"id": "SOR_229", "count": 3},
+    {"id": "SOR_230", "count": 1},
+    {"id": "SOR_84",  "count": 3},
+    {"id": "SOR_232", "count": 2},
+    {"id": "SOR_88",  "count": 1},
+    {"id": "SOR_135", "count": 1},
+    {"id": "SOR_132", "count": 3},
+    {"id": "SOR_231", "count": 1},
+    {"id": "SOR_86",  "count": 1},
+    {"id": "SOR_89",  "count": 1},
+    {"id": "SOR_123", "count": 1},
+    {"id": "SOR_139", "count": 1},
+    {"id": "SOR_126", "count": 1},
+    {"id": "SOR_172", "count": 3},
+    {"id": "SOR_233", "count": 3},
+    {"id": "SOR_234", "count": 1},
+    {"id": "SOR_92",  "count": 1},
+    {"id": "SOR_136", "count": 3}
+  ]
+}

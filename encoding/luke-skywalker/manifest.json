@@ -1,0 +1,10 @@
+{
+  "deck_slug": "luke-skywalker",
+  "source": {
+    "deck": "tests/fixtures/luke_skywalker_ash.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": []
+}

@@ -1,0 +1,51 @@
+{
+  "_comment": [
+    "Project-level Claude Code settings, checked in so the encode-next workflow is",
+    "reproducible. The PreToolUse hook auto-approves routine project work; see",
+    ".claude/hooks/auto_allow.py for why prefix allow-rules alone were not enough.",
+    "Personal overrides belong in .claude/settings.local.json, which is gitignored."
+  ],
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Read|Edit|Write|Glob|Grep|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "python",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/auto_allow.py"]
+          }
+        ]
+      }
+    ]
+  },
+
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "deny": ["Bash(rm -rf:*)"],
+    "allow": [
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pytest:*)",
+      "Bash(pip:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(echo:*)"
+    ]
+  }
+}

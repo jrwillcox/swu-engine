@@ -1,0 +1,181 @@
+/*
+ * SWU Home Game — visual identity.
+ * A restrained sci-fi HUD: deep space neutrals, a cool cyan accent for the
+ * human seat and a warm amber for the opponent, clean geometric type, subtle
+ * glows. No Star Wars trademarks — original theming only.
+ */
+:root {
+  /* Palette */
+  --bg-0: #070b12;
+  --bg-1: #0c121d;
+  --panel: rgba(18, 26, 40, 0.72);
+  --panel-solid: #121a28;
+  --panel-edge: rgba(120, 160, 220, 0.18);
+  --ink: #e7eefb;
+  --ink-dim: #9fb0cc;
+  --ink-faint: #5f6f8c;
+
+  --accent: #46d7ff; /* human / friendly */
+  --accent-soft: rgba(70, 215, 255, 0.16);
+  --foe: #ff9d3c; /* opponent / enemy */
+  --foe-soft: rgba(255, 157, 60, 0.14);
+
+  --good: #57e08a;
+  --warn: #ffd45e;
+  --danger: #ff5b6e;
+  --shield: #7cc6ff;
+  --xp: #ffd45e;
+
+  /* Stat colours sampled from the printed cards: power/attack sits in a red
+     diamond (~#e52127), hit points in a blue circle (~#029ed3). The UI mirrors
+     these so on-board readouts match the card faces. */
+  --stat-power: #e52127;
+  --stat-power-grad: linear-gradient(180deg, #f24850, #c2161d);
+  --stat-power-dim: linear-gradient(180deg, #c23a40, #8d1218);
+  --stat-hp: #029ed3;
+  --stat-hp-grad: linear-gradient(180deg, #38bdec, #0379b3);
+  --stat-hp-dim: linear-gradient(180deg, #2a86a8, #03566f);
+
+  --legal-glow: 0 0 0 2px rgba(70, 215, 255, 0.9), 0 0 18px 2px rgba(70, 215, 255, 0.55);
+  --foe-glow: 0 0 0 2px rgba(255, 157, 60, 0.85), 0 0 16px 2px rgba(255, 157, 60, 0.45);
+
+  --radius: 12px;
+  --radius-card: 7px;
+
+  /* Animation speed is driven by a data attribute on <html> (settings). */
+  --anim: 1; /* multiplier; overridden per speed setting */
+  --t-fast: calc(140ms * var(--anim));
+  --t-med: calc(280ms * var(--anim));
+  --t-slow: calc(520ms * var(--anim));
+
+  --font-ui: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
+  --font-num: "Segoe UI", "Inter", system-ui, sans-serif;
+}
+
+html[data-speed="fast"] {
+  --anim: 0.45;
+}
+html[data-speed="normal"] {
+  --anim: 1;
+}
+html[data-speed="slow"] {
+  --anim: 2.1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --anim: 0.001;
+  }
+}
+html[data-reduced="true"] {
+  --anim: 0.001;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 800px at 50% -10%, #14233b 0%, transparent 60%),
+    radial-gradient(900px 700px at 90% 110%, #1a1430 0%, transparent 55%), var(--bg-0);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  /* Touch hardening (no effect with a mouse): kill the 300ms tap delay and
+     double-tap-to-zoom while keeping scroll/pan, suppress the grey tap flash and
+     the iOS long-press callout (we drive our own long-press inspect), and stop
+     rubber-band overscroll fighting board taps. */
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button {
+  font-family: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+  backdrop-filter: blur(8px);
+}
+
+/* A reusable HUD button */
+.btn {
+  border: 1px solid var(--panel-edge);
+  background: linear-gradient(180deg, rgba(70, 215, 255, 0.14), rgba(70, 215, 255, 0.04));
+  color: var(--ink);
+  padding: 8px 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition:
+    transform var(--t-fast) ease,
+    box-shadow var(--t-fast) ease,
+    background var(--t-fast) ease;
+}
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(70, 215, 255, 0.22);
+}
+.btn:active {
+  transform: translateY(0);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, #46d7ff, #1ba6df);
+  color: #04121b;
+  border-color: transparent;
+}
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.04);
+}
+.btn-danger {
+  background: linear-gradient(180deg, rgba(255, 91, 110, 0.2), rgba(255, 91, 110, 0.05));
+  border-color: rgba(255, 91, 110, 0.4);
+}
+
+.scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll::-webkit-scrollbar-thumb {
+  background: rgba(120, 160, 220, 0.25);
+  border-radius: 8px;
+}
+
+/* Touch devices (iPad etc.): give buttons a finger-sized hit area and drop the
+   hover lift (there is no hover, and the :active feedback is enough). */
+@media (pointer: coarse) {
+  .btn {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+  .btn:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}

@@ -1,0 +1,501 @@
+{
+  "deck_slug": "twi-set",
+  "source": {
+    "deck": null,
+    "set_code": "TWI"
+  },
+  "total_deck_cards": 257,
+  "playable_deck_cards": 257,
+  "groups": [
+    {
+      "gid": "twi-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_3",
+        "TWI_10",
+        "TWI_13",
+        "TWI_17",
+        "TWI_18",
+        "TWI_34",
+        "TWI_36"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_41",
+        "TWI_44",
+        "TWI_48",
+        "TWI_59",
+        "TWI_76",
+        "TWI_78",
+        "TWI_89"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_03_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_103",
+        "TWI_131",
+        "TWI_140",
+        "TWI_146",
+        "TWI_149",
+        "TWI_150",
+        "TWI_151"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_04_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_154",
+        "TWI_155",
+        "TWI_156",
+        "TWI_157",
+        "TWI_160",
+        "TWI_162",
+        "TWI_165"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_05_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_167",
+        "TWI_173",
+        "TWI_177",
+        "TWI_195",
+        "TWI_202",
+        "TWI_212",
+        "TWI_239"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_06_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_256"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "twi-set:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_07_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_4",
+        "TWI_8",
+        "TWI_25",
+        "TWI_35",
+        "TWI_40",
+        "TWI_47",
+        "TWI_68"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_08_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_88",
+        "TWI_100",
+        "TWI_101",
+        "TWI_152",
+        "TWI_168",
+        "TWI_175",
+        "TWI_187"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:09",
+      "seq": 9,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_09_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_188",
+        "TWI_201",
+        "TWI_208",
+        "TWI_215",
+        "TWI_216",
+        "TWI_220",
+        "TWI_223"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:10",
+      "seq": 10,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_10_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_252"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "twi-set:11",
+      "seq": 11,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_11_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_1",
+        "TWI_6",
+        "TWI_7",
+        "TWI_9",
+        "TWI_12",
+        "TWI_14",
+        "TWI_16"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:12",
+      "seq": 12,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_12_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_19",
+        "TWI_28",
+        "TWI_33",
+        "TWI_42",
+        "TWI_43",
+        "TWI_45",
+        "TWI_50"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:13",
+      "seq": 13,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_13_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_51",
+        "TWI_54",
+        "TWI_56",
+        "TWI_58",
+        "TWI_62",
+        "TWI_67",
+        "TWI_70"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:14",
+      "seq": 14,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_14_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_71",
+        "TWI_73",
+        "TWI_74",
+        "TWI_81",
+        "TWI_85",
+        "TWI_98",
+        "TWI_105"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:15",
+      "seq": 15,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_15_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_119",
+        "TWI_120",
+        "TWI_122",
+        "TWI_129",
+        "TWI_130",
+        "TWI_134",
+        "TWI_137"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:16",
+      "seq": 16,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_16_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_139",
+        "TWI_143",
+        "TWI_153",
+        "TWI_163",
+        "TWI_166",
+        "TWI_169",
+        "TWI_172"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:17",
+      "seq": 17,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_17_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_178",
+        "TWI_183",
+        "TWI_185",
+        "TWI_186",
+        "TWI_194",
+        "TWI_197",
+        "TWI_200"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:18",
+      "seq": 18,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_18_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_203",
+        "TWI_204",
+        "TWI_210",
+        "TWI_211",
+        "TWI_224",
+        "TWI_249",
+        "TWI_254"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:19",
+      "seq": 19,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_19_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_2",
+        "TWI_5",
+        "TWI_22",
+        "TWI_31",
+        "TWI_32",
+        "TWI_38",
+        "TWI_39"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:20",
+      "seq": 20,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_20_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_46",
+        "TWI_49",
+        "TWI_52",
+        "TWI_53",
+        "TWI_55",
+        "TWI_60",
+        "TWI_63"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:21",
+      "seq": 21,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_21_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_66",
+        "TWI_69",
+        "TWI_72",
+        "TWI_75",
+        "TWI_95",
+        "TWI_96",
+        "TWI_102"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:22",
+      "seq": 22,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_22_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_115",
+        "TWI_116",
+        "TWI_125",
+        "TWI_132",
+        "TWI_135",
+        "TWI_145",
+        "TWI_148"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:23",
+      "seq": 23,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_23_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_176",
+        "TWI_192",
+        "TWI_199",
+        "TWI_205",
+        "TWI_213",
+        "TWI_219",
+        "TWI_225"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "twi-set:24",
+      "seq": 24,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_24_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_227",
+        "TWI_235",
+        "TWI_247",
+        "TWI_250",
+        "TWI_255"
+      ],
+      "done": 5,
+      "total": 5
+    }
+  ]
+}

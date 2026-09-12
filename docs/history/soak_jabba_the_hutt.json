@@ -1,0 +1,1368 @@
+{
+  "generated": "2026-06-27T20:39:51.641626Z",
+  "total_games": 2000,
+  "ok_games": 2000,
+  "failed_games": 0,
+  "elapsed_seconds": 788.1,
+  "win_rates": {
+    "P0": 1006,
+    "P1": 994
+  },
+  "action_length": {
+    "min": 59,
+    "max": 337,
+    "mean": 128.7,
+    "p25": 93,
+    "p50": 114,
+    "p75": 153
+  },
+  "round_length": {
+    "min": 5,
+    "max": 24,
+    "mean": 9.9,
+    "p25": 8,
+    "p50": 9,
+    "p75": 11
+  },
+  "action_kind_frequencies": {
+    "AttackWithUnit": 49068,
+    "PlayCard": 44869,
+    "ResourceCard": 37698,
+    "Pass": 23241,
+    "ChooseTarget": 20828,
+    "UseAbility": 16663,
+    "ClaimInitiative": 15879,
+    "SelectSearchCard": 6102,
+    "SkipResource": 5976,
+    "ContinueAttack": 5310,
+    "PlayFromHand": 4131,
+    "DiscardForSearch": 3958,
+    "AcceptTrigger": 3777,
+    "DeployLeader": 3425,
+    "DeclineTrigger": 2270,
+    "KeepHand": 2269,
+    "TakeMultiligan": 1731,
+    "UseAmbush": 1370,
+    "SelectDiscardUnitForDamage": 1204,
+    "ChooseDiscardDamageTarget": 1055,
+    "ChooseOwnTarget": 930,
+    "FinishPlot": 905,
+    "DeclineAmbush": 877,
+    "DeclineGrantedAttack": 698,
+    "ChooseRevealDeck": 539,
+    "ChooseRevealPlayer": 539,
+    "PlotPlay": 516,
+    "DeclineOpponentDamage": 471,
+    "ConfirmOpponentDamage": 459,
+    "PlayRevealedCard": 281,
+    "DeclineRevealedCard": 258,
+    "FinishSearch": 35
+  },
+  "leader_deploy_rate": {
+    "P0": 0.865,
+    "P1": 0.848,
+    "avg_deploy_round_P0": 6.2,
+    "avg_deploy_round_P1": 6.23
+  },
+  "initiative_takes_per_game": 7.94,
+  "ability_coverage": {
+    "JTL_216": 1275,
+    "LAW_134": 880,
+    "LAW_136": 2179,
+    "LAW_15": 21279,
+    "LAW_152": 1537,
+    "LAW_158": 4086,
+    "LAW_163": 1212,
+    "LAW_168": 3940,
+    "LAW_170": 1053,
+    "LAW_214": 701,
+    "LAW_215": 539,
+    "LAW_216": 1112,
+    "LAW_23": 3958,
+    "LAW_231": 3541,
+    "LAW_244": 3076,
+    "LAW_246": 1894,
+    "LAW_249": 3577,
+    "LAW_252": 244,
+    "LAW_65": 1448,
+    "SEC_186": 2589,
+    "SEC_189": 1539
+  },
+  "coverage_analysis": {
+    "fired": {
+      "JTL_216": 1275,
+      "LAW_134": 880,
+      "LAW_136": 2179,
+      "LAW_15": 21279,
+      "LAW_152": 1537,
+      "LAW_158": 4086,
+      "LAW_163": 1212,
+      "LAW_168": 3940,
+      "LAW_170": 1053,
+      "LAW_214": 701,
+      "LAW_215": 539,
+      "LAW_216": 1112,
+      "LAW_23": 3958,
+      "LAW_231": 3541,
+      "LAW_244": 3076,
+      "LAW_246": 1894,
+      "LAW_249": 3577,
+      "LAW_252": 244,
+      "LAW_65": 1448,
+      "SEC_186": 2589,
+      "SEC_189": 1539
+    },
+    "zero_fire_active": [
+      {
+        "key": "JTL_250",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_10",
+        "types": [
+          "ActivatedAbility",
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_104",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_111",
+        "types": [
+          "ConstantAbility",
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_119",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_142",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_145",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_147",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_166",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_167",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_20",
+        "types": [
+          "ActivatedAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_35",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_37",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_41",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_45",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "LAW_67",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SEC_103",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SEC_239",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SEC_252",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SEC_93",
+        "types": [
+          "ActivatedAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_113",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_118",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_120",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_124",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_128",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_129",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_13",
+        "types": [
+          "ActivatedAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_130",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_147",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_148",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_153",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_154",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_159",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_160",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_161",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_164",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_165",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_166",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_174",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_178",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_179",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_18",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_196",
+        "types": [
+          "ActivatedAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_206",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_216",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_220",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_223",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_231",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_236",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_242",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_245",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_246",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_249",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_251",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_252",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_253",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_254",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_258",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_262",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_28",
+        "types": [
+          "ActivatedAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_30",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_31",
+        "types": [
+          "ActivatedAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_39",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_40",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_41",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_44",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_47",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_64",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_66",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_7",
+        "types": [
+          "ActivatedAbility",
+          "ConstantAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_73",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_78",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_81",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_82",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_84",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_85",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SHD_93",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_10",
+        "types": [
+          "ActivatedAbility",
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_103",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_123",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_126",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_129",
+        "types": [
+          "ActivatedAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_130",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_132",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_135",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_136",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_139",
+        "types": [
+          "CostReduction",
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_14",
+        "types": [
+          "ActivatedAbility",
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_142",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_143",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_145",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_152",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_172",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_189",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_196",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_217",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_218",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_22",
+        "types": [
+          "ActivatedAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_220",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_222",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_226",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_227",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_228",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_231",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_233",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_234",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_236",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_238",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_240",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_241",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_244",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_245",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_45",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_49",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_5",
+        "types": [
+          "ActivatedAbility",
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_53",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_59",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_74",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_78",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_83",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_84",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_86",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_88",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_92",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "SOR_99",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_107",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_109",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_11",
+        "types": [
+          "ActivatedAbility",
+          "ConstantAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_123",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_126",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_144",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_147",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_164",
+        "types": [
+          "ConstantAbility",
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_171",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_174",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_226",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_238",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_246",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_248",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_251",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_257",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_86",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_91",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_94",
+        "types": [
+          "ConstantAbility",
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_97",
+        "types": [
+          "TriggerAbility"
+        ],
+        "reachable": false
+      },
+      {
+        "key": "TWI_99",
+        "types": [
+          "EventAbility"
+        ],
+        "reachable": false
+      }
+    ],
+    "reachable_zero_fire": [],
+    "passive_constant": [
+      "LAW_105",
+      "LAW_108",
+      "LAW_210",
+      "LAW_212",
+      "SHD_125",
+      "SHD_126",
+      "SHD_168",
+      "SHD_175",
+      "SHD_221",
+      "SHD_234",
+      "SHD_247",
+      "SHD_248",
+      "SHD_261",
+      "SHD_56",
+      "SHD_68",
+      "SHD_69",
+      "SHD_71",
+      "SHD_74",
+      "SHD_83",
+      "SOR_144",
+      "SOR_198",
+      "SOR_230",
+      "SOR_242",
+      "SOR_48",
+      "SOR_79",
+      "SOR_89",
+      "TWI_106",
+      "TWI_114",
+      "TWI_142",
+      "TWI_158",
+      "TWI_240",
+      "TWI_243",
+      "TWI_90",
+      "TWI_92"
+    ],
+    "n_registered": 201,
+    "n_fired": 21
+  },
+  "effect_efficacy": {
+    "per_ability": {
+      "JTL_216": {
+        "fired": 1275,
+        "targets": 1275,
+        "amount": 0,
+        "kinds": {
+          "DefeatUnit": 1275
+        }
+      },
+      "LAW_134": {
+        "fired": 880,
+        "targets": 0,
+        "amount": 880,
+        "kinds": {
+          "CreateCreditToken": 880
+        }
+      },
+      "LAW_136": {
+        "fired": 2179,
+        "targets": 0,
+        "amount": 0,
+        "kinds": {
+          "CustomEffect": 2179
+        }
+      },
+      "LAW_15": {
+        "fired": 21279,
+        "targets": 8549,
+        "amount": 8574,
+        "kinds": {
+          "ReturnToHand": 8574,
+          "CreateCreditToken": 8574,
+          "CustomEffect": 4131
+        }
+      },
+      "LAW_152": {
+        "fired": 1537,
+        "targets": 1537,
+        "amount": 1537,
+        "kinds": {
+          "GiveToken": 1537
+        }
+      },
+      "LAW_158": {
+        "fired": 4086,
+        "targets": 0,
+        "amount": 4086,
+        "kinds": {
+          "NextPlayDiscount": 4086
+        }
+      },
+      "LAW_163": {
+        "fired": 1212,
+        "targets": 0,
+        "amount": 0,
+        "kinds": {
+          "CustomEffect": 1212
+        }
+      },
+      "LAW_168": {
+        "fired": 3940,
+        "targets": 3160,
+        "amount": 0,
+        "kinds": {
+          "CustomEffect": 3940
+        }
+      },
+      "LAW_170": {
+        "fired": 1053,
+        "targets": 1047,
+        "amount": 0,
+        "kinds": {
+          "CustomEffect": 1053
+        }
+      },
+      "LAW_214": {
+        "fired": 701,
+        "targets": 701,
+        "amount": 0,
+        "kinds": {
+          "CustomEffect": 701
+        }
+      },
+      "LAW_215": {
+        "fired": 539,
+        "targets": 0,
+        "amount": 0,
+        "kinds": {
+          "CustomEffect": 539
+        }
+      },
+      "LAW_216": {
+        "fired": 1112,
+        "targets": 0,
+        "amount": 0,
+        "kinds": {
+          "CustomEffect": 1112
+        }
+      },
+      "LAW_23": {
+        "fired": 3958,
+        "targets": 0,
+        "amount": 0,
+        "kinds": {
+          "CustomEffect": 3958
+        }
+      },
+      "LAW_231": {
+        "fired": 3541,
+        "targets": 0,
+        "amount": 0,
+        "kinds": {
+          "CustomEffect": 3541
+        }
+      },
+      "LAW_244": {
+        "fired": 3076,
+        "targets": 0,
+        "amount": 3076,
+        "kinds": {
+          "CreateCreditToken": 3076
+        }
+      },
+      "LAW_246": {
+        "fired": 1894,
+        "targets": 1638,
+        "amount": 0,
+        "kinds": {
+          "ReturnToHand": 1894
+        }
+      },
+      "LAW_249": {
+        "fired": 3577,
+        "targets": 2657,
+        "amount": 3577,
+        "kinds": {
+          "GiveToken": 3577
+        }
+      },
+      "LAW_252": {
+        "fired": 244,
+        "targets": 0,
+        "amount": 244,
+        "kinds": {
+          "CreateCreditToken": 244
+        }
+      },
+      "LAW_65": {
+        "fired": 1448,
+        "targets": 0,
+        "amount": 0,
+        "kinds": {
+          "CustomEffect": 1448
+        }
+      },
+      "SEC_186": {
+        "fired": 2589,
+        "targets": 0,
+        "amount": 2589,
+        "kinds": {
+          "DiscardFromHand": 2589
+        }
+      },
+      "SEC_189": {
+        "fired": 1539,
+        "targets": 1539,
+        "amount": 0,
+        "kinds": {
+          "ExhaustCard": 1539
+        }
+      }
+    },
+    "suspicious_whiff": []
+  },
+  "action_cap": 2000,
+  "near_cap_games": [],
+  "nondeterministic_games": [],
+  "failures": []
+}

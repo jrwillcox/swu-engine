@@ -1,0 +1,149 @@
+{
+  "deck_slug": "han-solo",
+  "source": {
+    "deck": "tests/fixtures/han_solo.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": [
+    {
+      "gid": "han-solo:01",
+      "seq": 1,
+      "kind": "keyword",
+      "theme": "Bounty keyword",
+      "keyword": "Bounty",
+      "file": "group_01_bounty_keyword.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_95",
+        "SHD_195"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "han-solo:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_204"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "han-solo:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_03_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "TWI_191",
+        "SOR_192",
+        "JTL_200",
+        "JTL_215"
+      ],
+      "done": 4,
+      "total": 4
+    },
+    {
+      "gid": "han-solo:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_04_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_17",
+        "JTL_93",
+        "JTL_96",
+        "JTL_97",
+        "TWI_110",
+        "JTL_124",
+        "JTL_209"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "han-solo:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_05_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_210",
+        "JTL_217",
+        "JTL_249"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "han-solo:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_06_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_103",
+        "JTL_245"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "han-solo:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "New primitive: scaling-magnitude",
+      "keyword": "",
+      "file": "group_07_new_primitive_scaling_magnitude.md",
+      "depends_on": [],
+      "new_primitives": [
+        "scaling-magnitude"
+      ],
+      "cards": [
+        "SOR_97",
+        "JTL_208"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "han-solo:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "New primitive: control-change",
+      "keyword": "",
+      "file": "group_08_new_primitive_control_change.md",
+      "depends_on": [],
+      "new_primitives": [
+        "control-change"
+      ],
+      "cards": [
+        "JTL_235"
+      ],
+      "done": 1,
+      "total": 1
+    }
+  ]
+}

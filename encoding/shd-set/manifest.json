@@ -1,0 +1,461 @@
+{
+  "deck_slug": "shd-set",
+  "source": {
+    "deck": null,
+    "set_code": "SHD"
+  },
+  "total_deck_cards": 262,
+  "playable_deck_cards": 262,
+  "groups": [
+    {
+      "gid": "shd-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_2",
+        "SHD_3",
+        "SHD_10",
+        "SHD_12",
+        "SHD_14",
+        "SHD_17",
+        "SHD_33"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_45",
+        "SHD_50",
+        "SHD_58",
+        "SHD_79",
+        "SHD_80",
+        "SHD_91",
+        "SHD_107"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_03_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_114",
+        "SHD_133",
+        "SHD_139",
+        "SHD_142",
+        "SHD_143",
+        "SHD_144",
+        "SHD_150"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_04_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_158",
+        "SHD_163",
+        "SHD_167",
+        "SHD_170",
+        "SHD_171",
+        "SHD_172",
+        "SHD_173"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_05_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_177",
+        "SHD_180",
+        "SHD_225",
+        "SHD_226",
+        "SHD_229",
+        "SHD_235",
+        "SHD_239"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_06_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_255"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "shd-set:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_07_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_1",
+        "SHD_9",
+        "SHD_15",
+        "SHD_27",
+        "SHD_38",
+        "SHD_53",
+        "SHD_94"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_08_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_99",
+        "SHD_102",
+        "SHD_105",
+        "SHD_108",
+        "SHD_115",
+        "SHD_127",
+        "SHD_134"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:09",
+      "seq": 9,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_09_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_135",
+        "SHD_138",
+        "SHD_156",
+        "SHD_157",
+        "SHD_176",
+        "SHD_181",
+        "SHD_184"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:10",
+      "seq": 10,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_10_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_191",
+        "SHD_194",
+        "SHD_198",
+        "SHD_203",
+        "SHD_207",
+        "SHD_209",
+        "SHD_214"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:11",
+      "seq": 11,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_11_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_222",
+        "SHD_228",
+        "SHD_233",
+        "SHD_243",
+        "SHD_244"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "shd-set:12",
+      "seq": 12,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_12_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_4",
+        "SHD_5",
+        "SHD_6",
+        "SHD_8",
+        "SHD_11",
+        "SHD_32",
+        "SHD_34"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:13",
+      "seq": 13,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_13_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_35",
+        "SHD_36",
+        "SHD_42",
+        "SHD_48",
+        "SHD_52",
+        "SHD_54",
+        "SHD_59"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:14",
+      "seq": 14,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_14_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_75",
+        "SHD_76",
+        "SHD_86",
+        "SHD_87",
+        "SHD_97",
+        "SHD_101",
+        "SHD_103"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:15",
+      "seq": 15,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_15_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_104",
+        "SHD_112",
+        "SHD_116",
+        "SHD_117",
+        "SHD_122",
+        "SHD_137",
+        "SHD_140"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:16",
+      "seq": 16,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_16_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_145",
+        "SHD_151",
+        "SHD_155",
+        "SHD_169",
+        "SHD_182",
+        "SHD_183",
+        "SHD_185"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:17",
+      "seq": 17,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_17_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_186",
+        "SHD_188",
+        "SHD_189",
+        "SHD_190",
+        "SHD_193",
+        "SHD_197",
+        "SHD_199"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:18",
+      "seq": 18,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_18_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_201",
+        "SHD_204",
+        "SHD_205",
+        "SHD_208",
+        "SHD_211",
+        "SHD_212",
+        "SHD_213"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:19",
+      "seq": 19,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_19_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_217",
+        "SHD_227",
+        "SHD_230",
+        "SHD_232",
+        "SHD_241"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "shd-set:20",
+      "seq": 20,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_20_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_16",
+        "SHD_51",
+        "SHD_67",
+        "SHD_72",
+        "SHD_77",
+        "SHD_88",
+        "SHD_92"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:21",
+      "seq": 21,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_21_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_106",
+        "SHD_109",
+        "SHD_123",
+        "SHD_132",
+        "SHD_187",
+        "SHD_192",
+        "SHD_202"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "shd-set:22",
+      "seq": 22,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_22_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SHD_215",
+        "SHD_219",
+        "SHD_224",
+        "SHD_250",
+        "SHD_256"
+      ],
+      "done": 5,
+      "total": 5
+    }
+  ]
+}

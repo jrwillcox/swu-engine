@@ -1,0 +1,18 @@
+# SWU frontend (Vite preview of the built bundle) for the family server.
+# Build context = the web/ folder. Serves web/dist and proxies /api to the
+# backend; the proxy target is env-driven (SWU_API, set in compose.swu.yml to
+# http://swu-backend:8000). Mirrors what start-deployed.ps1 runs locally.
+FROM node:22-slim
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# vite preview binds 0.0.0.0 so the container is reachable on the LAN as
+# <host>:5173. allowedHosts is set via SWU_ALLOWED_HOSTS in compose.
+EXPOSE 5173
+CMD ["npx", "vite", "preview", "--host", "0.0.0.0", "--port", "5173"]

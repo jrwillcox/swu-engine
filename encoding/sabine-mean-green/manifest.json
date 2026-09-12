@@ -1,0 +1,80 @@
+{
+  "deck_slug": "sabine-mean-green",
+  "source": {
+    "deck": "tests/fixtures/sabine_mean_green.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": [
+    {
+      "gid": "sabine-mean-green:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_14",
+        "SOR_142",
+        "SOR_143",
+        "SOR_145",
+        "SHD_147",
+        "SOR_152"
+      ],
+      "done": 6,
+      "total": 6
+    },
+    {
+      "gid": "sabine-mean-green:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_02_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_99"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "sabine-mean-green:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_103",
+        "SHD_126",
+        "SOR_144",
+        "SOR_245"
+      ],
+      "done": 4,
+      "total": 4
+    },
+    {
+      "gid": "sabine-mean-green:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_04_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SOR_22",
+        "SHD_129"
+      ],
+      "done": 2,
+      "total": 2
+    }
+  ]
+}

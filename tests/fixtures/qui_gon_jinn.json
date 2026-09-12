@@ -1,0 +1,29 @@
+{
+  "leader": {"id": "LOF_16"},
+  "base": {"id": "LOF_23"},
+  "deck": [
+    {"id": "LOF_190", "count": 3},
+    {"id": "LOF_242", "count": 3},
+    {"id": "LOF_255", "count": 3},
+    {"id": "LOF_193", "count": 3},
+    {"id": "LOF_96", "count": 3},
+    {"id": "LOF_196", "count": 3},
+    {"id": "LOF_197", "count": 3},
+    {"id": "LOF_201", "count": 3},
+    {"id": "LOF_227", "count": 3},
+    {"id": "TWI_193", "count": 2},
+    {"id": "LOF_111", "count": 2},
+    {"id": "LOF_194", "count": 2},
+    {"id": "LOF_99", "count": 2},
+    {"id": "LOF_198", "count": 2},
+    {"id": "LOF_199", "count": 2},
+    {"id": "LOF_100", "count": 2},
+    {"id": "TWI_217", "count": 2},
+    {"id": "LOF_218", "count": 2},
+    {"id": "SHD_96", "count": 1},
+    {"id": "JTL_201", "count": 1},
+    {"id": "LOF_249", "count": 1},
+    {"id": "LOF_104", "count": 1},
+    {"id": "SOR_219", "count": 1}
+  ]
+}

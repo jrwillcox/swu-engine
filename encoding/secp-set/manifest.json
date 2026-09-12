@@ -1,0 +1,59 @@
+{
+  "deck_slug": "secp-set",
+  "source": {
+    "deck": null,
+    "set_code": "SECP"
+  },
+  "total_deck_cards": 20,
+  "playable_deck_cards": 20,
+  "groups": [
+    {
+      "gid": "secp-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SECP_11"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "secp-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_02_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SECP_1",
+        "SECP_8",
+        "SECP_13",
+        "SECP_16"
+      ],
+      "done": 4,
+      "total": 4
+    },
+    {
+      "gid": "secp-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_03_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SECP_19"
+      ],
+      "done": 1,
+      "total": 1
+    }
+  ]
+}

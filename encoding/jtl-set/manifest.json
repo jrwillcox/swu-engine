@@ -1,0 +1,549 @@
+{
+  "deck_slug": "jtl-set",
+  "source": {
+    "deck": null,
+    "set_code": "JTL"
+  },
+  "total_deck_cards": 262,
+  "playable_deck_cards": 262,
+  "groups": [
+    {
+      "gid": "jtl-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_1",
+        "JTL_10",
+        "JTL_12",
+        "JTL_37",
+        "JTL_40",
+        "JTL_43",
+        "JTL_46"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_51",
+        "JTL_55",
+        "JTL_62",
+        "JTL_78",
+        "JTL_80",
+        "JTL_91",
+        "JTL_102"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_03_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_104",
+        "JTL_116",
+        "JTL_120",
+        "JTL_121",
+        "JTL_125",
+        "JTL_127",
+        "JTL_147"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_04_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_148",
+        "JTL_149",
+        "JTL_152",
+        "JTL_153",
+        "JTL_156",
+        "JTL_158",
+        "JTL_162"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_05_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_168",
+        "JTL_170",
+        "JTL_172",
+        "JTL_173",
+        "JTL_174",
+        "JTL_175",
+        "JTL_180"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_06_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_198",
+        "JTL_218",
+        "JTL_219",
+        "JTL_222",
+        "JTL_226",
+        "JTL_227",
+        "JTL_234"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_07_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_239",
+        "JTL_248"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "jtl-set:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_08_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_14",
+        "JTL_21",
+        "JTL_28",
+        "JTL_41",
+        "JTL_48",
+        "JTL_63",
+        "JTL_89"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:09",
+      "seq": 9,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_09_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_98",
+        "JTL_126",
+        "JTL_134",
+        "JTL_177",
+        "JTL_186",
+        "JTL_191",
+        "JTL_194"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:10",
+      "seq": 10,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_10_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_197",
+        "JTL_205",
+        "JTL_207",
+        "JTL_220",
+        "JTL_221",
+        "JTL_223"
+      ],
+      "done": 6,
+      "total": 6
+    },
+    {
+      "gid": "jtl-set:11",
+      "seq": 11,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_11_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_2",
+        "JTL_3",
+        "JTL_4",
+        "JTL_5",
+        "JTL_7",
+        "JTL_8",
+        "JTL_11"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:12",
+      "seq": 12,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_12_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_15",
+        "JTL_16",
+        "JTL_32",
+        "JTL_34",
+        "JTL_36",
+        "JTL_42",
+        "JTL_44"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:13",
+      "seq": 13,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_13_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_45",
+        "JTL_50",
+        "JTL_57",
+        "JTL_58",
+        "JTL_66",
+        "JTL_67",
+        "JTL_70"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:14",
+      "seq": 14,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_14_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_71",
+        "JTL_72",
+        "JTL_73",
+        "JTL_76",
+        "JTL_77",
+        "JTL_81",
+        "JTL_86"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:15",
+      "seq": 15,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_15_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_88",
+        "JTL_92",
+        "JTL_94",
+        "JTL_101",
+        "JTL_106",
+        "JTL_107",
+        "JTL_109"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:16",
+      "seq": 16,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_16_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_115",
+        "JTL_119",
+        "JTL_122",
+        "JTL_135",
+        "JTL_137",
+        "JTL_138",
+        "JTL_145"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:17",
+      "seq": 17,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_17_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_146",
+        "JTL_150",
+        "JTL_157",
+        "JTL_160",
+        "JTL_161",
+        "JTL_163",
+        "JTL_164"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:18",
+      "seq": 18,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_18_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_178",
+        "JTL_179",
+        "JTL_182",
+        "JTL_188",
+        "JTL_192",
+        "JTL_193",
+        "JTL_195"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:19",
+      "seq": 19,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_19_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_199",
+        "JTL_202",
+        "JTL_206",
+        "JTL_211",
+        "JTL_228",
+        "JTL_231",
+        "JTL_238"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:20",
+      "seq": 20,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_20_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_247",
+        "JTL_253",
+        "JTL_257",
+        "JTL_261",
+        "JTL_262"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "jtl-set:21",
+      "seq": 21,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_21_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_6",
+        "JTL_13",
+        "JTL_18",
+        "JTL_24",
+        "JTL_25",
+        "JTL_35",
+        "JTL_38"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:22",
+      "seq": 22,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_22_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_39",
+        "JTL_47",
+        "JTL_49",
+        "JTL_52",
+        "JTL_54",
+        "JTL_56",
+        "JTL_59"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:23",
+      "seq": 23,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_23_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_60",
+        "JTL_74",
+        "JTL_79",
+        "JTL_82",
+        "JTL_83",
+        "JTL_84",
+        "JTL_87"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:24",
+      "seq": 24,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_24_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_99",
+        "JTL_100",
+        "JTL_105",
+        "JTL_117",
+        "JTL_129",
+        "JTL_130",
+        "JTL_131"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:25",
+      "seq": 25,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_25_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_155",
+        "JTL_169",
+        "JTL_171",
+        "JTL_213",
+        "JTL_229",
+        "JTL_232",
+        "JTL_233"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "jtl-set:26",
+      "seq": 26,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_26_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "JTL_242",
+        "JTL_243",
+        "JTL_244",
+        "JTL_252",
+        "JTL_254",
+        "JTL_259",
+        "JTL_260"
+      ],
+      "done": 7,
+      "total": 7
+    }
+  ]
+}

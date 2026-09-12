@@ -1,0 +1,29 @@
+{
+  "leader": {"id": "LOF_9"},
+  "base": {"id": "LOF_21"},
+  "deck": [
+    {"id": "LOF_63", "count": 1},
+    {"id": "LOF_38", "count": 1},
+    {"id": "TWI_138", "count": 1},
+    {"id": "LOF_138", "count": 1},
+    {"id": "SOR_137", "count": 1},
+    {"id": "LOF_154", "count": 3},
+    {"id": "LOF_31", "count": 2},
+    {"id": "LOF_59", "count": 3},
+    {"id": "LOF_129", "count": 2},
+    {"id": "LOF_131", "count": 3},
+    {"id": "LOF_156", "count": 2},
+    {"id": "LOF_229", "count": 2},
+    {"id": "LOF_160", "count": 2},
+    {"id": "LOF_35", "count": 3},
+    {"id": "LOF_67", "count": 2},
+    {"id": "LOF_231", "count": 3},
+    {"id": "LOF_233", "count": 3},
+    {"id": "LOF_136", "count": 2},
+    {"id": "LOF_137", "count": 2},
+    {"id": "LOF_39", "count": 3},
+    {"id": "LOF_140", "count": 3},
+    {"id": "LOF_41", "count": 3},
+    {"id": "SOR_139", "count": 2}
+  ]
+}

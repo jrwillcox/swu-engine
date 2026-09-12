@@ -1,0 +1,33 @@
+{
+  "leader": {"id": "SHD_7"},
+  "base": {"id": "SHD_19"},
+  "deck": [
+    {"id": "SHD_110", "count": 2},
+    {"id": "SHD_28", "count": 1},
+    {"id": "SHD_81", "count": 1},
+    {"id": "SHD_234", "count": 3},
+    {"id": "SHD_82", "count": 3},
+    {"id": "SHD_113", "count": 1},
+    {"id": "SHD_83", "count": 3},
+    {"id": "SHD_236", "count": 2},
+    {"id": "SHD_238", "count": 2},
+    {"id": "SHD_30", "count": 3},
+    {"id": "SHD_84", "count": 3},
+    {"id": "SHD_85", "count": 3},
+    {"id": "SHD_31", "count": 1},
+    {"id": "SHD_118", "count": 1},
+    {"id": "SHD_63", "count": 2},
+    {"id": "SHD_120", "count": 1},
+    {"id": "SHD_89", "count": 2},
+    {"id": "SHD_242", "count": 3},
+    {"id": "SHD_71", "count": 1},
+    {"id": "SHD_124", "count": 1},
+    {"id": "SHD_125", "count": 2},
+    {"id": "SHD_128", "count": 1},
+    {"id": "SHD_129", "count": 2},
+    {"id": "SHD_262", "count": 1},
+    {"id": "SHD_130", "count": 1},
+    {"id": "SHD_39", "count": 3},
+    {"id": "SHD_93", "count": 1}
+  ]
+}

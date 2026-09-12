@@ -1,0 +1,98 @@
+{
+  "deck_slug": "p25-set",
+  "source": {
+    "deck": null,
+    "set_code": "P25"
+  },
+  "total_deck_cards": 130,
+  "playable_deck_cards": 130,
+  "groups": [
+    {
+      "gid": "p25-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "P25_39",
+        "P25_54",
+        "P25_74"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "p25-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_02_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "P25_40",
+        "P25_44",
+        "P25_67",
+        "P25_72",
+        "P25_78"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "p25-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "P25_41",
+        "P25_42",
+        "P25_46",
+        "P25_55",
+        "P25_73",
+        "P25_83",
+        "P25_105"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "p25-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_04_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "P25_107"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "p25-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_05_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "P25_43"
+      ],
+      "done": 1,
+      "total": 1
+    }
+  ]
+}

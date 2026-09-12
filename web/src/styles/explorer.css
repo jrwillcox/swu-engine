@@ -1,0 +1,907 @@
+/*
+ * Card Explorer — browse the whole catalog, filter, inspect, and pick cards
+ * toward a deck. Layout is a fixed top bar + filter row, then a scrolling grid.
+ */
+.explorer {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(1200px 800px at 50% -10%, #14233b 0%, transparent 60%), var(--bg-0);
+  padding: 12px 16px;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.explorer-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.explorer-title {
+  font-size: 20px;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+.explorer-search {
+  width: 240px;
+  max-width: 40vw;
+}
+.explorer-deck-count {
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.explorer-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.explorer-select {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+.explorer-select select {
+  background: var(--panel-solid);
+  color: var(--ink);
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  min-width: 120px;
+  max-width: 220px;
+}
+
+/* Multi-select filter (trait, and other multi-value filters to come). The
+   trigger matches the native <select> box; the popover is an absolute checkbox
+   list anchored to it. */
+.explorer-multi {
+  position: relative;
+}
+.explorer-multi-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--panel-solid);
+  color: var(--ink);
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  min-width: 120px;
+  max-width: 220px;
+  cursor: pointer;
+  text-align: left;
+}
+.explorer-multi-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.explorer-multi-summary.empty {
+  color: var(--ink-faint);
+}
+.explorer-multi-caret {
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+.explorer-multi-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 160px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--panel-solid);
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 4px;
+}
+.explorer-multi-clear {
+  display: block;
+  width: 100%;
+  background: transparent;
+  color: var(--ink-dim);
+  border: none;
+  border-bottom: 1px solid var(--panel-edge);
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.explorer-multi-clear:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+.explorer-multi-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.explorer-multi-opt:hover {
+  background: var(--panel-edge);
+}
+.explorer-multi-opt input {
+  accent-color: var(--accent);
+}
+
+.explorer-count {
+  margin-top: -2px;
+}
+
+/* The "Adding to: [deck ▾]" selector sits in the top bar in add mode. */
+.explorer-addto select {
+  border-color: var(--accent);
+}
+
+/* Body row: the scrolling grid (main) + the optional live deck rail. */
+.explorer-body {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+}
+.explorer-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.explorer-grid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 12px;
+  align-content: start;
+  padding: 4px 4px 24px;
+}
+
+.xtile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: var(--radius-card);
+}
+.xtile.selected .xtile-img {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.xtile-img {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  padding: 0;
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: #0a0f17;
+  cursor: pointer;
+}
+.xtile-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.xtile-img:hover {
+  box-shadow: 0 4px 18px rgba(70, 215, 255, 0.25);
+}
+.xtile-noimg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 8px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--ink-dim);
+}
+
+.xtile-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(2px);
+}
+.xtile-badge.ok {
+  background: rgba(87, 224, 138, 0.85);
+  color: #04201a;
+}
+.xtile-badge.no {
+  background: rgba(20, 28, 42, 0.8);
+  color: var(--ink-dim);
+  border: 1px solid var(--panel-edge);
+}
+
+.xtile-count {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #04121b;
+}
+
+.xtile-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+.xtile-code {
+  font-size: 11px;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+.xtile-stepper {
+  display: flex;
+  gap: 4px;
+}
+.xtile-stepper button {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.xtile-stepper button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.explorer-more {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 8px;
+}
+
+/* ── Zoom overlay ───────────────────────────────────────────────────────── */
+.xzoom-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 6, 12, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 24px;
+  backdrop-filter: blur(3px);
+}
+.xzoom {
+  display: flex;
+  gap: 20px;
+  max-width: 860px;
+  width: 100%;
+  max-height: 90vh;
+  padding: 20px;
+  position: relative;
+}
+.xzoom-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  font-size: 20px;
+}
+.xzoom-art {
+  flex: 0 0 auto;
+  width: min(46%, 340px);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 10px;
+}
+.xzoom-art img {
+  width: 100%;
+  border-radius: 10px;
+  object-fit: contain;
+  max-height: 80vh;
+}
+.xzoom-art-ctl {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.xzoom-art-ctl .explorer-select select {
+  min-width: 0;
+}
+.xzoom-info {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+.xzoom-info h2 {
+  margin: 0 0 2px;
+  font-size: 22px;
+}
+.xzoom-unique {
+  color: var(--warn);
+  font-size: 14px;
+  margin-left: 8px;
+}
+.xzoom-sub {
+  color: var(--ink-dim);
+  font-style: italic;
+  margin-bottom: 6px;
+}
+.xzoom-meta {
+  color: var(--ink-faint);
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+
+.xzoom-stats {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+.xzoom-stat {
+  display: flex;
+  flex-direction: column;
+}
+.xzoom-stat-label {
+  font-size: 10px;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+.xzoom-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.xzoom-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--panel-edge);
+}
+.chip.trait {
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.chip.aspect {
+  border: none;
+}
+
+.xzoom-avail {
+  margin: 14px 0;
+  font-weight: 700;
+  font-size: 14px;
+}
+.xzoom-avail.ok {
+  color: var(--good);
+}
+.xzoom-avail.no {
+  color: var(--ink-dim);
+}
+
+.xzoom-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.xzoom-count {
+  font-size: 18px;
+  font-weight: 800;
+  min-width: 18px;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .xzoom {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .xzoom-art {
+    width: 70%;
+    align-self: center;
+  }
+}
+
+/* ── Deck Manager (custom decks, Stage 4) ───────────────────────────────────
+ * Reuses the .explorer full-screen shell (fixed bar + scrolling body). */
+.deck-manager-error {
+  color: var(--danger);
+  margin: 0;
+}
+.deck-manager-empty {
+  color: var(--ink-dim);
+  padding: 20px 4px;
+}
+
+.deck-new-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.deck-new-row .seed-input {
+  flex: 1;
+  max-width: 360px;
+}
+
+.deck-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.deck-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.deck-row.editing {
+  gap: 10px;
+}
+.deck-row.editing .seed-input {
+  flex: 1;
+  max-width: 360px;
+}
+.deck-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.deck-row-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.deck-row-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+.deck-row-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.deck-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: default;
+}
+.deck-pill.complete {
+  background: rgba(28, 160, 80, 0.2);
+  color: var(--good);
+}
+.deck-pill.draft {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink-dim);
+}
+.deck-count {
+  font-weight: 700;
+  color: var(--ink);
+}
+.deck-badge {
+  white-space: nowrap;
+}
+
+/* Detail (read-only contents; Stage 5 → add-mode) */
+.deck-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.deck-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.deck-errors {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--warn);
+  font-size: 13px;
+}
+.deck-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.deck-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  padding: 10px 16px;
+  min-width: 180px;
+}
+.deck-slot-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.deck-slot-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+.deck-pool-head {
+  margin: 4px 0 0;
+  font-size: 15px;
+}
+.deck-pool {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.deck-pool li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.deck-pool-count {
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Live deck rail (Card Explorer add mode, Stage 5) ───────────────────────
+ * A compact right rail showing the deck being built as cards are clicked. */
+.deck-panel {
+  flex: 0 0 288px;
+  width: 288px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-edge);
+  border-radius: 12px;
+  padding: 12px;
+}
+.deck-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.deck-panel-name {
+  font-size: 15px;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deck-panel-totals {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.deck-panel-totals .deck-count {
+  font-size: 18px;
+}
+
+.deck-panel-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.deck-panel-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.deck-panel-slot-icon {
+  font-size: 14px;
+}
+.deck-panel-slot-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deck-panel-slot-name.empty {
+  color: var(--ink-dim);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.deck-panel-pool {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-right: 2px;
+}
+.deck-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.deck-panel-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.deck-panel-code {
+  font-size: 10px;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+.deck-panel-cname {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deck-panel-x {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.deck-panel-del {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+/* On a narrow screen the rail drops below the grid. */
+@media (max-width: 720px) {
+  .explorer-body {
+    flex-direction: column;
+  }
+  .deck-panel {
+    flex-basis: auto;
+    width: auto;
+    max-height: 40vh;
+  }
+}
+
+/* ── View toggle (Cards ▦ / List ☰) ─────────────────────────────────────────
+   A segmented control living at the end of the filter row, not in Settings —
+   it's a per-browsing choice, so it sits with the filters it works alongside. */
+.explorer-view {
+  display: flex;
+  align-self: flex-end;
+  margin-left: 4px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.explorer-view button {
+  background: var(--panel-solid);
+  color: var(--ink-dim);
+  border: none;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.explorer-view button + button {
+  border-left: 1px solid var(--panel-edge);
+}
+.explorer-view button:hover {
+  color: var(--ink);
+}
+.explorer-view button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* ── Details list ──────────────────────────────────────────────────────────
+   Windows-Explorer-style table: a sticky sortable header and one compact row
+   per card. Both axes scroll inside this box, so narrow screens can reach the
+   right-hand columns without the page moving. */
+.explorer-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  background: rgba(10, 15, 23, 0.55);
+}
+.xlist {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.xlist thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel-solid);
+  border-bottom: 1px solid var(--panel-edge);
+  padding: 0;
+  text-align: left;
+  white-space: nowrap;
+}
+.xlist thead th button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.xlist thead th button:hover {
+  color: var(--ink);
+}
+.xlist thead th.sorted button {
+  color: var(--accent);
+}
+.xlist thead th.xlist-num button {
+  justify-content: flex-end;
+}
+.xlist-caret {
+  font-size: 8px;
+}
+
+.xlist tbody td {
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(120, 160, 220, 0.08);
+  white-space: nowrap;
+}
+.xlist tbody tr {
+  cursor: pointer;
+}
+.xlist tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+.xlist tbody tr:hover {
+  background: var(--accent-soft);
+}
+.xlist tbody tr.selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.xlist-code-col {
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+.xlist-name {
+  font-weight: 600;
+}
+.xlist-unique {
+  color: var(--warn);
+  margin-left: 5px;
+  font-size: 10px;
+}
+.xlist-sub,
+.xlist-words {
+  color: var(--ink-dim);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.xlist-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.xlist .chip.aspect {
+  font-size: 10px;
+  padding: 1px 6px;
+  margin-right: 4px;
+}
+.xlist-avail.ok {
+  color: var(--good);
+}
+.xlist-avail.no {
+  color: var(--ink-faint);
+}
+
+/* Deck stepper column (add mode): −  n  + , centred, click-isolated. */
+.xlist-deck {
+  width: 1%;
+}
+.xlist-deck .xtile-stepper {
+  align-items: center;
+}
+.xlist-count {
+  display: inline-block;
+  min-width: 14px;
+  text-align: center;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}

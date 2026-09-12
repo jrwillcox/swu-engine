@@ -1,0 +1,466 @@
+{
+  "deck_slug": "lof-set",
+  "source": {
+    "deck": null,
+    "set_code": "LOF"
+  },
+  "total_deck_cards": 264,
+  "playable_deck_cards": 264,
+  "groups": [
+    {
+      "gid": "lof-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_11",
+        "LOF_12",
+        "LOF_71",
+        "LOF_79",
+        "LOF_91",
+        "LOF_133",
+        "LOF_134"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_141",
+        "LOF_142",
+        "LOF_144",
+        "LOF_145",
+        "LOF_147",
+        "LOF_149",
+        "LOF_155"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_03_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_158",
+        "LOF_167",
+        "LOF_170",
+        "LOF_171",
+        "LOF_172",
+        "LOF_176",
+        "LOF_177"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_04_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_213",
+        "LOF_239",
+        "LOF_259",
+        "LOF_260",
+        "LOF_264"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "lof-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_05_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_1",
+        "LOF_36",
+        "LOF_57",
+        "LOF_65",
+        "LOF_68",
+        "LOF_83",
+        "LOF_115"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_06_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_117",
+        "LOF_121",
+        "LOF_122",
+        "LOF_125",
+        "LOF_139",
+        "LOF_146",
+        "LOF_175"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_07_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_184",
+        "LOF_188",
+        "LOF_204",
+        "LOF_219",
+        "LOF_222",
+        "LOF_226",
+        "LOF_243"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_08_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_4",
+        "LOF_5",
+        "LOF_6",
+        "LOF_7",
+        "LOF_8",
+        "LOF_13",
+        "LOF_14"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:09",
+      "seq": 9,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_09_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_15",
+        "LOF_17",
+        "LOF_33",
+        "LOF_47",
+        "LOF_48",
+        "LOF_49",
+        "LOF_50"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:10",
+      "seq": 10,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_10_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_52",
+        "LOF_53",
+        "LOF_54",
+        "LOF_55",
+        "LOF_56",
+        "LOF_58",
+        "LOF_60"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:11",
+      "seq": 11,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_11_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_64",
+        "LOF_72",
+        "LOF_75",
+        "LOF_76",
+        "LOF_81",
+        "LOF_85",
+        "LOF_86"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:12",
+      "seq": 12,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_12_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_87",
+        "LOF_89",
+        "LOF_92",
+        "LOF_95",
+        "LOF_97",
+        "LOF_102",
+        "LOF_105"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:13",
+      "seq": 13,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_13_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_106",
+        "LOF_118",
+        "LOF_124",
+        "LOF_126",
+        "LOF_127",
+        "LOF_135",
+        "LOF_150"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:14",
+      "seq": 14,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_14_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_152",
+        "LOF_153",
+        "LOF_166",
+        "LOF_169",
+        "LOF_173",
+        "LOF_174",
+        "LOF_178"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:15",
+      "seq": 15,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_15_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_180",
+        "LOF_191",
+        "LOF_195",
+        "LOF_203",
+        "LOF_205",
+        "LOF_206",
+        "LOF_212"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:16",
+      "seq": 16,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_16_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_215",
+        "LOF_216",
+        "LOF_220",
+        "LOF_221",
+        "LOF_223",
+        "LOF_224",
+        "LOF_225"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:17",
+      "seq": 17,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_17_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_237",
+        "LOF_241",
+        "LOF_244",
+        "LOF_250",
+        "LOF_252",
+        "LOF_258",
+        "LOF_263"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:18",
+      "seq": 18,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_18_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_2",
+        "LOF_3",
+        "LOF_10",
+        "LOF_18",
+        "LOF_19",
+        "LOF_20",
+        "LOF_22"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:19",
+      "seq": 19,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_19_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_24",
+        "LOF_25",
+        "LOF_26",
+        "LOF_27",
+        "LOF_28",
+        "LOF_29",
+        "LOF_30"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:20",
+      "seq": 20,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_20_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_44",
+        "LOF_73",
+        "LOF_78",
+        "LOF_94",
+        "LOF_103",
+        "LOF_114",
+        "LOF_123"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:21",
+      "seq": 21,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_21_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_128",
+        "LOF_159",
+        "LOF_186",
+        "LOF_189",
+        "LOF_209",
+        "LOF_211",
+        "LOF_217"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "lof-set:22",
+      "seq": 22,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_22_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_248",
+        "LOF_262"
+      ],
+      "done": 2,
+      "total": 2
+    }
+  ]
+}

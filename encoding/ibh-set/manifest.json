@@ -1,0 +1,79 @@
+{
+  "deck_slug": "ibh-set",
+  "source": {
+    "deck": null,
+    "set_code": "IBH"
+  },
+  "total_deck_cards": 104,
+  "playable_deck_cards": 104,
+  "groups": [
+    {
+      "gid": "ibh-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IBH_20",
+        "IBH_53",
+        "IBH_72",
+        "IBH_95",
+        "IBH_99",
+        "IBH_104"
+      ],
+      "done": 6,
+      "total": 6
+    },
+    {
+      "gid": "ibh-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_02_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IBH_52"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "ibh-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IBH_1",
+        "IBH_13",
+        "IBH_31",
+        "IBH_42"
+      ],
+      "done": 4,
+      "total": 4
+    },
+    {
+      "gid": "ibh-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_04_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IBH_10"
+      ],
+      "done": 1,
+      "total": 1
+    }
+  ]
+}

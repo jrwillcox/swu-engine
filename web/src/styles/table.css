@@ -1,0 +1,524 @@
+/* Table layout — mirrors the SWU play area across the centre line.
+   Every zone is a bounded region; arena cards are sized by the band height so
+   they can never overflow into a neighbouring zone. */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  height: 100vh;
+  height: 100dvh; /* dynamic viewport: Safari's toolbar can't clip the board */
+  width: 100vw;
+  width: 100dvw;
+}
+
+/* Touch / narrow screens: the board takes the full width and the battle log
+   becomes an off-canvas slide-in drawer (toggled from the HUD), so the iPad
+   shows the whole play area in landscape. */
+@media (pointer: coarse), (max-width: 1100px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+.table {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  /* Keep the action bar / hand clear of the iPad home-indicator + camera areas. */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  /* Height of "your" territory (my rail + hand + bottom padding). Everything
+     below the shared arenas is fixed-height, so the playmat divider lands on a
+     real boundary regardless of viewport height — it never cuts a unit row. */
+  --my-territory: 236px;
+}
+
+/* Per-player playmat backdrops (drop-in images supported via playmats.ts).
+   The divider sits at the top of your rail: arenas read as neutral/opponent
+   ground, the blue band is unambiguously yours. */
+.playmat {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 0;
+}
+.playmat.top {
+  top: 0;
+  bottom: var(--my-territory);
+}
+.playmat.bottom {
+  bottom: 0;
+  height: var(--my-territory);
+}
+.playmat::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(70, 215, 255, 0.5), transparent);
+}
+.playmat.top::after {
+  bottom: 0;
+}
+.playmat.bottom::after {
+  top: 0;
+}
+
+/* HUD (top) and action bar (bottom) are always visible; the board between them
+   flexes to fit any viewport height, so the action bar can never be clipped off
+   the bottom — even on short laptop screens. */
+.table-content {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 16px 10px;
+}
+.table-content > .topbar {
+  flex: 0 0 auto;
+}
+
+.board {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows:
+    minmax(0, 88px) /* opponent rail (hand + base/leader + resources + piles) */
+    minmax(160px, 1fr) /* arenas (ground | space, side by side) */
+    minmax(0, 88px) /* my rail */
+    minmax(0, 132px); /* my hand */
+  gap: 6px;
+  min-height: 0;
+}
+
+/* Ground (left) and space (right) arenas share one board row. */
+.arenas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  min-height: 0;
+}
+
+/* Top bar — one row carries status (phase/round/initiative) on the left, the
+   action prompt + buttons in the middle, and the turn flag + settings on the
+   right. Replaces the old separate HUD and footer action bars. */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  min-height: 0;
+}
+.topbar-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.topbar-mid {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.topbar .spacer {
+  flex: 1;
+}
+.topbar .pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--panel-edge);
+  background: rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
+}
+.topbar .pill.phase {
+  color: var(--accent);
+}
+.topbar .pill.init {
+  color: var(--warn);
+}
+.topbar .fs-icon {
+  display: inline-block;
+}
+.topbar .fs-icon.on {
+  color: var(--accent);
+}
+.topbar .turn-flag {
+  font-weight: 800;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.topbar .turn-flag.you {
+  color: var(--accent);
+}
+.topbar .turn-flag.foe {
+  color: var(--foe);
+}
+
+/* Zone label chips */
+.zone-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+
+/* Compact opponent hand chip (lives inline in the opponent rail) */
+.hand-chip {
+  display: flex;
+  flex-direction: column;
+}
+.hand-chip-cards {
+  display: flex;
+  align-items: center;
+  height: 64px;
+}
+.hand-chip .card.mini {
+  height: 50px;
+  width: 36px;
+  margin: 0 -17px;
+}
+.hand-chip .card.mini:first-child {
+  margin-left: 0;
+}
+.hand-chip-count {
+  margin-left: 24px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-dim);
+}
+
+/* Rails (base + leader + resources + piles), both players */
+.rail {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 2px 14px 4px;
+  overflow: hidden;
+}
+.rail .spacer {
+  flex: 1;
+}
+.rail .piles {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.base-cluster {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 72px;
+}
+.base-slot {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.base-slot .card {
+  height: 100%;
+}
+.base-readout {
+  position: absolute;
+  right: 4px;
+  bottom: 9px;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 11px;
+  background: var(--stat-hp-grad); /* blue HP circle, as on the printed card */
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  font-weight: 800;
+  font-size: 14px;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  z-index: 3;
+}
+.base-hp-bar {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 3px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  z-index: 2;
+}
+.base-hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0379b3, #38bdec);
+}
+.base-hp-fill.low {
+  background: linear-gradient(90deg, #b32638, #ff5b6e);
+}
+
+/* Resources */
+.res-block {
+  display: flex;
+  flex-direction: column;
+}
+.resources {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  height: 58px;
+}
+.res-card {
+  width: 30px;
+}
+.res-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-dim);
+  align-self: center;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.res-credits {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-dim);
+  align-self: center;
+  margin-left: 6px;
+  white-space: nowrap;
+  cursor: help;
+}
+.res-force-token {
+  font-size: 12px;
+  font-weight: 700;
+  color: #c8a828;
+  align-self: center;
+  margin-left: 6px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Piles */
+.pile {
+  position: relative;
+  text-align: center;
+}
+.pile .pile-card {
+  width: 46px;
+  position: relative;
+}
+.pile .count {
+  position: absolute;
+  inset: 18px 0 0 0;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+  text-shadow:
+    0 1px 4px #000,
+    0 0 6px #000;
+  pointer-events: none;
+}
+.pile.clickable {
+  cursor: pointer;
+}
+
+/* Arenas */
+.arena {
+  position: relative;
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  border-radius: 14px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(10, 16, 28, 0.4);
+  overflow: hidden;
+  min-height: 0;
+}
+.arena.space {
+  background: rgba(12, 18, 34, 0.4);
+}
+.arena.is-target-zone {
+  box-shadow: inset 0 0 0 2px rgba(255, 157, 60, 0.5);
+}
+.arena-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border-right: 1px solid var(--panel-edge);
+  background: rgba(0, 0, 0, 0.18);
+}
+.arena-rows {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  min-height: 0;
+}
+.arena-units {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch; /* momentum scroll for crowded arenas on iPad */
+}
+.arena-units.foe {
+  border-bottom: 1px dashed rgba(255, 157, 60, 0.12);
+}
+.arena-units .card {
+  height: 92%;
+}
+.arena-units::-webkit-scrollbar {
+  height: 5px;
+}
+.arena-units::-webkit-scrollbar-thumb {
+  background: rgba(120, 160, 220, 0.2);
+  border-radius: 6px;
+}
+
+/* ---- Phones (≤480px wide in portrait, or ≤520px tall in landscape) ----
+   The board above is a fixed landscape grid tuned for iPad; a phone viewport is
+   far smaller, so the fixed bands squeeze base/leader/hand into slivers and the
+   top bar's buttons overlap the status pills. Here we instead let the board take
+   its NATURAL height and scroll, give each band an explicit size so cards stay
+   legible, and let the top bar wrap. iPad and desktop never match these queries
+   (iPad is wider than 480 and taller than 520; desktop is pointer:fine), so
+   their layout is untouched. */
+@media (pointer: coarse) and (max-width: 480px), (pointer: coarse) and (max-height: 520px) {
+  /* The page itself can't scroll (theme.css pins html/body/#root to 100% with
+     body overflow:hidden), so the scroll MUST live on an inner element. .table
+     keeps its definite viewport height and becomes the scroller; .table-content
+     is allowed to grow TALLER than it (min-height, not height) so there is real
+     overflow to scroll. If .table were height:auto it would expand to fit and get
+     clipped by the fixed-height #root with no scrollbar — the original bug. */
+  .table {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch; /* momentum scroll */
+  }
+  .table-content {
+    height: auto;
+    min-height: 100%;
+    padding: 6px 8px 10px;
+  }
+
+  /* Top bar wraps: the status pills sit on the first line; the action prompt and
+     its buttons (Pass / Confirm resources / …) drop to their own full-width line
+     below, so they can never overlap "Init: …" again. */
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding: 5px 8px;
+  }
+  .topbar .pill {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .topbar-mid {
+    flex-basis: 100%;
+  }
+
+  /* Natural-height bands with explicit sizes (cards are sized as a % of their
+     band, so a collapsed band = invisible cards). The whole board scrolls.
+     The single grid column is capped at the container width (minmax(0,1fr)) so a
+     wide child — the fanned hand — can no longer stretch the board past the
+     screen and shove the space arena off the right edge. */
+  .board {
+    flex: 0 0 auto; /* take the explicit grid height, don't stretch/shrink */
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 300px auto auto; /* hand row grows with its rows */
+    gap: 8px;
+  }
+  .board > * {
+    min-width: 0;
+  }
+  .arenas,
+  .arena {
+    min-width: 0;
+  }
+  /* The hand itself is restyled in the phone block at the END of this file, so
+     it lands AFTER the base `.hand` rules and actually wins the cascade. */
+}
+
+/* Portrait phones only: stack the two arenas vertically so EACH gets the full
+   screen width. Side by side on a ~390px-wide phone, the space arena is a thin
+   unusable sliver; stacked, both are full-width (the board just scrolls a little
+   more). Landscape phones keep them side by side — width is plentiful there,
+   height is the scarce axis. */
+@media (pointer: coarse) and (max-width: 480px) {
+  .board {
+    grid-template-rows: auto 460px auto auto;
+  }
+  .arenas {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+}
+
+/* Hand */
+.hand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 0;
+  overflow: visible;
+}
+.hand .card {
+  height: 100%;
+  margin: 0 -14px;
+}
+.hand .card:hover {
+  z-index: 6;
+}
+
+.eliminated {
+  filter: grayscale(0.7) brightness(0.7);
+}
+
+/* ---- Phone hand (placed AFTER the base `.hand` rules so it wins the cascade —
+   the earlier phone media block can't, since these base rules come after it) ----
+   The desktop hand is a single fanned, overlapping row sized by band height. On a
+   phone that row is wider than the screen and horizontal touch-scroll fights the
+   board's vertical scroll, so cards stay unreachable. Instead we WRAP the hand
+   into rows of fixed-width, non-overlapping cards: every card is fully visible and
+   tappable, and the (already working) vertical board scroll reaches the lower row.
+   Sized by width (not band height) because the row height is now `auto`. */
+@media (pointer: coarse) and (max-width: 480px), (pointer: coarse) and (max-height: 520px) {
+  .hand {
+    flex-wrap: wrap;
+    align-content: flex-start;
+    justify-content: center;
+    overflow: visible;
+    gap: 8px;
+    min-height: 0;
+    height: auto;
+    padding: 4px 8px 8px;
+  }
+  /* Fixed card width → flex-wrap fits as many per row as the width allows (≈3 on a
+     portrait phone, all 6 on one row on a wider landscape phone). Override .fill's
+     height:100%/width:auto; aspect-ratio derives the height. */
+  .hand .card,
+  .hand .card.fill {
+    width: 96px;
+    max-width: 28vw;
+    height: auto;
+    margin: 0;
+  }
+}

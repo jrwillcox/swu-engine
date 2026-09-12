@@ -1,0 +1,28 @@
+{
+  "leader": {"id": "SHD_13"},
+  "base": {"id": "SHD_24"},
+  "deck": [
+    {"id": "SHD_160", "count": 3},
+    {"id": "SHD_174", "count": 2},
+    {"id": "SHD_252", "count": 2},
+    {"id": "SHD_175", "count": 2},
+    {"id": "SHD_148", "count": 1},
+    {"id": "SHD_149", "count": 3},
+    {"id": "SHD_248", "count": 1},
+    {"id": "SHD_161", "count": 3},
+    {"id": "SHD_254", "count": 3},
+    {"id": "SHD_146", "count": 3},
+    {"id": "SHD_164", "count": 3},
+    {"id": "SHD_165", "count": 3},
+    {"id": "SHD_246", "count": 3},
+    {"id": "SHD_166", "count": 2},
+    {"id": "SHD_247", "count": 2},
+    {"id": "SHD_168", "count": 2},
+    {"id": "SHD_249", "count": 2},
+    {"id": "SHD_153", "count": 1},
+    {"id": "SHD_154", "count": 1},
+    {"id": "SHD_178", "count": 3},
+    {"id": "SHD_179", "count": 3},
+    {"id": "SHD_159", "count": 2}
+  ]
+}

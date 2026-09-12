@@ -1,0 +1,51 @@
+# SWU app services for the family server, layered onto the ~/server hub stack.
+#
+# ALWAYS invoked with the hub compose as the FIRST -f file, from ~/server:
+#     docker compose -f docker-compose.yml -f apps/swu/compose.swu.yml <cmd>
+# With multiple -f files, relative paths resolve against the project directory =
+# the first file's directory (~/server). That is why the build contexts and the
+# data volume below are written relative to ~/server as ./apps/swu[...].
+services:
+  swu-backend:
+    build:
+      context: ./apps/swu
+      dockerfile: Dockerfile.backend
+    restart: unless-stopped
+    environment:
+      SWU_DB: /app/data/swu.db
+      # Who may register, and which of them are admins (see swu.web.auth).
+      # Deliberately defaulted to the stock single-player account rather than a
+      # real household's names: override both in the compose project's `.env`
+      # (i.e. next to docker-compose.yml, NOT in this file) so the names live on
+      # the machine that needs them and never in version control.
+      #
+      #     SWU_ALLOWED_USERS=ada,grace
+      #     SWU_ADMIN_USERS=ada
+      #
+      # Do NOT write `${SWU_ALLOWED_USERS:-}` here: compose would pass an empty
+      # string, and auth.py reads "set but blank" as *registration disabled*,
+      # which locks every account out of a fresh deployment.
+      SWU_ALLOWED_USERS: ${SWU_ALLOWED_USERS:-player}
+      SWU_ADMIN_USERS: ${SWU_ADMIN_USERS:-player}
+    volumes:
+      # Family LIVE data — saves, users, bug_reports, swu.db, ~2GB images.
+      # Seeded once by setup-server.ps1; never rebuilt away.
+      - ./apps/swu/data:/app/data
+    # NO ports: — the backend stays on the compose network only (LAN-private).
+
+  swu-frontend:
+    build:
+      context: ./apps/swu/web
+      dockerfile: Dockerfile.frontend
+    restart: unless-stopped
+    environment:
+      SWU_API: http://swu-backend:8000
+      # Host header allow-list for `vite preview` (LAN access by hostname).
+      # Set SWU_ALLOWED_HOSTS to the server's hostname, e.g.
+      #   SWU_ALLOWED_HOSTS=mybox.local,mybox docker compose up -d
+      # Unset means vite's default (IP addresses only).
+      SWU_ALLOWED_HOSTS: ${SWU_ALLOWED_HOSTS:-}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - swu-backend

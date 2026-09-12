@@ -1,0 +1,505 @@
+{
+  "deck_slug": "law-set",
+  "source": {
+    "deck": null,
+    "set_code": "LAW"
+  },
+  "total_deck_cards": 264,
+  "playable_deck_cards": 264,
+  "groups": [
+    {
+      "gid": "law-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_1",
+        "LAW_4",
+        "LAW_11",
+        "LAW_13",
+        "LAW_17",
+        "LAW_40",
+        "LAW_44"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_47",
+        "LAW_51",
+        "LAW_56",
+        "LAW_58",
+        "LAW_62",
+        "LAW_64",
+        "LAW_76"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_03_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_77",
+        "LAW_78",
+        "LAW_85",
+        "LAW_99",
+        "LAW_102",
+        "LAW_106",
+        "LAW_124"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_04_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_130",
+        "LAW_132",
+        "LAW_137",
+        "LAW_173",
+        "LAW_174",
+        "LAW_178",
+        "LAW_179"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_05_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_181",
+        "LAW_183",
+        "LAW_184",
+        "LAW_187",
+        "LAW_189",
+        "LAW_191",
+        "LAW_195"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_06_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_198",
+        "LAW_201",
+        "LAW_205",
+        "LAW_206",
+        "LAW_207",
+        "LAW_208",
+        "LAW_213"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_07_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_2",
+        "LAW_5",
+        "LAW_12",
+        "LAW_18",
+        "LAW_26",
+        "LAW_29",
+        "LAW_48"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_08_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_83",
+        "LAW_84",
+        "LAW_94",
+        "LAW_96",
+        "LAW_103",
+        "LAW_107",
+        "LAW_125"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:09",
+      "seq": 9,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_09_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_138",
+        "LAW_159",
+        "LAW_176",
+        "LAW_192",
+        "LAW_194",
+        "LAW_200",
+        "LAW_217"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:10",
+      "seq": 10,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_10_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_224",
+        "LAW_225",
+        "LAW_229",
+        "LAW_236",
+        "LAW_237",
+        "LAW_238",
+        "LAW_240"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:11",
+      "seq": 11,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_11_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_241",
+        "LAW_242",
+        "LAW_245"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "law-set:12",
+      "seq": 12,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_12_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_3",
+        "LAW_6",
+        "LAW_7",
+        "LAW_14",
+        "LAW_16",
+        "LAW_19",
+        "LAW_31"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:13",
+      "seq": 13,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_13_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_39",
+        "LAW_43",
+        "LAW_46",
+        "LAW_55",
+        "LAW_59",
+        "LAW_61",
+        "LAW_69"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:14",
+      "seq": 14,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_14_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_73",
+        "LAW_74",
+        "LAW_87",
+        "LAW_88",
+        "LAW_91",
+        "LAW_95",
+        "LAW_97"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:15",
+      "seq": 15,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_15_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_109",
+        "LAW_110",
+        "LAW_112",
+        "LAW_113",
+        "LAW_127",
+        "LAW_128",
+        "LAW_129"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:16",
+      "seq": 16,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_16_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_133",
+        "LAW_139",
+        "LAW_140",
+        "LAW_144",
+        "LAW_148",
+        "LAW_150",
+        "LAW_151"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:17",
+      "seq": 17,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_17_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_157",
+        "LAW_165",
+        "LAW_171",
+        "LAW_182",
+        "LAW_185",
+        "LAW_186",
+        "LAW_193"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:18",
+      "seq": 18,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_18_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_202",
+        "LAW_223",
+        "LAW_227",
+        "LAW_233",
+        "LAW_257"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "law-set:19",
+      "seq": 19,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_19_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_8",
+        "LAW_9",
+        "LAW_21",
+        "LAW_22",
+        "LAW_24",
+        "LAW_25",
+        "LAW_27"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:20",
+      "seq": 20,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_20_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_28",
+        "LAW_30",
+        "LAW_36",
+        "LAW_53",
+        "LAW_63",
+        "LAW_66",
+        "LAW_71"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:21",
+      "seq": 21,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_21_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_92",
+        "LAW_116",
+        "LAW_117",
+        "LAW_121",
+        "LAW_126",
+        "LAW_141",
+        "LAW_149"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:22",
+      "seq": 22,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_22_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_155",
+        "LAW_156",
+        "LAW_161",
+        "LAW_169",
+        "LAW_197",
+        "LAW_204",
+        "LAW_219"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:23",
+      "seq": 23,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_23_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_221",
+        "LAW_228",
+        "LAW_232",
+        "LAW_235",
+        "LAW_243",
+        "LAW_248",
+        "LAW_256"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "law-set:24",
+      "seq": 24,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_24_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LAW_258",
+        "LAW_262",
+        "LAW_264"
+      ],
+      "done": 3,
+      "total": 3
+    }
+  ]
+}

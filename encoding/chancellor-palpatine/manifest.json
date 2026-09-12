@@ -1,0 +1,118 @@
+{
+  "deck_slug": "chancellor-palpatine",
+  "source": {
+    "deck": "tests/fixtures/chancellor_palpatine.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": [
+    {
+      "gid": "chancellor-palpatine:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_34",
+        "SEC_76",
+        "SEC_77",
+        "LOF_82",
+        "SEC_241"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "chancellor-palpatine:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_02_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_1"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "chancellor-palpatine:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_27",
+        "SEC_37",
+        "SEC_55",
+        "SEC_79",
+        "SEC_81",
+        "SEC_84",
+        "SEC_85"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "chancellor-palpatine:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_04_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_124",
+        "SEC_245"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "chancellor-palpatine:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_05_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "SEC_31",
+        "SEC_33",
+        "SEC_83",
+        "SEC_87",
+        "SEC_92"
+      ],
+      "done": 5,
+      "total": 5
+    },
+    {
+      "gid": "chancellor-palpatine:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "New primitive: opponent-chooses-target",
+      "keyword": "",
+      "file": "group_06_new_primitive_opponent_chooses_target.md",
+      "depends_on": [],
+      "new_primitives": [
+        "opponent-chooses-target"
+      ],
+      "cards": [
+        "LOF_43"
+      ],
+      "done": 1,
+      "total": 1
+    }
+  ]
+}

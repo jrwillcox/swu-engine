@@ -1,0 +1,16 @@
+# Backend build context (swu-game root). Exclude data/ (the ~2GB image cache +
+# live saves — mounted as a volume at runtime), the frontend (its own image),
+# and regenerable/heavy dirs. Everything ELSE is shipped by `COPY . .` because the
+# backend imports scripts.audit_coverage and reads tests/fixtures/*.json at runtime
+# — so scripts/ and tests/ must NOT be excluded here.
+data/
+.venv/
+web/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.hypothesis/
+.git/
+*.log

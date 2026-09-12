@@ -1,0 +1,45 @@
+# Normalise line endings. The working tree was authored on Windows and holds a
+# mix of CRLF and LF; without this, diffs are noisy and the repo reads as
+# disordered on GitHub. Text files are stored LF in git and checked out native.
+* text=auto eol=lf
+
+# PowerShell is happiest with CRLF on disk.
+*.ps1 text eol=crlf
+
+# Explicit text types (so git never guesses wrong on a file with odd bytes).
+*.py    text
+*.pyi   text
+*.ts    text
+*.tsx   text
+*.js    text
+*.jsx   text
+*.json  text
+*.md    text
+*.css   text
+*.html  text
+*.yml   text
+*.yaml  text
+*.toml  text
+*.cfg   text
+*.txt   text
+
+# Binary — never diff or line-ending-convert these.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.pdf   binary
+*.db    binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+
+# Generated/vendored files: keep them out of diffs and language stats.
+web/package-lock.json  linguist-generated=true -diff
+docs/openapi.json      linguist-generated=true
+
+# The per-set card encodings are data, not hand-written logic. Excluding them
+# from language stats keeps the repo's language breakdown representative.
+src/swu/cards/*/abilities.py linguist-generated=false
+encoding/**                  linguist-documentation=true

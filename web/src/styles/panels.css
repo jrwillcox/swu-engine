@@ -1,0 +1,979 @@
+/* Overlays, panels, action bar, prompts, end screen, zoom. */
+
+/* Log panel — fills its rail (a fixed right column on desktop, a slide-in
+   drawer on touch/narrow — see .log-rail). */
+.log-rail {
+  height: 100dvh;
+  min-height: 0;
+}
+.log-panel {
+  height: 100%;
+  overflow-y: auto;
+  padding: 12px 14px;
+  font-size: 12px;
+  border-radius: 0;
+  border-left: 1px solid var(--panel-edge);
+  background: rgba(10, 15, 24, 0.6);
+}
+
+/* Touch / narrow: the log becomes an off-canvas drawer toggled from the HUD. */
+@media (pointer: coarse), (max-width: 1100px) {
+  .log-rail {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: min(340px, 86vw);
+    z-index: 96;
+    transform: translateX(100%);
+    transition: transform var(--t-med) ease;
+    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.5);
+  }
+  .log-rail.open {
+    transform: translateX(0);
+  }
+  .log-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 95;
+    background: rgba(4, 7, 12, 0.5);
+  }
+}
+
+/* Wide desktop: the log is always the right column, so hide the drawer chrome. */
+@media (pointer: fine) and (min-width: 1101px) {
+  .log-toggle,
+  .log-backdrop {
+    display: none;
+  }
+}
+
+/* Portrait hint — tablets only (≥600px wide). On a tablet, rotating to landscape
+   gives the wide board it's designed for. On a phone we DON'T nag (its landscape
+   is even shorter); the phone media query in table.css makes portrait usable
+   with a natural-height scrolling board instead. */
+.rotate-hint {
+  display: none;
+}
+@media (orientation: portrait) and (pointer: coarse) and (min-width: 600px) {
+  .rotate-hint {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    text-align: center;
+    background: rgba(4, 7, 12, 0.97);
+  }
+  .rotate-hint h2 {
+    margin: 0;
+  }
+  .rotate-hint p {
+    margin: 0;
+    color: var(--ink-dim);
+  }
+  .rotate-hint-icon {
+    font-size: 64px;
+    color: var(--accent);
+    animation: rotate-hint-spin 2.4s ease-in-out infinite;
+  }
+}
+@keyframes rotate-hint-spin {
+  0%,
+  60%,
+  100% {
+    transform: rotate(0deg);
+  }
+  80% {
+    transform: rotate(-90deg);
+  }
+}
+.log-panel h4 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
+}
+.log-line {
+  padding: 2px 0;
+  line-height: 1.35;
+  color: var(--ink-dim);
+}
+.log-line.good {
+  color: var(--good);
+}
+.log-line.bad {
+  color: var(--danger);
+}
+.log-line.info {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Round separator in the battle log — a centred label on a rule, so rounds are
+   easy to scan apart in a fast event stream. */
+.log-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 4px;
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.log-divider::before,
+.log-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--panel-edge), transparent);
+}
+
+/* Action bar / prompt — rendered inline inside the top bar (no panel chrome). */
+.action-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap; /* let action buttons drop below a full-width prompt */
+}
+.action-bar.attn .hint.prompt {
+  animation: attn-pulse 1.4s ease-in-out infinite;
+}
+@keyframes attn-pulse {
+  0%,
+  100% {
+    text-shadow: none;
+  }
+  50% {
+    text-shadow: 0 0 12px rgba(255, 212, 94, 0.7);
+  }
+}
+.action-bar .hint {
+  flex: 1;
+  font-size: 13px;
+  color: var(--ink-dim);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.action-bar .hint.prompt {
+  color: var(--warn);
+  font-weight: 700;
+  font-size: 14px;
+  white-space: normal; /* wrap the full prompt */
+  overflow: visible; /* never clip the prompt */
+  text-overflow: clip;
+  flex: 1 1 100%; /* take a full row so wide target buttons wrap below */
+}
+/* Must be allowed to shrink (min-width:0) so a long run of controls — e.g.
+   C-3PO's "Choose the number 0..5" — is constrained to the row width and the
+   flex-wrap below actually wraps, instead of overflowing off-screen. */
+.action-buttons {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.context-menu {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.waiting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--foe);
+  font-weight: 700;
+  font-size: 14px;
+}
+.dot-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--foe);
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.skip-hint {
+  font-size: 11px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Card zoom on hover — anchored to the card, supports front + reverse faces */
+.card-zoom {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.zoom-face {
+  position: relative;
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(120, 160, 220, 0.3);
+  overflow: hidden;
+  background: #0a0f1a;
+}
+.zoom-face.landscape {
+  aspect-ratio: 418 / 300;
+}
+.zoom-face.portrait {
+  aspect-ratio: 300 / 418;
+}
+.zoom-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Touch inspect: the same zoom centred over a scrim instead of pinned to a card.
+   Re-enable pointer events and let it scroll if it's taller than the screen. */
+.card-zoom-scrim {
+  z-index: 95;
+}
+.card-zoom.centered {
+  position: relative;
+  pointer-events: auto;
+  max-width: 92vw;
+  max-height: 92dvh;
+  overflow-y: auto;
+}
+
+/* Attached upgrades surfaced under the host card in the hover zoom. */
+.zoom-upgrades {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.zoom-up {
+  position: relative;
+  width: var(--up-w, 110px);
+  aspect-ratio: 300 / 418;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(70, 215, 255, 0.4);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75);
+  background: #0a0f1a;
+}
+.zoom-up img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.zoom-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(4, 10, 18, 0.8);
+  color: var(--accent);
+}
+
+/* Token badges (Shield / Experience) surfaced beneath the zoomed card. */
+.zoom-tokens {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.zoom-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1.5px solid #fff4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+.zoom-token.shield {
+  background: radial-gradient(circle at 30% 30%, #aee0ff, #2f8fd8);
+  color: #062338;
+}
+.zoom-token.xp {
+  background: radial-gradient(circle at 30% 30%, #ffe79a, #e0a52f);
+  color: #2a1a02;
+}
+.zoom-token-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.zoom-token-count {
+  font-weight: 800;
+}
+
+/* Aspect cost penalty chip surfaced beneath the zoomed card — labels what the
+   "+N" pill on the art means (an off-aspect surcharge). */
+.zoom-penalty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 122, 136, 0.5);
+  background: rgba(192, 31, 51, 0.18);
+  color: #ffd6db;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+.zoom-penalty-badge {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: radial-gradient(circle at 40% 35%, #ff7a88, #c01f33);
+  color: #fff;
+  font-weight: 800;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+}
+/* Neutral (base cost) badge, e.g. the Smuggle bracket cost before its surcharge. */
+.zoom-penalty-badge.neutral {
+  background: linear-gradient(#3a4761, #1d2738);
+  color: #eaf2ff;
+}
+/* Smuggle-cost chip: a calmer blue surround than the red aspect-penalty chip. */
+.zoom-penalty.smuggle {
+  border-color: rgba(70, 215, 255, 0.45);
+  background: rgba(70, 215, 255, 0.14);
+  color: #d6f1ff;
+}
+
+/* Modal scrim */
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 12, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 90;
+  display: grid;
+  place-items: center;
+}
+.modal {
+  width: min(880px, 92vw);
+  max-height: 84vh;
+  overflow-y: auto;
+  padding: 22px;
+}
+.modal h2 {
+  margin-top: 0;
+}
+
+/* Confirmation gate (e.g. attaching an upgrade to an enemy unit) */
+.confirm-dialog {
+  width: min(440px, 92vw);
+}
+.confirm-message {
+  line-height: 1.5;
+  opacity: 0.92;
+}
+.confirm-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* B2 new-round pacing gate */
+.turn-gate-card {
+  width: min(380px, 92vw);
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.turn-gate-card h2 {
+  margin: 0;
+}
+.turn-gate-round {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.turn-gate-prompt {
+  margin: 0 0 6px;
+  color: var(--ink-dim);
+  line-height: 1.45;
+}
+.discard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+}
+.discard-grid .card {
+  width: 100%;
+}
+
+/* Top-of-deck peek (R2-D2 / C-3PO) */
+.peek-viewer {
+  width: min(420px, 92vw);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.peek-viewer .peek-prompt {
+  margin: 0;
+  opacity: 0.85;
+}
+.peek-viewer .peek-card {
+  width: min(260px, 70vw);
+  aspect-ratio: 300 / 418;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+.peek-viewer .peek-name {
+  font-weight: 700;
+  font-size: 16px;
+}
+.peek-viewer .peek-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Reveal-and-reorder (For a Cause I Believe In, SOR_152) */
+.reveal-viewer {
+  width: min(880px, 94vw);
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.reveal-viewer .peek-prompt {
+  margin: 0;
+  opacity: 0.85;
+  max-width: 60ch;
+}
+.reveal-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+}
+.reveal-card {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: min(170px, 40vw);
+}
+.reveal-card-img {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 300 / 418;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+  transition: opacity 0.15s ease;
+}
+.reveal-card.discarded .reveal-card-img {
+  opacity: 0.42;
+  filter: grayscale(0.5);
+}
+.reveal-card.kept .reveal-card-img {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.reveal-badge {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.reveal-badge.kept {
+  background: var(--accent);
+  color: #04121b;
+}
+.reveal-badge.discarded {
+  background: rgba(8, 12, 18, 0.85);
+  color: var(--ink-dim);
+}
+.reveal-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.reveal-card-actions {
+  display: flex;
+  gap: 8px;
+}
+.reveal-card-actions .btn {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* Clickable card in the ChooseCardsViewer (deck/discard selection). */
+button.choose-card {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 8px;
+  transition:
+    transform 0.12s ease,
+    outline-color 0.12s ease;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+button.choose-card:hover:not(:disabled),
+button.choose-card:focus-visible {
+  transform: translateY(-4px);
+  outline-color: var(--accent);
+}
+button.choose-card:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+button.choose-card .card-img {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+}
+
+/* Settings */
+.settings-panel {
+  display: grid;
+  gap: 16px;
+  width: min(420px, 92vw);
+  padding: 22px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.seg {
+  display: flex;
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seg button {
+  background: transparent;
+  border: 0;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+.seg button.active {
+  background: var(--accent);
+  color: #04121b;
+  font-weight: 700;
+}
+
+/* End screen */
+.end-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 7, 12, 0.82);
+  backdrop-filter: blur(8px);
+}
+.end-card {
+  text-align: center;
+  padding: 40px 56px;
+}
+.end-card h1 {
+  font-size: 52px;
+  margin: 0 0 6px;
+  letter-spacing: 0.04em;
+}
+.end-card.win h1 {
+  color: var(--accent);
+  text-shadow: 0 0 30px rgba(70, 215, 255, 0.6);
+}
+.end-card.lose h1 {
+  color: var(--foe);
+  text-shadow: 0 0 30px rgba(255, 157, 60, 0.5);
+}
+.end-card p {
+  color: var(--ink-dim);
+  margin-bottom: 26px;
+}
+
+/* New game screen */
+.start-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow-y: auto;
+}
+/* Account controls (signed-in user / sign out / manage users) pinned top-right
+   of the start screen. */
+.account-bar {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 5;
+}
+.start-card {
+  width: min(720px, 94vw);
+  padding: 32px;
+}
+.start-card h1 {
+  margin: 0 0 4px;
+  font-size: 30px;
+  letter-spacing: 0.02em;
+}
+.start-card .sub {
+  color: var(--ink-dim);
+  margin-bottom: 26px;
+}
+.deck-pick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+.deck-col h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+}
+.deck-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(255, 255, 255, 0.03);
+  transition:
+    border-color var(--t-fast),
+    background var(--t-fast);
+}
+.deck-option.sel {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.deck-option .name {
+  font-weight: 700;
+}
+.deck-option .meta {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.deck-select {
+  width: 100%;
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--panel-edge);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 8px 10px;
+  transition: border-color var(--t-fast);
+  color-scheme: dark;
+}
+.deck-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.deck-select option,
+.deck-select optgroup {
+  background: var(--panel-solid);
+  color: var(--ink);
+}
+.deck-col-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.difficulty-pick {
+  margin-bottom: 22px;
+}
+.difficulty-pick h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+}
+.difficulty-select {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--panel-edge);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 160px;
+  transition: border-color var(--t-fast);
+  color-scheme: dark;
+}
+.difficulty-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.difficulty-select option {
+  background: var(--panel-solid);
+  color: var(--ink);
+}
+
+.start-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.seed-input {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--panel-edge);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 8px 10px;
+  width: 120px;
+}
+
+/* Floating effects */
+.fx-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+}
+.fx-float {
+  position: absolute;
+  font-weight: 900;
+  font-size: 26px;
+  text-shadow: 0 2px 8px #000;
+  transform: translate(-50%, -50%);
+}
+.fx-float.dmg {
+  color: #ff6b7e;
+}
+.fx-float.heal {
+  color: #57e08a;
+}
+.fx-float.over {
+  color: #ffd45e;
+}
+.fx-ring {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid var(--accent);
+  transform: translate(-50%, -50%);
+}
+.fx-shield {
+  position: absolute;
+  font-size: 30px;
+  color: var(--shield);
+  transform: translate(-50%, -50%);
+  text-shadow: 0 0 10px var(--shield);
+}
+.fx-banner {
+  position: fixed;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  z-index: 70;
+  pointer-events: none;
+  text-shadow: 0 2px 18px #000;
+}
+
+/* ── Part D: save / replay / import ─────────────────────────────────────── */
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: rgba(8, 14, 22, 0.94);
+  border: 1px solid var(--panel-edge);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  font-weight: 600;
+}
+
+/* Mulligan moment */
+.mulligan-viewer {
+  width: min(860px, 94vw);
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.mulligan-hand {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.mulligan-hand .card {
+  width: min(150px, 22vw);
+  aspect-ratio: 300 / 418;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+}
+
+.end-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* Start-screen tools */
+.start-tools {
+  width: min(720px, 94vw);
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+.tool-card {
+  padding: 20px 24px;
+}
+.tool-card h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+}
+.tool-card .meta {
+  color: var(--ink-dim);
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+.save-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.save-slot {
+  font-family: ui-monospace, monospace;
+}
+.import-text {
+  width: 100%;
+  margin: 8px 0;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--panel-edge);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+.import-report {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.import-report .ok {
+  color: var(--good, #6ee7a8);
+  font-weight: 700;
+}
+.import-report .warn {
+  color: var(--warn, #f5c451);
+}
+.import-report ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.planner-hint {
+  display: block;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+/* Replay viewer */
+.replay-viewer {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 12px;
+  background: var(--bg, #04070c);
+}
+.replay-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+.replay-slider {
+  flex: 0 0 220px;
+}
+.replay-counter {
+  font-variant-numeric: tabular-nums;
+  min-width: 96px;
+  text-align: right;
+}
+.replay-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 12px;
+  min-height: 0;
+}
+.replay-board {
+  position: relative;
+  min-height: 0;
+}
+.replay-side {
+  padding: 14px;
+}
+.replay-side h4 {
+  margin: 0 0 10px;
+}

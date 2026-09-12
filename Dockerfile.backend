@@ -1,0 +1,30 @@
+# SWU backend (FastAPI/uvicorn) container for the family server.
+# Build context = the app root (swu-game). The ~2GB image cache and the live
+# data/ (saves, users, bug_reports, swu.db) are NOT baked in — they arrive as a
+# bind-mounted volume at runtime (see compose.swu.yml), so a rebuild never
+# touches family data. data/ is excluded from the build context by .dockerignore.
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install deps first so this layer is cached unless pyproject/src change.
+# Editable install keeps swu/web/paths.py at /app/src/... so its default data-dir
+# resolution (parents[3] == /app) points at the mounted /app/data. SWU_DB below
+# makes that explicit and robust regardless.
+COPY pyproject.toml ./
+COPY src ./src
+RUN pip install --no-cache-dir -e ".[web]"
+
+# IMPORTANT: the backend reaches OUTSIDE the installed package at runtime, so
+# src/ alone is not enough — ship the rest of the tree (minus what .dockerignore
+# prunes: data/, web/, .venv, caches). Specifically:
+#   * explorer.py does `from scripts.audit_coverage import ...`  (the card catalog)
+#   * decks.py reads deck fixtures from tests/fixtures/*.json     (the deck list)
+COPY . .
+
+ENV SWU_DB=/app/data/swu.db
+
+# Backend binds 0.0.0.0 INSIDE the container; it is never published to the LAN
+# (no ports: in compose), so only swu-frontend reaches it over the compose net.
+EXPOSE 8000
+CMD ["python", "-m", "swu.web", "--host", "0.0.0.0", "--port", "8000"]

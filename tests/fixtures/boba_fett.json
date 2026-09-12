@@ -1,0 +1,29 @@
+{
+  "leader": {"id": "JTL_9"},
+  "base": {"id": "SHD_26"},
+  "deck": [
+    {"id": "JTL_132", "count": 3},
+    {"id": "JTL_133", "count": 1},
+    {"id": "SOR_130", "count": 3},
+    {"id": "JTL_183", "count": 3},
+    {"id": "JTL_237", "count": 3},
+    {"id": "SOR_131", "count": 2},
+    {"id": "TWI_181", "count": 2},
+    {"id": "JTL_185", "count": 3},
+    {"id": "JTL_187", "count": 3},
+    {"id": "JTL_139", "count": 2},
+    {"id": "JTL_240", "count": 3},
+    {"id": "JTL_140", "count": 1},
+    {"id": "JTL_165", "count": 2},
+    {"id": "SOR_132", "count": 2},
+    {"id": "JTL_141", "count": 1},
+    {"id": "JTL_189", "count": 1},
+    {"id": "SOR_184", "count": 1},
+    {"id": "JTL_230", "count": 1},
+    {"id": "SHD_178", "count": 3},
+    {"id": "TWI_171", "count": 1},
+    {"id": "SOR_186", "count": 3},
+    {"id": "SOR_139", "count": 3},
+    {"id": "JTL_144", "count": 3}
+  ]
+}

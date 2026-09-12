@@ -1,0 +1,349 @@
+/* Card visuals + zone-agnostic states. */
+
+.card {
+  position: relative;
+  border-radius: var(--radius-card);
+  background: #0a0f1a;
+  border: 1px solid rgba(180, 200, 240, 0.14);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  user-select: none;
+  -webkit-user-select: none;
+  /* Long-press on a card pops our own inspect zoom — suppress the iOS image
+     "Save / Copy" callout that would otherwise hijack the gesture. */
+  -webkit-touch-callout: none;
+  aspect-ratio: 300 / 418; /* portrait units */
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.card.landscape {
+  aspect-ratio: 418 / 300; /* leaders & bases */
+}
+
+/* Height-filled cards: parent zone sets the height, width follows aspect. */
+.card.fill {
+  height: 100%;
+  width: auto;
+}
+
+.card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-card);
+  display: block;
+  pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.card-back {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-card);
+  background:
+    repeating-linear-gradient(45deg, rgba(70, 215, 255, 0.07) 0 6px, transparent 6px 12px),
+    radial-gradient(circle at 50% 38%, rgba(70, 215, 255, 0.25), transparent 55%),
+    linear-gradient(160deg, #13233b, #0a1020);
+  border: 1px solid rgba(70, 215, 255, 0.2);
+  display: grid;
+  place-items: center;
+}
+.card-back::after {
+  content: "";
+  width: 32%;
+  aspect-ratio: 1;
+  border: 2px solid rgba(70, 215, 255, 0.45);
+  border-radius: 50%;
+  box-shadow: inset 0 0 12px rgba(70, 215, 255, 0.35);
+}
+
+/* Exhausted = turned sideways. For Motion-driven cards (arena units) the
+   rotation+downscale is set via the animate prop in Card.tsx (a CSS transform
+   loses to Motion's inline transform). The CSS transform below is what rotates
+   the plain non-Motion backs (e.g. opponent resources); the scale keeps the
+   sideways card within its upright footprint so it doesn't overlap neighbours. */
+.card.is-exhausted {
+  transform: rotate(90deg) scale(calc(300 / 418));
+  filter: saturate(0.85) brightness(0.92);
+}
+
+.card.clickable {
+  cursor: pointer;
+}
+.card.clickable:hover {
+  z-index: 5;
+}
+
+.card.hl-legal {
+  box-shadow: var(--legal-glow);
+  border-color: rgba(70, 215, 255, 0.9);
+}
+.card.hl-target {
+  box-shadow: var(--foe-glow);
+  border-color: rgba(255, 157, 60, 0.9);
+  cursor: crosshair;
+}
+.card.hl-selected {
+  box-shadow:
+    0 0 0 3px var(--accent),
+    0 0 24px 4px rgba(70, 215, 255, 0.6);
+}
+.card.dim {
+  opacity: 0.5;
+}
+
+/* Two-stage resourcing: a staged card is picked but not yet committed. Gold ring
+   + dimmed art + a badge, so it reads as "pending resource" not "in play". */
+.card.hl-staged {
+  box-shadow:
+    0 0 0 2px rgba(255, 210, 90, 0.95),
+    0 0 18px 2px rgba(255, 200, 70, 0.5);
+  border-color: rgba(255, 210, 90, 0.95);
+}
+.card.hl-staged .card-img {
+  filter: saturate(0.7) brightness(0.7);
+}
+.card.hl-staged::after {
+  content: "→ RESOURCE";
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #2a1d00;
+  background: rgba(255, 210, 90, 0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Stat pips — kept INSIDE the card so they never bleed onto neighbours. */
+.card-stats {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  z-index: 3;
+}
+.pip {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+/* Match the printed cards: power in the red diamond, HP in the blue circle. */
+.pip.power {
+  background: var(--stat-power-grad);
+  color: #fff;
+}
+.pip.hp {
+  background: var(--stat-hp-grad);
+  color: #fff;
+}
+/* Damaged: a dimmer blue (remaining HP is lower) — the red dmg-counter badge
+   carries the "how much damage" signal, so we don't recolour HP to red. */
+.pip.hp.damaged {
+  background: var(--stat-hp-dim);
+  color: #cdeaf6;
+}
+
+.dmg-counter {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 12px;
+  background: radial-gradient(circle at 40% 35%, #ff7a88, #c01f33);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid #fff3;
+  box-shadow: 0 2px 8px rgba(192, 31, 51, 0.6);
+  z-index: 4;
+}
+
+/* Aspect-penalty surcharge for an off-aspect card in your own hand. Sits just to
+   the right of the printed cost circle (top-left of the art) and reads "+N" — the
+   real cost is printed_cost + N. It is hoverable (cursor: help) so its own
+   "Aspect cost penalty" tooltip shows, but carries no click handler, so a click
+   on it still bubbles to the card and plays it. Only own-hand cards carry a
+   non-zero penalty, and hand cards never carry shield/XP tokens, so it never
+   collides with .tokens. */
+.cost-penalty {
+  position: absolute;
+  top: 4px;
+  left: 22%;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: radial-gradient(circle at 40% 35%, #ff7a88, #c01f33);
+  color: #fff;
+  font-weight: 800;
+  font-size: 11px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(192, 31, 51, 0.6);
+  cursor: help;
+  white-space: nowrap;
+  z-index: 5;
+}
+/* Larger variant overlaid on the enlarged hover/inspect zoom face. */
+.cost-penalty.zoom {
+  top: 8px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+/* Smuggle cost on your own (face-down, ~30px-wide) resource: the base bracket
+   cost in a neutral chip + the red "+N" aspect surcharge. Compact so it fits the
+   tiny card; the hover zoom shows the legible labelled version. */
+.smuggle-cost {
+  position: absolute;
+  top: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  pointer-events: none;
+  z-index: 5;
+}
+.smuggle-base,
+.smuggle-pen {
+  min-width: 12px;
+  height: 13px;
+  padding: 0 2px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+.smuggle-base {
+  background: linear-gradient(#3a4761, #1d2738);
+  color: #eaf2ff;
+}
+.smuggle-pen {
+  background: radial-gradient(circle at 40% 35%, #ff7a88, #c01f33);
+  color: #fff;
+}
+
+.tokens {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  z-index: 4;
+}
+.token {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 800;
+  border: 1.5px solid #fff4;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.token.shield {
+  background: radial-gradient(circle at 40% 35%, #aee0ff, #2f8fd8);
+  color: #062338;
+}
+.token.xp {
+  background: radial-gradient(circle at 40% 35%, #ffe79a, #e0a52f);
+  color: #2a1a02;
+}
+
+/* Attached upgrades: small art chips tucked along the bottom edge of the host,
+   left-aligned so they clear the centred stat pips. Hover a chip to zoom it. */
+.upgrades {
+  position: absolute;
+  bottom: 3px;
+  left: 4px;
+  right: 4px;
+  height: 34%;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  z-index: 2;
+  pointer-events: none; /* chips re-enable; gaps stay click-through to the host */
+}
+.upgrade-chip {
+  pointer-events: auto;
+  width: 30%;
+  max-width: 38px;
+  aspect-ratio: 300 / 418;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid rgba(70, 215, 255, 0.85);
+  box-shadow:
+    0 0 6px rgba(70, 215, 255, 0.55),
+    0 2px 4px rgba(0, 0, 0, 0.7);
+  background: #0a0f1a;
+}
+.upgrade-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center; /* upgrade art/name reads from the top */
+  display: block;
+}
+.upgrade-chip-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-size: 14px;
+  color: var(--accent);
+}
+.upgrade-chip:hover {
+  box-shadow: 0 0 10px rgba(70, 215, 255, 0.9);
+}
+
+.card.leader::before {
+  content: "★";
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 11px;
+  color: var(--warn);
+  text-shadow: 0 0 4px #000;
+  z-index: 3;
+}
+
+/* Touch: make the small upgrade chips easier to long-press for inspection. */
+@media (pointer: coarse) {
+  .upgrade-chip {
+    max-width: 48px;
+  }
+}

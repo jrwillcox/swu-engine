@@ -1,0 +1,121 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swu-game"
+version = "0.1.0"
+description = "Star Wars Unlimited card game engine with LLM opponent"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "tenacity>=8.2",
+    "rich>=13.7",
+    "anthropic>=0.40",   # LLM opponent (Phase 6B); only used by the Normal/Hard bots
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "hypothesis>=6.100",  # tests/test_hypothesis_engine.py (medium tier)
+    "ruff>=0.6",
+    "mypy>=1.11",          # scoped to the typed core — see [tool.mypy]
+]
+web = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "httpx>=0.27",       # FastAPI TestClient
+]
+
+[tool.pytest.ini_options]
+# NOTE: pytest's tmp_path/tmpdir basetemp is set in tests/conftest.py
+# (pytest_configure) to a dir under the OS %TEMP%, NOT an in-repo .pytest_tmp.
+# See the comment there for the two Windows WinError-5 failure modes it avoids
+# (a project-local basetemp under Documents was itself the cause — scanner
+# handles / a corrupted ACL made it un-removable, erroring every tmp_path test).
+# A CLI --basetemp still overrides the default.
+#
+# The default run is the FAST tier: everything except the soak campaign and the
+# Hypothesis stateful machine, both marked `slow` (~6 min combined). Run those
+# with `pytest -m slow`, and the lot with `pytest -m ""`.
+addopts = "-m 'not slow'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["data", ".venv", "web"]
+
+[tool.ruff.lint]
+# Deliberately conservative: the value here is catching real mistakes (undefined
+# names, unused imports, unreachable code), not reformatting 100k lines to taste.
+# Style-opinion families (bugbear, comprehension rewrites) are left off — they
+# flagged only intentional patterns in this codebase.
+select = ["E4", "E7", "E9", "F"]
+ignore = [
+    "E731",  # assigning a lambda is idiomatic in the ability specs
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The per-set card files are generated-shaped data: they import the whole spec
+# vocabulary up front for readability, whether or not every name is used.
+"src/swu/cards/*/abilities.py" = ["F401"]
+
+# F811 in the test suite is a pytest false positive: the shared `repo` fixture is
+# imported from tests/test_sor_cards.py, and ruff reads every test function that
+# takes a `repo` parameter as redefining it (3,700+ times). F841 likewise fires on
+# bindings kept for readability in arrange-heavy card tests, and E402 on imports
+# placed after a block of module-level setup.
+"tests/*" = ["F811", "F841", "E402", "E702"]
+
+# These two modules annotate return types with string literals naming classes that
+# are imported inside the function body, to break an import cycle. The annotation
+# is never evaluated at runtime, but ruff can't see the deferred import (F821).
+"src/swu/abilities/resolver.py" = ["F821"]
+"src/swu/engine/actions.py" = ["F821"]
+"src/swu/engine/state.py" = ["F821"]
+
+# CLI entry points and campaign scripts extend sys.path before importing the
+# package, so their imports legitimately sit below module-level code.
+"src/swu/cli.py" = ["E402"]
+"scripts/*" = ["E402", "E741"]
+
+[tool.mypy]
+# Scoped DELIBERATELY, not tree-wide.  `src/swu/abilities/` and engine/state.py are
+# the fully-typed core — the ability DSL's vocabulary and the state model every other
+# module is written against — so type errors there are real design errors.  The rest
+# of the tree is ~25% return-annotated; pointing mypy at it would produce thousands of
+# `no-untyped-def` notes that nobody will read.  A bare `mypy` checks exactly the two
+# paths below because of `files`; widen it only alongside real annotation work.
+python_version = "3.11"
+files = ["src/swu/abilities", "src/swu/engine/state.py"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+# Non-strict on purpose: missing annotations are not flagged, only *wrong* ones.
+disallow_untyped_defs = false
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+# Modules outside the scoped core are followed for types but not themselves checked,
+# and third-party packages ship no stubs we depend on.
+module = ["anthropic.*", "requests.*", "tenacity.*", "rich.*", "fastapi.*", "uvicorn.*"]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["src/swu"]
+omit = ["*/__main__.py", "*/pipeline.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"

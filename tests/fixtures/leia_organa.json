@@ -1,0 +1,29 @@
+{
+  "leader": {"id": "LAW_10"},
+  "base": {"id": "LAW_20"},
+  "deck": [
+    {"id": "LAW_37", "count": 3},
+    {"id": "LAW_142", "count": 2},
+    {"id": "SEC_93", "count": 2},
+    {"id": "LAW_67", "count": 1},
+    {"id": "LAW_38", "count": 3},
+    {"id": "LAW_104", "count": 1},
+    {"id": "JTL_95", "count": 3},
+    {"id": "LAW_145", "count": 3},
+    {"id": "LAW_152", "count": 2},
+    {"id": "LAW_105", "count": 2},
+    {"id": "LAW_119", "count": 1},
+    {"id": "LAW_146", "count": 3},
+    {"id": "JTL_250", "count": 1},
+    {"id": "SEC_252", "count": 2},
+    {"id": "LAW_35", "count": 2},
+    {"id": "LAW_147", "count": 3},
+    {"id": "LAW_45", "count": 2},
+    {"id": "LAW_108", "count": 3},
+    {"id": "SEC_103", "count": 1},
+    {"id": "LAW_111", "count": 3},
+    {"id": "LAW_166", "count": 2},
+    {"id": "LAW_167", "count": 3},
+    {"id": "LAW_41", "count": 2}
+  ]
+}

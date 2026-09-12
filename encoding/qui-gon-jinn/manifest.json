@@ -1,0 +1,119 @@
+{
+  "deck_slug": "qui-gon-jinn",
+  "source": {
+    "deck": "tests/fixtures/qui_gon_jinn.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": [
+    {
+      "gid": "qui-gon-jinn:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_198",
+        "SOR_219"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "qui-gon-jinn:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_02_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_104",
+        "TWI_193",
+        "LOF_194"
+      ],
+      "done": 3,
+      "total": 3
+    },
+    {
+      "gid": "qui-gon-jinn:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_96",
+        "SHD_96",
+        "LOF_99",
+        "LOF_111",
+        "JTL_201",
+        "LOF_201",
+        "LOF_242"
+      ],
+      "done": 7,
+      "total": 7
+    },
+    {
+      "gid": "qui-gon-jinn:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_04_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_255"
+      ],
+      "done": 1,
+      "total": 1
+    },
+    {
+      "gid": "qui-gon-jinn:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_05_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "LOF_100",
+        "LOF_197"
+      ],
+      "done": 2,
+      "total": 2
+    },
+    {
+      "gid": "qui-gon-jinn:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "New primitive: force-token",
+      "keyword": "",
+      "file": "group_06_new_primitive_force_token.md",
+      "depends_on": [],
+      "new_primitives": [
+        "force-token"
+      ],
+      "cards": [
+        "LOF_16",
+        "LOF_23",
+        "LOF_193",
+        "LOF_196",
+        "LOF_218",
+        "LOF_227",
+        "LOF_249"
+      ],
+      "done": 7,
+      "total": 7
+    }
+  ]
+}

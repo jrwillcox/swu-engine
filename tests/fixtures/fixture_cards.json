@@ -1,0 +1,1898 @@
+[
+ {
+  "id": 5,
+  "set_code": "SOR",
+  "card_number": "5",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 6,
+  "set_code": "SOR",
+  "card_number": "10",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 15,
+  "set_code": "SOR",
+  "card_number": "229",
+  "name": "Cell Block Guard"
+ },
+ {
+  "id": 20,
+  "set_code": "SOR",
+  "card_number": "240",
+  "name": "Fleet Lieutenant"
+ },
+ {
+  "id": 25,
+  "set_code": "SOR",
+  "card_number": "84",
+  "name": "Grand Moff Tarkin"
+ },
+ {
+  "id": 30,
+  "set_code": "SOR",
+  "card_number": "189",
+  "name": "Leia Organa"
+ },
+ {
+  "id": 35,
+  "set_code": "SOR",
+  "card_number": "225",
+  "name": "TIE/ln Fighter"
+ },
+ {
+  "id": 40,
+  "set_code": "SOR",
+  "card_number": "235",
+  "name": "Galactic Ambition"
+ },
+ {
+  "id": 45,
+  "set_code": "SOR",
+  "card_number": "237",
+  "name": "Alliance X-Wing"
+ },
+ {
+  "id": 55,
+  "set_code": "SOR",
+  "card_number": "29",
+  "name": "Administrator's Tower"
+ },
+ {
+  "id": 70,
+  "set_code": "SOR",
+  "card_number": "35",
+  "name": "Lieutenant Childsen"
+ },
+ {
+  "id": 75,
+  "set_code": "SOR",
+  "card_number": "49",
+  "name": "Obi-Wan Kenobi"
+ },
+ {
+  "id": 80,
+  "set_code": "SOR",
+  "card_number": "58",
+  "name": "Vigilance"
+ },
+ {
+  "id": 85,
+  "set_code": "SOR",
+  "card_number": "74",
+  "name": "Repair"
+ },
+ {
+  "id": 90,
+  "set_code": "SOR",
+  "card_number": "78",
+  "name": "Vanquish"
+ },
+ {
+  "id": 95,
+  "set_code": "SOR",
+  "card_number": "23",
+  "name": "Command Center"
+ },
+ {
+  "id": 100,
+  "set_code": "SOR",
+  "card_number": "53",
+  "name": "Luke's Lightsaber"
+ },
+ {
+  "id": 105,
+  "set_code": "SOR",
+  "card_number": "83",
+  "name": "Superlaser Technician"
+ },
+ {
+  "id": 110,
+  "set_code": "SOR",
+  "card_number": "126",
+  "name": "Resupply"
+ },
+ {
+  "id": 115,
+  "set_code": "SOR",
+  "card_number": "129",
+  "name": "Admiral Ozzel"
+ },
+ {
+  "id": 120,
+  "set_code": "SOR",
+  "card_number": "132",
+  "name": "Imperial Interceptor"
+ },
+ {
+  "id": 125,
+  "set_code": "SOR",
+  "card_number": "136",
+  "name": "Vader's Lightsaber"
+ },
+ {
+  "id": 130,
+  "set_code": "SOR",
+  "card_number": "198",
+  "name": "Han Solo"
+ },
+ {
+  "id": 135,
+  "set_code": "SOR",
+  "card_number": "217",
+  "name": "Shoot First"
+ },
+ {
+  "id": 140,
+  "set_code": "SOR",
+  "card_number": "218",
+  "name": "Asteroid Sanctuary"
+ },
+ {
+  "id": 145,
+  "set_code": "SOR",
+  "card_number": "226",
+  "name": "Admiral Motti"
+ },
+ {
+  "id": 150,
+  "set_code": "SOR",
+  "card_number": "227",
+  "name": "Snowtrooper Lieutenant"
+ },
+ {
+  "id": 155,
+  "set_code": "SOR",
+  "card_number": "228",
+  "name": "Viper Probe Droid"
+ },
+ {
+  "id": 160,
+  "set_code": "SOR",
+  "card_number": "230",
+  "name": "General Veers"
+ },
+ {
+  "id": 165,
+  "set_code": "SOR",
+  "card_number": "232",
+  "name": "AT-ST"
+ },
+ {
+  "id": 170,
+  "set_code": "SOR",
+  "card_number": "233",
+  "name": "I Am Your Father"
+ },
+ {
+  "id": 175,
+  "set_code": "SOR",
+  "card_number": "234",
+  "name": "Maximum Firepower"
+ },
+ {
+  "id": 180,
+  "set_code": "SOR",
+  "card_number": "236",
+  "name": "R2-D2"
+ },
+ {
+  "id": 185,
+  "set_code": "SOR",
+  "card_number": "242",
+  "name": "General Dodonna"
+ },
+ {
+  "id": 190,
+  "set_code": "SOR",
+  "card_number": "244",
+  "name": "Snowspeeder"
+ },
+ {
+  "id": 195,
+  "set_code": "SOR",
+  "card_number": "2",
+  "name": "Shield"
+ },
+ {
+  "id": 225,
+  "set_code": "SOR",
+  "card_number": "1",
+  "name": "Experience"
+ },
+ {
+  "id": 260,
+  "set_code": "SOR",
+  "card_number": "172",
+  "name": "Open Fire"
+ },
+ {
+  "id": 272,
+  "set_code": "SOR",
+  "card_number": "222",
+  "name": "Waylay"
+ },
+ {
+  "id": 306,
+  "set_code": "SOR",
+  "card_number": "19",
+  "name": "Security Complex"
+ },
+ {
+  "id": 314,
+  "set_code": "SOR",
+  "card_number": "37",
+  "name": "Academy Defense Walker"
+ },
+ {
+  "id": 317,
+  "set_code": "SOR",
+  "card_number": "44",
+  "name": "Restored ARC-170"
+ },
+ {
+  "id": 318,
+  "set_code": "SOR",
+  "card_number": "45",
+  "name": "Yoda"
+ },
+ {
+  "id": 319,
+  "set_code": "SOR",
+  "card_number": "59",
+  "name": "2-1B Surgical Droid"
+ },
+ {
+  "id": 321,
+  "set_code": "SOR",
+  "card_number": "63",
+  "name": "Cloud City Wing Guard"
+ },
+ {
+  "id": 322,
+  "set_code": "SOR",
+  "card_number": "66",
+  "name": "System Patrol Craft"
+ },
+ {
+  "id": 323,
+  "set_code": "SOR",
+  "card_number": "46",
+  "name": "Consular Security Force"
+ },
+ {
+  "id": 325,
+  "set_code": "SOR",
+  "card_number": "48",
+  "name": "Vigilant Honor Guards"
+ },
+ {
+  "id": 328,
+  "set_code": "SOR",
+  "card_number": "69",
+  "name": "Resilient"
+ },
+ {
+  "id": 332,
+  "set_code": "SOR",
+  "card_number": "79",
+  "name": "Admiral Piett"
+ },
+ {
+  "id": 336,
+  "set_code": "SOR",
+  "card_number": "86",
+  "name": "Gladiator Star Destroyer"
+ },
+ {
+  "id": 337,
+  "set_code": "SOR",
+  "card_number": "88",
+  "name": "Blizzard Assault AT-AT"
+ },
+ {
+  "id": 338,
+  "set_code": "SOR",
+  "card_number": "89",
+  "name": "Relentless"
+ },
+ {
+  "id": 340,
+  "set_code": "SOR",
+  "card_number": "92",
+  "name": "Overwhelming Barrage"
+ },
+ {
+  "id": 349,
+  "set_code": "SOR",
+  "card_number": "121",
+  "name": "Hardpoint Heavy Blaster"
+ },
+ {
+  "id": 350,
+  "set_code": "SOR",
+  "card_number": "123",
+  "name": "Recruit"
+ },
+ {
+  "id": 351,
+  "set_code": "SOR",
+  "card_number": "128",
+  "name": "Death Star Stormtrooper"
+ },
+ {
+  "id": 353,
+  "set_code": "SOR",
+  "card_number": "130",
+  "name": "First Legion Snowtrooper"
+ },
+ {
+  "id": 354,
+  "set_code": "SOR",
+  "card_number": "135",
+  "name": "Emperor Palpatine"
+ },
+ {
+  "id": 355,
+  "set_code": "SOR",
+  "card_number": "139",
+  "name": "Force Choke"
+ },
+ {
+  "id": 356,
+  "set_code": "SOR",
+  "card_number": "141",
+  "name": "Green Squadron A-Wing"
+ },
+ {
+  "id": 359,
+  "set_code": "SOR",
+  "card_number": "157",
+  "name": "Cantina Braggart"
+ },
+ {
+  "id": 373,
+  "set_code": "SOR",
+  "card_number": "194",
+  "name": "Rogue Operative"
+ },
+ {
+  "id": 374,
+  "set_code": "SOR",
+  "card_number": "195",
+  "name": "Auzituck Liberator Gunship"
+ },
+ {
+  "id": 375,
+  "set_code": "SOR",
+  "card_number": "196",
+  "name": "Chewbacca"
+ },
+ {
+  "id": 380,
+  "set_code": "SOR",
+  "card_number": "220",
+  "name": "Surprise Strike"
+ },
+ {
+  "id": 381,
+  "set_code": "SOR",
+  "card_number": "231",
+  "name": "TIE Advanced"
+ },
+ {
+  "id": 382,
+  "set_code": "SOR",
+  "card_number": "238",
+  "name": "C-3PO"
+ },
+ {
+  "id": 383,
+  "set_code": "SOR",
+  "card_number": "239",
+  "name": "Rebel Pathfinder"
+ },
+ {
+  "id": 384,
+  "set_code": "SOR",
+  "card_number": "241",
+  "name": "Wing Leader"
+ },
+ {
+  "id": 399,
+  "set_code": "SOR",
+  "card_number": "87",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 409,
+  "set_code": "SOR",
+  "card_number": "156",
+  "name": "Benthic \"Two Tubes\""
+ },
+ {
+  "id": 536,
+  "set_code": "SOR",
+  "card_number": "51",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 910,
+  "set_code": "SOR",
+  "card_number": "159",
+  "name": "Partisan Insurgent"
+ },
+ {
+  "id": 925,
+  "set_code": "SOR",
+  "card_number": "20",
+  "name": "Capital City"
+ },
+ {
+  "id": 929,
+  "set_code": "SOR",
+  "card_number": "39",
+  "name": "AT-AT Suppressor"
+ },
+ {
+  "id": 934,
+  "set_code": "SOR",
+  "card_number": "68",
+  "name": "Cargo Juggernaut"
+ },
+ {
+  "id": 944,
+  "set_code": "SOR",
+  "card_number": "110",
+  "name": "Frontline Shuttle"
+ },
+ {
+  "id": 950,
+  "set_code": "SOR",
+  "card_number": "131",
+  "name": "Fifth Brother"
+ },
+ {
+  "id": 1232,
+  "set_code": "SOR",
+  "card_number": "154",
+  "name": "Rallying Cry"
+ },
+ {
+  "id": 1314,
+  "set_code": "SOR",
+  "card_number": "103",
+  "name": "Rebel Assault"
+ },
+ {
+  "id": 1429,
+  "set_code": "SOR",
+  "card_number": "247",
+  "name": "Underworld Thug"
+ },
+ {
+  "id": 2754,
+  "set_code": "SHD",
+  "card_number": "7",
+  "name": "Moff Gideon"
+ },
+ {
+  "id": 2756,
+  "set_code": "SHD",
+  "card_number": "84",
+  "name": "Phase-III Dark Trooper"
+ },
+ {
+  "id": 2757,
+  "set_code": "SHD",
+  "card_number": "39",
+  "name": "Calculated Lethality"
+ },
+ {
+  "id": 2758,
+  "set_code": "SHD",
+  "card_number": "242",
+  "name": "Gideon's Light Cruiser"
+ },
+ {
+  "id": 2805,
+  "set_code": "SHD",
+  "card_number": "113",
+  "name": "Privateer Crew"
+ },
+ {
+  "id": 2806,
+  "set_code": "SHD",
+  "card_number": "129",
+  "name": "Timely Intervention"
+ },
+ {
+  "id": 2807,
+  "set_code": "SHD",
+  "card_number": "174",
+  "name": "Hotshot DL-44 Blaster"
+ },
+ {
+  "id": 5436,
+  "set_code": "SHD",
+  "card_number": "19",
+  "name": "Remnant Science Facility"
+ },
+ {
+  "id": 5491,
+  "set_code": "SHD",
+  "card_number": "30",
+  "name": "Death Trooper"
+ },
+ {
+  "id": 5641,
+  "set_code": "SHD",
+  "card_number": "63",
+  "name": "System Patrol Craft"
+ },
+ {
+  "id": 5676,
+  "set_code": "SHD",
+  "card_number": "71",
+  "name": "Top Target"
+ },
+ {
+  "id": 5731,
+  "set_code": "SHD",
+  "card_number": "82",
+  "name": "Outland TIE Vanguard"
+ },
+ {
+  "id": 5736,
+  "set_code": "SHD",
+  "card_number": "83",
+  "name": "Seasoned Shoretrooper"
+ },
+ {
+  "id": 5741,
+  "set_code": "SHD",
+  "card_number": "85",
+  "name": "Superlaser Technician"
+ },
+ {
+  "id": 5761,
+  "set_code": "SHD",
+  "card_number": "89",
+  "name": "Pirate Battle Tank"
+ },
+ {
+  "id": 5781,
+  "set_code": "SHD",
+  "card_number": "93",
+  "name": "Remnant Reserves"
+ },
+ {
+  "id": 5806,
+  "set_code": "SHD",
+  "card_number": "98",
+  "name": "Sundari Peacekeeper"
+ },
+ {
+  "id": 5816,
+  "set_code": "SHD",
+  "card_number": "100",
+  "name": "Modded Cohort"
+ },
+ {
+  "id": 5821,
+  "set_code": "SHD",
+  "card_number": "101",
+  "name": "Adelphi Patrol Wing"
+ },
+ {
+  "id": 5866,
+  "set_code": "SHD",
+  "card_number": "110",
+  "name": "Warzone Lieutenant"
+ },
+ {
+  "id": 5901,
+  "set_code": "SHD",
+  "card_number": "118",
+  "name": "Kihraxz Heavy Fighter"
+ },
+ {
+  "id": 5911,
+  "set_code": "SHD",
+  "card_number": "120",
+  "name": "Discerning Veteran"
+ },
+ {
+  "id": 5931,
+  "set_code": "SHD",
+  "card_number": "124",
+  "name": "Legal Authority"
+ },
+ {
+  "id": 5936,
+  "set_code": "SHD",
+  "card_number": "125",
+  "name": "Price on Your Head"
+ },
+ {
+  "id": 5951,
+  "set_code": "SHD",
+  "card_number": "128",
+  "name": "Outflank"
+ },
+ {
+  "id": 5956,
+  "set_code": "SHD",
+  "card_number": "130",
+  "name": "Moment of Glory"
+ },
+ {
+  "id": 6146,
+  "set_code": "SHD",
+  "card_number": "168",
+  "name": "Hunting Nexu"
+ },
+ {
+  "id": 6236,
+  "set_code": "SHD",
+  "card_number": "187",
+  "name": "Lurking TIE Phantom"
+ },
+ {
+  "id": 6461,
+  "set_code": "SHD",
+  "card_number": "234",
+  "name": "Incinerator Trooper"
+ },
+ {
+  "id": 6471,
+  "set_code": "SHD",
+  "card_number": "236",
+  "name": "Snowtrooper Lieutenant"
+ },
+ {
+  "id": 6481,
+  "set_code": "SHD",
+  "card_number": "238",
+  "name": "Cell Block Guard"
+ },
+ {
+  "id": 6591,
+  "set_code": "SHD",
+  "card_number": "262",
+  "name": "Confiscate"
+ },
+ {
+  "id": 7953,
+  "set_code": "SHD",
+  "card_number": "28",
+  "name": "Doctor Pershing"
+ },
+ {
+  "id": 7958,
+  "set_code": "SHD",
+  "card_number": "31",
+  "name": "The Client"
+ },
+ {
+  "id": 8028,
+  "set_code": "SHD",
+  "card_number": "81",
+  "name": "General Tagge"
+ },
+ {
+  "id": 8108,
+  "set_code": "SHD",
+  "card_number": "148",
+  "name": "Cassian Andor"
+ },
+ {
+  "id": 8138,
+  "set_code": "SHD",
+  "card_number": "188",
+  "name": "4-LOM"
+ },
+ {
+  "id": 8148,
+  "set_code": "SHD",
+  "card_number": "191",
+  "name": "Xanadu Blood"
+ },
+ {
+  "id": 8612,
+  "set_code": "SHD",
+  "card_number": "1",
+  "name": "Experience"
+ },
+ {
+  "id": 8617,
+  "set_code": "SHD",
+  "card_number": "2",
+  "name": "Shield"
+ },
+ {
+  "id": 8635,
+  "set_code": "C24",
+  "card_number": "2",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 13985,
+  "set_code": "TWI",
+  "card_number": "15",
+  "name": "General Grievous"
+ },
+ {
+  "id": 13990,
+  "set_code": "TWI",
+  "card_number": "83",
+  "name": "General's Guardian"
+ },
+ {
+  "id": 14010,
+  "set_code": "TWI",
+  "card_number": "180",
+  "name": "Separatist Commando"
+ },
+ {
+  "id": 14015,
+  "set_code": "TWI",
+  "card_number": "229",
+  "name": "Battle Droid Escort"
+ },
+ {
+  "id": 14020,
+  "set_code": "TWI",
+  "card_number": "233",
+  "name": "Hailfire Tank"
+ },
+ {
+  "id": 14025,
+  "set_code": "TWI",
+  "card_number": "240",
+  "name": "332nd Stalwart"
+ },
+ {
+  "id": 14030,
+  "set_code": "TWI",
+  "card_number": "1",
+  "name": "Battle Droid"
+ },
+ {
+  "id": 14035,
+  "set_code": "TWI",
+  "card_number": "2",
+  "name": "Clone Trooper"
+ },
+ {
+  "id": 14426,
+  "set_code": "TWI",
+  "card_number": "45",
+  "name": "41st Elite Corps"
+ },
+ {
+  "id": 14596,
+  "set_code": "TWI",
+  "card_number": "79",
+  "name": "Confederate Courier"
+ },
+ {
+  "id": 14601,
+  "set_code": "TWI",
+  "card_number": "80",
+  "name": "Poggle the Lesser"
+ },
+ {
+  "id": 14611,
+  "set_code": "TWI",
+  "card_number": "82",
+  "name": "MagnaGuard Wing Leader"
+ },
+ {
+  "id": 14616,
+  "set_code": "TWI",
+  "card_number": "84",
+  "name": "Kraken"
+ },
+ {
+  "id": 14626,
+  "set_code": "TWI",
+  "card_number": "86",
+  "name": "Admiral Trench"
+ },
+ {
+  "id": 14631,
+  "set_code": "TWI",
+  "card_number": "87",
+  "name": "Separatist Super Tank"
+ },
+ {
+  "id": 14661,
+  "set_code": "TWI",
+  "card_number": "93",
+  "name": "Advanced Recon Commando"
+ },
+ {
+  "id": 14676,
+  "set_code": "TWI",
+  "card_number": "96",
+  "name": "Aayla Secura"
+ },
+ {
+  "id": 14711,
+  "set_code": "TWI",
+  "card_number": "104",
+  "name": "Obedient Vanguard"
+ },
+ {
+  "id": 14746,
+  "set_code": "TWI",
+  "card_number": "112",
+  "name": "Subjugating Starfighter"
+ },
+ {
+  "id": 14806,
+  "set_code": "TWI",
+  "card_number": "124",
+  "name": "Tactical Advantage"
+ },
+ {
+  "id": 14931,
+  "set_code": "TWI",
+  "card_number": "150",
+  "name": "Saw Gerrera"
+ },
+ {
+  "id": 15001,
+  "set_code": "TWI",
+  "card_number": "164",
+  "name": "Hevy"
+ },
+ {
+  "id": 15051,
+  "set_code": "TWI",
+  "card_number": "174",
+  "name": "Open Fire"
+ },
+ {
+  "id": 15076,
+  "set_code": "TWI",
+  "card_number": "179",
+  "name": "Soulless One"
+ },
+ {
+  "id": 15091,
+  "set_code": "TWI",
+  "card_number": "183",
+  "name": "Rush Clovis"
+ },
+ {
+  "id": 15096,
+  "set_code": "TWI",
+  "card_number": "184",
+  "name": "Tactical Droid Commander"
+ },
+ {
+  "id": 15126,
+  "set_code": "TWI",
+  "card_number": "190",
+  "name": "On the Doorstep"
+ },
+ {
+  "id": 15206,
+  "set_code": "TWI",
+  "card_number": "206",
+  "name": "Independent Senator"
+ },
+ {
+  "id": 15211,
+  "set_code": "TWI",
+  "card_number": "207",
+  "name": "B1 Security Team"
+ },
+ {
+  "id": 15261,
+  "set_code": "TWI",
+  "card_number": "217",
+  "name": "Tri-Droid Suppressor"
+ },
+ {
+  "id": 15281,
+  "set_code": "TWI",
+  "card_number": "221",
+  "name": "In Pursuit"
+ },
+ {
+  "id": 15286,
+  "set_code": "TWI",
+  "card_number": "222",
+  "name": "Political Pressure"
+ },
+ {
+  "id": 15306,
+  "set_code": "TWI",
+  "card_number": "226",
+  "name": "Waylay"
+ },
+ {
+  "id": 15316,
+  "set_code": "TWI",
+  "card_number": "228",
+  "name": "Droid Starfighter"
+ },
+ {
+  "id": 15321,
+  "set_code": "TWI",
+  "card_number": "230",
+  "name": "Super Battle Droid"
+ },
+ {
+  "id": 15336,
+  "set_code": "TWI",
+  "card_number": "234",
+  "name": "The Invisible Hand"
+ },
+ {
+  "id": 15351,
+  "set_code": "TWI",
+  "card_number": "237",
+  "name": "Droid Deployment"
+ },
+ {
+  "id": 15356,
+  "set_code": "TWI",
+  "card_number": "238",
+  "name": "Merciless Contest"
+ },
+ {
+  "id": 15376,
+  "set_code": "TWI",
+  "card_number": "243",
+  "name": "Republic Commando"
+ },
+ {
+  "id": 15391,
+  "set_code": "TWI",
+  "card_number": "246",
+  "name": "Tranquility"
+ },
+ {
+  "id": 15396,
+  "set_code": "TWI",
+  "card_number": "247",
+  "name": "AT-TE Vanguard"
+ },
+ {
+  "id": 15446,
+  "set_code": "TWI",
+  "card_number": "257",
+  "name": "Private Manufacturing"
+ },
+ {
+  "id": 15476,
+  "set_code": "TWI",
+  "card_number": "23",
+  "name": "Lair of Grievous"
+ },
+ {
+  "id": 15576,
+  "set_code": "TWI",
+  "card_number": "169",
+  "name": "Clone Cohort"
+ },
+ {
+  "id": 15581,
+  "set_code": "TWI",
+  "card_number": "218",
+  "name": "Droid Cohort"
+ },
+ {
+  "id": 15596,
+  "set_code": "TWI",
+  "card_number": "236",
+  "name": "Grievous's Wheel Bike"
+ },
+ {
+  "id": 19501,
+  "set_code": "JTL",
+  "card_number": "6",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 19531,
+  "set_code": "JTL",
+  "card_number": "12",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 19591,
+  "set_code": "JTL",
+  "card_number": "24",
+  "name": "Data Vault"
+ },
+ {
+  "id": 19596,
+  "set_code": "JTL",
+  "card_number": "25",
+  "name": "Thermal Oscillator"
+ },
+ {
+  "id": 19706,
+  "set_code": "JTL",
+  "card_number": "47",
+  "name": "Admiral Yularen"
+ },
+ {
+  "id": 19761,
+  "set_code": "JTL",
+  "card_number": "58",
+  "name": "Academy Graduate"
+ },
+ {
+  "id": 19941,
+  "set_code": "JTL",
+  "card_number": "94",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 19946,
+  "set_code": "JTL",
+  "card_number": "95",
+  "name": "Phoenix Squadron A-Wing"
+ },
+ {
+  "id": 20166,
+  "set_code": "JTL",
+  "card_number": "139",
+  "name": "Dengar"
+ },
+ {
+  "id": 20176,
+  "set_code": "JTL",
+  "card_number": "141",
+  "name": "IG-88"
+ },
+ {
+  "id": 20181,
+  "set_code": "JTL",
+  "card_number": "142",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 20286,
+  "set_code": "JTL",
+  "card_number": "163",
+  "name": "AT-DP Occupier"
+ },
+ {
+  "id": 20386,
+  "set_code": "JTL",
+  "card_number": "183",
+  "name": "Zygerrian Starhopper"
+ },
+ {
+  "id": 20406,
+  "set_code": "JTL",
+  "card_number": "187",
+  "name": "Bossk"
+ },
+ {
+  "id": 20416,
+  "set_code": "JTL",
+  "card_number": "189",
+  "name": "Boba Fett"
+ },
+ {
+  "id": 20721,
+  "set_code": "JTL",
+  "card_number": "250",
+  "name": "Sabine's Masterpiece"
+ },
+ {
+  "id": 20751,
+  "set_code": "JTL",
+  "card_number": "256",
+  "name": "Swarming Vulture Droid"
+ },
+ {
+  "id": 20756,
+  "set_code": "JTL",
+  "card_number": "257",
+  "name": "Flanking Fang Fighter"
+ },
+ {
+  "id": 20796,
+  "set_code": "JTL",
+  "card_number": "3",
+  "name": "Experience"
+ },
+ {
+  "id": 20801,
+  "set_code": "JTL",
+  "card_number": "4",
+  "name": "Shield"
+ },
+ {
+  "id": 25386,
+  "set_code": "J25",
+  "card_number": "4",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 25396,
+  "set_code": "J25",
+  "card_number": "6",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 25531,
+  "set_code": "GG",
+  "card_number": "5",
+  "name": "Experience"
+ },
+ {
+  "id": 25556,
+  "set_code": "GG",
+  "card_number": "6",
+  "name": "Shield"
+ },
+ {
+  "id": 27209,
+  "set_code": "LOF",
+  "card_number": "37",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 27549,
+  "set_code": "LOF",
+  "card_number": "105",
+  "name": "Oppo Rancisis"
+ },
+ {
+  "id": 27669,
+  "set_code": "LOF",
+  "card_number": "129",
+  "name": "Acolyte of the Beyond"
+ },
+ {
+  "id": 27734,
+  "set_code": "LOF",
+  "card_number": "142",
+  "name": "Adi Gallia"
+ },
+ {
+  "id": 27809,
+  "set_code": "LOF",
+  "card_number": "157",
+  "name": "Cartel Interceptor"
+ },
+ {
+  "id": 27834,
+  "set_code": "LOF",
+  "card_number": "162",
+  "name": "Hunting Nexu"
+ },
+ {
+  "id": 27869,
+  "set_code": "LOF",
+  "card_number": "169",
+  "name": "Invasion Control Ship"
+ },
+ {
+  "id": 27914,
+  "set_code": "LOF",
+  "card_number": "178",
+  "name": "Adept of Anger"
+ },
+ {
+  "id": 27919,
+  "set_code": "LOF",
+  "card_number": "179",
+  "name": "Aurra Sing"
+ },
+ {
+  "id": 27949,
+  "set_code": "LOF",
+  "card_number": "185",
+  "name": "Baylan Skoll"
+ },
+ {
+  "id": 28069,
+  "set_code": "LOF",
+  "card_number": "209",
+  "name": "Tusken Tracker"
+ },
+ {
+  "id": 28084,
+  "set_code": "LOF",
+  "card_number": "212",
+  "name": "Life Wind Sage"
+ },
+ {
+  "id": 28269,
+  "set_code": "LOF",
+  "card_number": "249",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 28329,
+  "set_code": "LOF",
+  "card_number": "261",
+  "name": "Constructed Lightsaber"
+ },
+ {
+  "id": 28349,
+  "set_code": "LOF",
+  "card_number": "1",
+  "name": "Experience"
+ },
+ {
+  "id": 28354,
+  "set_code": "LOF",
+  "card_number": "2",
+  "name": "Shield"
+ },
+ {
+  "id": 38440,
+  "set_code": "P25",
+  "card_number": "73",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 38445,
+  "set_code": "P25",
+  "card_number": "74",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 38600,
+  "set_code": "P25",
+  "card_number": "103",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 38645,
+  "set_code": "P25",
+  "card_number": "112",
+  "name": "Constructed Lightsaber"
+ },
+ {
+  "id": 38705,
+  "set_code": "P25",
+  "card_number": "1",
+  "name": "Battle Droid"
+ },
+ {
+  "id": 38720,
+  "set_code": "P25",
+  "card_number": "3",
+  "name": "Clone Trooper"
+ },
+ {
+  "id": 38725,
+  "set_code": "P25",
+  "card_number": "75",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 38795,
+  "set_code": "P25",
+  "card_number": "89",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 38880,
+  "set_code": "IBH",
+  "card_number": "10",
+  "name": "Han Solo"
+ },
+ {
+  "id": 38930,
+  "set_code": "IBH",
+  "card_number": "20",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 39040,
+  "set_code": "IBH",
+  "card_number": "42",
+  "name": "Han Solo"
+ },
+ {
+  "id": 39095,
+  "set_code": "IBH",
+  "card_number": "53",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 39130,
+  "set_code": "IBH",
+  "card_number": "60",
+  "name": "Admiral Piett"
+ },
+ {
+  "id": 39240,
+  "set_code": "IBH",
+  "card_number": "82",
+  "name": "Admiral Ozzel"
+ },
+ {
+  "id": 39375,
+  "set_code": "J25",
+  "card_number": "14",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 39740,
+  "set_code": "SEC",
+  "card_number": "73",
+  "name": "The Eye of Aldhani"
+ },
+ {
+  "id": 39840,
+  "set_code": "SEC",
+  "card_number": "93",
+  "name": "C-3PO"
+ },
+ {
+  "id": 39870,
+  "set_code": "SEC",
+  "card_number": "99",
+  "name": "Naboo Royal Starship"
+ },
+ {
+  "id": 39880,
+  "set_code": "SEC",
+  "card_number": "101",
+  "name": "Queen Amidala"
+ },
+ {
+  "id": 39890,
+  "set_code": "SEC",
+  "card_number": "103",
+  "name": "Mon Mothma"
+ },
+ {
+  "id": 40040,
+  "set_code": "SEC",
+  "card_number": "133",
+  "name": "Syril Karn"
+ },
+ {
+  "id": 40045,
+  "set_code": "SEC",
+  "card_number": "134",
+  "name": "Hunting Assassin Droid"
+ },
+ {
+  "id": 40115,
+  "set_code": "SEC",
+  "card_number": "148",
+  "name": "Karis Nemik"
+ },
+ {
+  "id": 40130,
+  "set_code": "SEC",
+  "card_number": "151",
+  "name": "Kazuda Xiono"
+ },
+ {
+  "id": 40150,
+  "set_code": "SEC",
+  "card_number": "155",
+  "name": "Alexsandr Kallus"
+ },
+ {
+  "id": 40200,
+  "set_code": "SEC",
+  "card_number": "165",
+  "name": "Academy Disciplinarian"
+ },
+ {
+  "id": 40220,
+  "set_code": "SEC",
+  "card_number": "169",
+  "name": "AAT Incinerator"
+ },
+ {
+  "id": 40380,
+  "set_code": "SEC",
+  "card_number": "201",
+  "name": "Anakin Skywalker"
+ },
+ {
+  "id": 40440,
+  "set_code": "SEC",
+  "card_number": "213",
+  "name": "A-Wing"
+ },
+ {
+  "id": 40495,
+  "set_code": "SEC",
+  "card_number": "224",
+  "name": "Vel Sartha"
+ },
+ {
+  "id": 40620,
+  "set_code": "SEC",
+  "card_number": "249",
+  "name": "High Command Councilor"
+ },
+ {
+  "id": 40635,
+  "set_code": "SEC",
+  "card_number": "252",
+  "name": "Maarva Andor"
+ },
+ {
+  "id": 40670,
+  "set_code": "SEC",
+  "card_number": "259",
+  "name": "ASP Laborer"
+ },
+ {
+  "id": 40700,
+  "set_code": "SEC",
+  "card_number": "1",
+  "name": "Spy"
+ },
+ {
+  "id": 40705,
+  "set_code": "SEC",
+  "card_number": "2",
+  "name": "Experience"
+ },
+ {
+  "id": 45240,
+  "set_code": "SECP",
+  "card_number": "13",
+  "name": "Kazuda Xiono"
+ },
+ {
+  "id": 45525,
+  "set_code": "P25",
+  "card_number": "128",
+  "name": "Aurra Sing"
+ },
+ {
+  "id": 45585,
+  "set_code": "P25",
+  "card_number": "140",
+  "name": "Aurra Sing"
+ },
+ {
+  "id": 45600,
+  "set_code": "P25",
+  "card_number": "171",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 45605,
+  "set_code": "P25",
+  "card_number": "173",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 45645,
+  "set_code": "P25",
+  "card_number": "152",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 45695,
+  "set_code": "P25",
+  "card_number": "162",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 45790,
+  "set_code": "P26",
+  "card_number": "46",
+  "name": "Aurra Sing"
+ },
+ {
+  "id": 45850,
+  "set_code": "P26",
+  "card_number": "58",
+  "name": "Aurra Sing"
+ },
+ {
+  "id": 45890,
+  "set_code": "P26",
+  "card_number": "72",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 45905,
+  "set_code": "P26",
+  "card_number": "75",
+  "name": "Naboo Royal Starship"
+ },
+ {
+  "id": 45940,
+  "set_code": "P26",
+  "card_number": "88",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 45955,
+  "set_code": "P26",
+  "card_number": "91",
+  "name": "Naboo Royal Starship"
+ },
+ {
+  "id": 46102,
+  "set_code": "LAW",
+  "card_number": "10",
+  "name": "Leia Organa"
+ },
+ {
+  "id": 46107,
+  "set_code": "LAW",
+  "card_number": "11",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 46152,
+  "set_code": "LAW",
+  "card_number": "20",
+  "name": "Daimyo's Palace"
+ },
+ {
+  "id": 46212,
+  "set_code": "LAW",
+  "card_number": "32",
+  "name": "Cad Bane"
+ },
+ {
+  "id": 46227,
+  "set_code": "LAW",
+  "card_number": "35",
+  "name": "Ezra Bridger"
+ },
+ {
+  "id": 46237,
+  "set_code": "LAW",
+  "card_number": "37",
+  "name": "Han Solo"
+ },
+ {
+  "id": 46242,
+  "set_code": "LAW",
+  "card_number": "38",
+  "name": "Lepi Lookout"
+ },
+ {
+  "id": 46257,
+  "set_code": "LAW",
+  "card_number": "41",
+  "name": "Nothing Left to Fear"
+ },
+ {
+  "id": 46277,
+  "set_code": "LAW",
+  "card_number": "45",
+  "name": "Zeb Orellios"
+ },
+ {
+  "id": 46302,
+  "set_code": "LAW",
+  "card_number": "50",
+  "name": "Honnah"
+ },
+ {
+  "id": 46377,
+  "set_code": "LAW",
+  "card_number": "65",
+  "name": "4-LOM"
+ },
+ {
+  "id": 46387,
+  "set_code": "LAW",
+  "card_number": "67",
+  "name": "Jyn Erso"
+ },
+ {
+  "id": 46452,
+  "set_code": "LAW",
+  "card_number": "80",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 46517,
+  "set_code": "LAW",
+  "card_number": "93",
+  "name": "Rio Durant"
+ },
+ {
+  "id": 46572,
+  "set_code": "LAW",
+  "card_number": "104",
+  "name": "Bodhi Rook"
+ },
+ {
+  "id": 46577,
+  "set_code": "LAW",
+  "card_number": "105",
+  "name": "Cinta Kaz"
+ },
+ {
+  "id": 46587,
+  "set_code": "LAW",
+  "card_number": "107",
+  "name": "Swoop Bike Marauder"
+ },
+ {
+  "id": 46592,
+  "set_code": "LAW",
+  "card_number": "108",
+  "name": "Lando Calrissian"
+ },
+ {
+  "id": 46607,
+  "set_code": "LAW",
+  "card_number": "111",
+  "name": "Leia's Disguise"
+ },
+ {
+  "id": 46647,
+  "set_code": "LAW",
+  "card_number": "119",
+  "name": "Rogue One"
+ },
+ {
+  "id": 46682,
+  "set_code": "LAW",
+  "card_number": "126",
+  "name": "Adventurer Sniper Rifle"
+ },
+ {
+  "id": 46747,
+  "set_code": "LAW",
+  "card_number": "139",
+  "name": "Admiral Motti"
+ },
+ {
+  "id": 46762,
+  "set_code": "LAW",
+  "card_number": "142",
+  "name": "Scarif Lieutenant"
+ },
+ {
+  "id": 46777,
+  "set_code": "LAW",
+  "card_number": "145",
+  "name": "R2-D2"
+ },
+ {
+  "id": 46782,
+  "set_code": "LAW",
+  "card_number": "146",
+  "name": "Massassi Group Marines"
+ },
+ {
+  "id": 46787,
+  "set_code": "LAW",
+  "card_number": "147",
+  "name": "Jaunty Light Freighter"
+ },
+ {
+  "id": 46812,
+  "set_code": "LAW",
+  "card_number": "152",
+  "name": "C-3PO"
+ },
+ {
+  "id": 46882,
+  "set_code": "LAW",
+  "card_number": "166",
+  "name": "Putting a Team Together"
+ },
+ {
+  "id": 46887,
+  "set_code": "LAW",
+  "card_number": "167",
+  "name": "Common Cause"
+ },
+ {
+  "id": 46922,
+  "set_code": "LAW",
+  "card_number": "174",
+  "name": "0-0-0"
+ },
+ {
+  "id": 46962,
+  "set_code": "LAW",
+  "card_number": "182",
+  "name": "Weazel"
+ },
+ {
+  "id": 47002,
+  "set_code": "LAW",
+  "card_number": "190",
+  "name": "Haxion Aggressor"
+ },
+ {
+  "id": 47102,
+  "set_code": "LAW",
+  "card_number": "210",
+  "name": "Salacious Crumb"
+ },
+ {
+  "id": 47152,
+  "set_code": "LAW",
+  "card_number": "220",
+  "name": "Wookiee Guerilla"
+ },
+ {
+  "id": 47222,
+  "set_code": "LAW",
+  "card_number": "234",
+  "name": "Kage Elite"
+ },
+ {
+  "id": 47377,
+  "set_code": "LAW",
+  "card_number": "1",
+  "name": "Credit"
+ },
+ {
+  "id": 47382,
+  "set_code": "LAW",
+  "card_number": "2",
+  "name": "Experience"
+ },
+ {
+  "id": 47387,
+  "set_code": "LAW",
+  "card_number": "3",
+  "name": "Shield"
+ },
+ {
+  "id": 50677,
+  "set_code": "LAWP",
+  "card_number": "18",
+  "name": "Wookiee Guerilla"
+ },
+ {
+  "id": 50952,
+  "set_code": "TS26",
+  "card_number": "20",
+  "name": "501st Veteran"
+ },
+ {
+  "id": 50957,
+  "set_code": "TS26",
+  "card_number": "21",
+  "name": "Gar Saxon"
+ },
+ {
+  "id": 51037,
+  "set_code": "TS26",
+  "card_number": "37",
+  "name": "Abandoned the Order"
+ },
+ {
+  "id": 51117,
+  "set_code": "TS26",
+  "card_number": "53",
+  "name": "Coruscanti Spy"
+ },
+ {
+  "id": 51162,
+  "set_code": "TS26",
+  "card_number": "62",
+  "name": "R2-D2"
+ },
+ {
+  "id": 51277,
+  "set_code": "TS26",
+  "card_number": "1",
+  "name": "Battle Droid"
+ },
+ {
+  "id": 51282,
+  "set_code": "TS26",
+  "card_number": "2",
+  "name": "Clone Trooper"
+ },
+ {
+  "id": 51287,
+  "set_code": "TS26",
+  "card_number": "3",
+  "name": "Experience"
+ },
+ {
+  "id": 51292,
+  "set_code": "TS26",
+  "card_number": "4",
+  "name": "Shield"
+ },
+ {
+  "id": 51362,
+  "set_code": "P26",
+  "card_number": "112",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 51707,
+  "set_code": "ASH",
+  "card_number": "5",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 51727,
+  "set_code": "ASH",
+  "card_number": "9",
+  "name": "Ahsoka Tano"
+ },
+ {
+  "id": 52172,
+  "set_code": "ASH",
+  "card_number": "98",
+  "name": "AT-ST Raider"
+ },
+ {
+  "id": 52206,
+  "set_code": "ASH",
+  "card_number": "105",
+  "name": "Bo-Katan Kryze"
+ },
+ {
+  "id": 52231,
+  "set_code": "ASH",
+  "card_number": "110",
+  "name": "Admiral Ackbar"
+ },
+ {
+  "id": 52241,
+  "set_code": "ASH",
+  "card_number": "112",
+  "name": "Luke Skywalker"
+ },
+ {
+  "id": 52331,
+  "set_code": "ASH",
+  "card_number": "130",
+  "name": "Fang Fighter Squadron"
+ },
+ {
+  "id": 52894,
+  "set_code": "ASH",
+  "card_number": "243",
+  "name": "Darth Vader"
+ },
+ {
+  "id": 53014,
+  "set_code": "ASH",
+  "card_number": "3",
+  "name": "Shield"
+ },
+ {
+  "id": 56613,
+  "set_code": "P26",
+  "card_number": "1",
+  "name": "Darth Vader"
+ }
+]

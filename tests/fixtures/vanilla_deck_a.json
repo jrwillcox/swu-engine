@@ -1,0 +1,92 @@
+{
+  "leader": {
+    "id": "SOR_10",
+    "count": 1
+  },
+  "base": {
+    "id": "SOR_19",
+    "count": 1
+  },
+  "deck": [
+    {
+      "id": "ASH_98",
+      "count": 3
+    },
+    {
+      "id": "IBH_82",
+      "count": 1
+    },
+    {
+      "id": "JTL_163",
+      "count": 3
+    },
+    {
+      "id": "JTL_58",
+      "count": 3
+    },
+    {
+      "id": "LAW_139",
+      "count": 1
+    },
+    {
+      "id": "LAW_174",
+      "count": 1
+    },
+    {
+      "id": "LAW_65",
+      "count": 1
+    },
+    {
+      "id": "LOF_129",
+      "count": 3
+    },
+    {
+      "id": "LOF_142",
+      "count": 1
+    },
+    {
+      "id": "LOF_178",
+      "count": 3
+    },
+    {
+      "id": "SEC_165",
+      "count": 3
+    },
+    {
+      "id": "SEC_169",
+      "count": 3
+    },
+    {
+      "id": "SEC_259",
+      "count": 3
+    },
+    {
+      "id": "SOR_232",
+      "count": 3
+    },
+    {
+      "id": "SOR_37",
+      "count": 3
+    },
+    {
+      "id": "SOR_39",
+      "count": 3
+    },
+    {
+      "id": "SOR_59",
+      "count": 3
+    },
+    {
+      "id": "TS26_20",
+      "count": 3
+    },
+    {
+      "id": "TS26_37",
+      "count": 3
+    },
+    {
+      "id": "TWI_45",
+      "count": 3
+    }
+  ]
+}
