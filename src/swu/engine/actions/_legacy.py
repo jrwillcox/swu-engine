@@ -1,36 +1,15 @@
-"""
-Actions and the legal_actions() / apply() contract.
+"""Transitional holding module for the not-yet-extracted parts of actions.
 
-EVERY decision in a SWU game — from initial mulligan to final attack — is an
-Action.  The engine loop is simply:
+This file is the remains of the single 24,788-line engine/actions.py, kept
+under one name while its sections are moved out into the layered kernel
+(base, costs, stats, zones, combat, observers, turn,
+api) and the per-family decisions/ modules.  It shrinks with every commit
+of the split and is deleted when it reaches zero.
 
-    while not state.is_terminal():
-        acts = legal_actions(state)
-        chosen = player.choose_action(view, acts)
-        state = apply(state, chosen)
-
-Key invariants:
-* legal_actions() is never empty while the game is live.
-* apply() raises IllegalActionError when the action is not legal.
-* apply() never mutates its input (deep-copy-then-modify).
-* All randomness uses state.make_rng(), which advances the embedded RNG;
-  the new state's rng_state reflects the post-shuffle RNG position.
-* When pending_decisions is non-empty, legal_actions() returns only the
-  top decision's options; turn alternation is suspended.
-
-Phase 2 additions
------------------
-* Decision stack: UseAmbush / DeclineAmbush, ExploitSacrifice / ExploitCommit
-* Effective-stats layer: compute_power() for combat (Grit, Raid, upgrades)
-* Keyword-aware attack pipeline (CR §Attacks):
-    1. Declare & exhaust attacker
-    2. On-attack triggers: Restore, Saboteur shield-strip
-    3. Compute effective power
-    4. Simultaneous damage with Shield interception
-    5. Overwhelm spillover
-    6. Defeat processing
-* Sentinel targeting in legal_actions()
-* Token stripping in _defeat_unit()
+Nothing should import from here directly: the package facade in __init__.py
+re-exports every public name, and scripts/refactor_parity.py proves that each
+extraction moved code without changing it.  The real module documentation lives in
+__init__.py.
 """
 from __future__ import annotations
 
@@ -10640,7 +10619,7 @@ def _check_game_over(s: GameState) -> None:
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
-def _new_rng(seed: Optional[int]) -> "random.Random":
+def _new_rng(seed: Optional[int]) -> "random.Random":  # noqa: F821 (imported in body)
     import random
     return random.Random(seed)
 
@@ -21459,7 +21438,7 @@ _UNIT_TRAITS: tuple[str, ...] = tuple(sorted(
 _ATTACH_TARGET_RE = re.compile(r"attach to an? ([^.\n]+)", re.IGNORECASE)
 
 
-def _upgrade_target_spec(card_def) -> "Optional[TargetSpec]":
+def _upgrade_target_spec(card_def) -> "Optional[TargetSpec]":  # noqa: F821 (imported in body)
     """Parse an Upgrade's "Attach to …" restriction into a ``TargetSpec``.
 
     Returns ``None`` when the upgrade has no parseable attachment restriction,

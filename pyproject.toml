@@ -81,8 +81,13 @@ ignore = [
 # are imported inside the function body, to break an import cycle. The annotation
 # is never evaluated at runtime, but ruff can't see the deferred import (F821).
 "src/swu/abilities/resolver.py" = ["F821"]
-"src/swu/engine/actions.py" = ["F821"]
 "src/swu/engine/state.py" = ["F821"]
+# NOT listed here: src/swu/engine/actions/**. That package had a blanket F821
+# ignore while it was one file, which was hiding exactly two real hits (both
+# string annotations naming a lazily-imported type); those two now carry a
+# targeted `# noqa: F821`. Keeping F821 live across the package is deliberate —
+# it is the only check that catches a function moved away from a global it still
+# references, which is the characteristic failure mode of this refactor.
 
 # CLI entry points and campaign scripts extend sys.path before importing the
 # package, so their imports legitimately sit below module-level code.
