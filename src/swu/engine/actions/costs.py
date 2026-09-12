@@ -42,7 +42,6 @@ from swu.engine.actions.base import (
     IllegalActionError,
 )
 
-
 # ── Effective-stats layer ─────────────────────────────────────────────────────
 
 _ASPECT_ICON_KEYS: set | None = None
@@ -949,3 +948,220 @@ def _pay_play_cost(s: GameState, ps: PlayerState, cost: int) -> int:
         for unit in _unit_resource_pool(ps)[:shortfall]:
             unit.exhausted = True
     return credits_defeated
+
+
+# ── Play-a-card-from-hand-as-an-ability subsystem (Admiral Ozzel, SOR_129) ────
+
+def _play_reduction_for(cd, base_reduction: int,
+                        cost_reduction_if_trait) -> int:
+    """The cost reduction to apply to card def ``cd`` — normally ``base_reduction``,
+    but the higher value if ``cost_reduction_if_trait`` = ``(trait, reduction)`` is
+    set and ``cd`` carries that trait.  "It costs 6 less; if it's a Force unit, it
+    costs 8 less instead." (Palpatine's Return SHD_94) — a REPLACEMENT, not additive.
+    """
+    if cost_reduction_if_trait is not None:
+        trait, reduction = cost_reduction_if_trait
+        if trait in (getattr(cd, "traits", ()) or ()):
+            return reduction
+    return base_reduction
+
+
+# ── Play an EVENT from hand as an ability (Bib Fortuna SOR_177) ────────────────
+
+def _event_aspect_waiver(card_def, ps: PlayerState, ignore: bool,
+                         state: "GameState | None" = None) -> int:
+    """Resources waived by "ignoring its aspect penalties" (Anakin Skywalker LOF_18)
+    — the card's WHOLE aspect penalty, the ``_play_upgrade_cost`` reading, not the
+    single-pip Daimyo's Palace LAW_20 one.  0 when the rider is off."""
+    if not ignore:
+        return 0
+    aspects = tuple(a.name for a in (getattr(card_def, "aspects", None) or ()))
+    return _aspect_penalty(aspects, ps, state)
+
+
+# ── Play an upgrade from hand for free, choosing a host (Jabba the Hutt ASH_42) ─
+
+def _play_upgrade_cost(state: GameState, ctx: dict, upgrade_ci: CardInstance,
+                       host_id: Optional[str] = None) -> int:
+    """Resource cost to play ``upgrade_ci`` through this decision: its effective
+    play cost less ``cost_reduction``, and — with ``ctx['ignore_aspect_penalty']``
+    — less its WHOLE aspect penalty ("ignoring its aspect penalty", unqualified,
+    A Fine Addition TWI_40; the General Grievous TWI_34 full-waiver reading, not
+    the single-pip Daimyo's Palace LAW_20 one).  Floored at 0."""
+    ps = state.player_by_id(ctx["controller_id"])
+    cost = _play_cost(state, upgrade_ci, ps, target_host_id=host_id)
+    if ctx.get("ignore_aspect_penalty"):
+        aspects = tuple(a.name for a in (getattr(upgrade_ci.card_def, "aspects", None) or ()))
+        cost -= _aspect_penalty(aspects, ps, state)
+    return max(0, cost - int(ctx.get("cost_reduction", 0) or 0))
+
+
+def _play_upgrade_affordable(state: GameState, ctx: dict,
+                             upgrade_ci: CardInstance, cost: int) -> bool:
+    """Can the controller pay ``cost`` for this play?
+
+    ``from_resources`` (The Armorer ASH_1) needs the Smuggle "other ready resources"
+    rule: the card being played leaves the resource row before the cost is paid, so
+    it can never pay for itself — one more resource is required whenever the
+    candidate is itself ready."""
+    ps = state.player_by_id(ctx["controller_id"])
+    if ctx.get("from_resources") and not upgrade_ci.exhausted:
+        cost += 1
+    return _affordable_with_credits(ps, cost, state)
+
+
+# ── distribute_damage decision helpers ───────────────────────────────────────
+
+def _consume_play_discount(state: GameState, ci: CardInstance, ps: PlayerState,
+                           via_plot: bool = False) -> int:
+    """Remove and return the amount of the first pending NextPlayDiscount that
+    applies to playing ``ci`` (mirrors ``_pending_play_discount``'s match), or 0.
+    Called once at the real play site so each discount applies to exactly one
+    subsequent matching card.  ``via_plot`` lets a plot_only discount (SEC_1) be
+    consumed by a Plot play."""
+    traits = set(getattr(ci.card_def, "traits", ()) or ())
+    for i, entry in enumerate(state.game_memory.pending_play_discounts):
+        if _play_discount_entry_matches(entry, ci, ps, traits, via_plot, state):
+            amt = _play_discount_entry_amount(entry, ci, ps, state)
+            del state.game_memory.pending_play_discounts[i]
+            return amt
+    return 0
+
+
+def _consume_standing_discount(state: GameState, ci: CardInstance, ps: PlayerState,
+                               target_host_id: Optional[str] = None) -> None:
+    """Mark each ``once_per_round`` ``StandingPlayDiscount`` source that discounted
+    playing ``ci`` as spent for the round (Director Krennic JTLP_1: "the first unit
+    you play each round …").  Called once at the real play site, mirroring
+    ``_consume_play_discount``.  ``target_host_id`` gates a host-scoped upgrade
+    discount (Guardian of the Whills SOR_61)."""
+    from swu.abilities.registry import get_abilities, StandingPlayDiscount
+    used = state.game_memory.standing_play_discounts_used_this_round
+    for src in _standing_play_discount_sources(state, ci, ps, target_host_id):
+        sc = getattr(src.card_def, "set_code", None) or ""
+        cn = getattr(src.card_def, "card_number", None) or ""
+        for spec in get_abilities(sc, cn):
+            if isinstance(spec, StandingPlayDiscount) and spec.once_per_round and (
+                _card_matches_standing_discount(ci.card_def, spec.applies_to)
+            ):
+                used.add(_standing_discount_key(src, ps))
+                break
+
+
+#: Aspect-penalty pips a "ignore 1 aspect penalty" waiver may waive — Daimyo's
+#: Palace LAW_20 explicitly excludes Heroism/Villainy ("Vigilance, Command,
+#: Aggression, or Cunning aspect penalties").
+_WAIVABLE_ASPECTS = {"Vigilance", "Command", "Aggression", "Cunning"}
+
+
+def _ignorable_aspect_penalty(card: AnyCard, ps: PlayerState,
+                              state: "GameState | None" = None) -> int:
+    """Resources waived by ignoring **one** Vigilance/Command/Aggression/Cunning
+    aspect penalty when playing ``card`` (Daimyo's Palace LAW_20): 2 if the card
+    has at least one unmatched pip among those four aspects against ``ps``'s base
+    aspects, else 0.  Heroism/Villainy penalties are not waivable per the card,
+    and a fully-matched card is never discounted.  Mirrors ``_effective_cost`` /
+    ``_aspect_penalty`` (base_zone aspects, counting duplicates)."""
+    card_aspects = tuple(a.name for a in (getattr(card, "aspects", None) or ()))
+    if not card_aspects:
+        return 0
+    available = _available_aspects(ps, state)
+    for aspect, needed in Counter(card_aspects).items():
+        if aspect in _WAIVABLE_ASPECTS and max(0, needed - available[aspect]) > 0:
+            return 2
+    return 0
+
+
+def _smuggle_cost(state: GameState, ci: CardInstance, ps: PlayerState) -> Optional[int]:
+    """Total effective resource cost to play ``ci`` via Smuggle (base + aspect
+    penalty), or None if it cannot be smuggled.  See ``_smuggle_cost_parts``."""
+    parts = _smuggle_cost_parts(state, ci, ps)
+    return None if parts is None else parts[0] + parts[1]
+
+
+def _piloting_discount_entry(state: GameState, ci: CardInstance,
+                             ps: PlayerState) -> Optional[int]:
+    """Index of the first pending NextPlayDiscount that discounts playing ``ci``
+    as a PILOT, or None.
+
+    Only an entry flagged ``applies_to_piloting`` reaches this path — "The next
+    Pilot card you play this phase costs 1 resource less.  (This includes Piloting
+    costs.)" (Wedge Antilles JTL_8).  Otherwise the ordinary hand-play discount
+    would silently apply twice, once per play mode."""
+    traits = set(getattr(ci.card_def, "traits", ()) or ())
+    for i, entry in enumerate(state.game_memory.pending_play_discounts):
+        if not entry.get("applies_to_piloting", False):
+            continue
+        if _play_discount_entry_matches(entry, ci, ps, traits, False, state):
+            return i
+    return None
+
+
+def _piloting_cost(state: GameState, ci: CardInstance, ps: PlayerState) -> Optional[int]:
+    """Total effective resource cost to play ``ci`` as a Pilot (base + aspect
+    penalty, less any pending Piloting-aware discount), or None if it cannot be
+    piloted (no Piloting keyword in epic_action).
+
+    Read at BOTH the enumeration and the payment site, so a pending discount can
+    never make an offered PilotPlay unaffordable; ``PilotPlay`` consumes the entry."""
+    from swu.engine.keywords import parse_piloting_cost
+    spec = parse_piloting_cost(getattr(ci.card_def, "epic_action", None))
+    if spec is None:
+        return None
+    n, aspects = spec
+    total = n + _aspect_penalty(aspects, ps, state)
+    idx = _piloting_discount_entry(state, ci, ps)
+    if idx is not None:
+        total -= int(
+            state.game_memory.pending_play_discounts[idx].get("amount", 0) or 0)
+    return max(0, total)
+
+
+def _vehicle_has_pilot(host: CardInstance) -> bool:
+    """True if the host unit already has a Pilot attached (a Pilot upgrade or a
+    leader deployed as an upgrade — both carry the Pilot trait on their card_def)."""
+    return _pilot_count(host) > 0
+
+
+def _pilot_count(host: CardInstance) -> int:
+    """Number of Pilot upgrades (or leaders-as-upgrade) attached to ``host``."""
+    return sum(1 for upg in host.attached_upgrades
+               if "Pilot" in (getattr(upg.card_def, "traits", ()) or ()))
+
+
+def _pilot_limit(host: CardInstance) -> int:
+    """Max Pilots ``host`` may carry: the standard 1, plus any extra granted by an
+    ``AdditionalPilotSlots`` marker — either printed on the host's card def
+    (Millennium Falcon JTL_249: "1 additional Pilot") or conferred by a Pilot
+    upgrade attached to the host (R2-D2 JTL_245: "Attached unit gains: 'You may
+    play or deploy 1 additional Pilot on this unit.'")."""
+    from swu.abilities.registry import get_abilities, AdditionalPilotSlots
+
+    def _extra(cd) -> int:
+        sc = getattr(cd, "set_code", None) or ""
+        cn = getattr(cd, "card_number", None) or ""
+        if not sc or not cn:
+            return 0
+        return sum(spec.count for spec in get_abilities(sc, cn)
+                   if isinstance(spec, AdditionalPilotSlots))
+
+    extra = _extra(host.card_def)
+    for upg in getattr(host, "attached_upgrades", None) or ():
+        extra += _extra(upg.card_def)
+    return 1 + extra
+
+
+def _discard_cost_candidates(ps: PlayerState, cost) -> list:
+    """Hand cards that satisfy a ``DiscardCardCost`` (all of them by default, or
+    only those at/above ``cost_min`` — "discard a card that costs 6 or more from
+    your hand", Dryden Vos SEC_7)."""
+    lo = getattr(cost, "cost_min", None)
+    if lo is None:
+        return list(ps.hand)
+    return [c for c in ps.hand
+            if int(getattr(c.card_def, "cost", None) or 0) >= int(lo)]
+
+
+def _discard_cost_payable(ps: PlayerState, cost) -> bool:
+    """Whether ``ps`` can pay a ``DiscardCardCost`` right now."""
+    return len(_discard_cost_candidates(ps, cost)) >= int(getattr(cost, "count", 1) or 1)
