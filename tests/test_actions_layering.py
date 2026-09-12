@@ -57,6 +57,21 @@ LAYERS = [
     # in one module and move as one block or not at all.
     "observers",
     "turn",
+    # ---- the decision families ------------------------------------------------
+    # One module per mechanic family, each claiming its own decision kinds from
+    # `dispatch`. They rank BELOW `_legacy` for the same reason the kernel modules do:
+    # `_legacy` back-imports whatever has already left it, so every reference points
+    # downward at every commit and this test passes throughout the migration rather
+    # than only at the end of it. When `_legacy` is empty it goes, and these are the
+    # top of the package.
+    #
+    # The order among them is the topological order of the push graph, which is
+    # acyclic -- measured, not assumed. `push_modal` is called from `sacrifice`, so
+    # `modal` must rank lower; `push_play_from_hand` is called from `capture`, `deck`
+    # and `discard`, so `hand` must rank lower than all three. That ordering is what
+    # makes a push call an ordinary downward import, which is why no dispatch registry
+    # for `push_*` is needed.
+    "targeting",
     "_legacy",
     "api",
 ]
