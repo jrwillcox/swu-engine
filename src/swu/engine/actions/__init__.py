@@ -30,11 +30,14 @@ Import submodules directly (``from swu.engine.actions.stats import compute_power
 in new code; the flat re-exports exist for the call sites that predate the split.
 """
 
+from swu.engine.actions.base import (  # noqa: F401
+    Action,
+    IllegalActionError,
+)
 from swu.engine.actions._legacy import (  # noqa: F401
     AcceptExhaust,
     AcceptTrigger,
     AckLookHand,
-    Action,
     AllowEffect,
     AnswerTestDecision,
     AssignDamage,
@@ -133,7 +136,6 @@ from swu.engine.actions._legacy import (  # noqa: F401
     FinishSelectDamage,
     FinishSelectToken,
     FinishSplitBounce,
-    IllegalActionError,
     KeepHand,
     KeepRevealed,
     KeepTopCard,

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import copy
 import re
-from abc import ABC, abstractmethod
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Callable, Optional
@@ -38,27 +37,7 @@ from swu.engine.state import CardInstance, GameState, Phase, PlayerState, Zone, 
 from swu.engine.tokens import attach_token, defeat_shield
 from swu.engine.triggers import get_bus
 
-
-class IllegalActionError(Exception):
-    pass
-
-
-# ── Abstract base ─────────────────────────────────────────────────────────────
-
-class Action(ABC):
-    @abstractmethod
-    def apply(self, state: GameState) -> GameState:
-        raise NotImplementedError
-
-    @abstractmethod
-    def describe(self) -> str:
-        raise NotImplementedError
-
-    def __eq__(self, other: object) -> bool:
-        return type(self) is type(other) and self.__dict__ == other.__dict__
-
-    def __hash__(self) -> int:
-        return hash((type(self), tuple(sorted(self.__dict__.items()))))
+from swu.engine.actions.base import Action, IllegalActionError
 
 
 # ── Setup actions ─────────────────────────────────────────────────────────────
