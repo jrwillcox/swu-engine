@@ -34,8 +34,10 @@ import re
 from typing import Optional
 
 from swu.cards.models import Leader
+from swu.engine.decisions import PendingDecision
 from swu.engine.events import (
-    ControlChanged, DamageDealt, EmptyDeckDamage,
+    ControlChanged, DamageDealt, DecisionPushed, EmptyDeckDamage,
+    EventAbilitiesSuppressed,
     LeaderReturnedToBase, UnitCaptured, UnitDefeated,
     UnitEntersPlay, UnitReturnedFromCapture, UpgradeDetached,
     UpgradePlayed,
@@ -43,6 +45,7 @@ from swu.engine.events import (
 from swu.engine.state import (
     CardInstance, GameState, Phase, PlayerState, Zone, ability_suppressed,
 )
+from swu.engine.tokens import attach_token
 from swu.engine.triggers import get_bus
 
 from swu.engine.actions.base import (
@@ -1114,3 +1117,201 @@ def _rescue_captured_card(s: GameState, captive_ci: CardInstance) -> bool:
         ))
         return True
     return False
+
+
+# ── apply convenience wrapper ─────────────────────────────────────────────────
+
+def apply_token_creation(s: GameState, kind: str, name: str, count: int,
+                         host_id=None, ready: bool = False,
+                         creator_id: Optional[str] = None) -> int:
+    """Create ``count`` more tokens matching a drained token-creation record, and
+    return how many were really created (Moff Jerjerrod ASH_94's top-up).
+
+    The one place that knows how to re-run each of the three creation shapes:
+    a token UPGRADE onto the recorded host (nothing if that host has left play), a
+    CREDIT into the creator's credit pile, or token UNITS into the creator's arena.
+    Always passes ``note_token_creation=False``, so a doubling never re-arms the
+    doubler."""
+    from swu.engine.tokens import create_credit_token
+    count = int(count)
+    if count <= 0:
+        return 0
+    if kind == "upgrade":
+        if host_id is None:
+            return 0
+        res = s.find_instance(host_id)
+        if res is None:
+            return 0
+        host_ps, host_ci = res
+        if host_ci.zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
+            return 0
+        for _ in range(count):
+            attach_token(s, host_ps, host_ci, name, note_token_creation=False)
+        return count
+    ps = s.player_by_id(creator_id) if creator_id is not None else None
+    if ps is None:
+        return 0
+    if kind == "credit":
+        for _ in range(count):
+            create_credit_token(s, ps, note_token_creation=False)
+        return count
+    if kind == "unit":
+        _create_token_units(s, ps, name, count, enters_ready=ready,
+                            note_token_creation=False)
+        return count
+    return 0
+
+
+def push_bounty_recollect(s: GameState, source_ci: CardInstance, event_ctx: dict) -> None:
+    """Bossk SHD_10 payoff: "collect that bounty again".  Re-run the just-collected
+    bounty (recorded in ``event_ctx["recollect_bounty"]``) by pushing a fresh
+    ``resolve_effects`` decision addressed to the SAME bounty spec — reusing the
+    ordinary effect-resolution machinery, so no new decision kind is needed.
+
+    The re-run resolves from the same source (the defeated unit, still findable in its
+    discard/base zone by ``source_id``) with ``defeated_controller_id`` threaded back
+    into its context so the bounty fn recomputes the SAME collector.  Marks the
+    once-per-round limiter spent (SOURCE_BOUNTY_RECOLLECT_AVAILABLE) so Bossk offers at
+    most one re-collection per round.  The pushed decision does not go through the
+    bounty-collection scan, so it never records another ledger entry (no chain)."""
+    entry = event_ctx.get("recollect_bounty")
+    if not entry:
+        return
+    # Spend the once-per-round the moment the re-collection actually resolves (this fn
+    # runs only on accept of Bossk's optional trigger).
+    s.game_memory.bounty_recollect_used_this_round.add(source_ci.instance_id)
+    owner_idx = s.player_index(source_ci.owner_id)
+    dec = PendingDecision(
+        deciding_player_id=source_ci.owner_id,
+        kind="resolve_effects",
+        context={
+            "set_code": entry["set_code"],
+            "card_number": entry["card_number"],
+            "ability_idx": int(entry["ability_idx"]),
+            "source_id": entry["source_id"],
+            "effect_idx": 0,
+            "resolved_targets": {},
+            "event_ctx": {"defeated_controller_id": entry["defeated_controller_id"]},
+            "after_all_player_idx": owner_idx,
+        },
+        after_resolve_player_index=owner_idx,
+    )
+    s.pending_decisions.append(dec)
+    s.active_player_index = owner_idx
+    s.event_log.append(DecisionPushed(
+        deciding_player_id=source_ci.owner_id,
+        kind="resolve_effects",
+    ))
+
+
+def _push_resolve_unique(
+    s: GameState, controller_id: str, display_name: str, candidate_ids: list[str]
+) -> None:
+    ctx = {
+        "controller_id": controller_id,
+        "display_name": display_name,
+        "candidate_ids": list(candidate_ids),
+    }
+    dec = PendingDecision(
+        deciding_player_id=controller_id,
+        kind="resolve_unique",
+        context=ctx,
+        after_resolve_player_index=s.active_player_index,
+    )
+    s.pending_decisions.append(dec)
+    s.active_player_index = s.player_index(controller_id)
+    s.event_log.append(DecisionPushed(
+        deciding_player_id=controller_id,
+        kind="resolve_unique",
+    ))
+
+
+# ── Credit-token economy (jabba-the-hutt:07) ───────────────────────────────────
+
+def _find_event_suppressor(s: GameState, event_player_id: str) -> Optional[CardInstance]:
+    """Return an in-play unit, controlled by an *opponent* of event_player_id,
+    whose abilities suppress an opponent's first event each round (Relentless),
+    or None.
+
+    Detection scans the arenas (the only place a unit is "in play") for a
+    ConstantAbility carrying a SuppressFirstEnemyEvent marker, so the effect
+    naturally turns off the moment the source leaves play.
+    """
+    from swu.abilities.registry import (
+        get_abilities, ConstantAbility, SuppressFirstEnemyEvent,
+    )
+    for owner_ps in s.players:
+        if owner_ps.player_id == event_player_id:
+            continue
+        for ci in owner_ps.ground_arena + owner_ps.space_arena:
+            sc = ci.card_def.set_code or ""
+            cn = ci.card_def.card_number or ""
+            for spec in get_abilities(sc, cn):
+                if isinstance(spec, ConstantAbility) and any(
+                    isinstance(eff, SuppressFirstEnemyEvent) for eff in spec.effects
+                ):
+                    return ci
+    return None
+
+
+def _resolve_event_ability(
+    s: GameState, ps: PlayerState, event_ci: CardInstance, after_idx: int
+) -> None:
+    """Resolve EventAbility effects for a played event card.
+
+    Inline-resolvable effects execute immediately; effects needing player
+    choices push a resolve_effects PendingDecision.
+
+    Relentless-style suppression is applied here (the single chokepoint both
+    PlayCard paths route through): the FIRST event a player plays each round
+    loses all abilities while an opponent controls an event-suppressor in play.
+    Tracking is recorded on every event play so "first" is correct even for
+    events with no registered ability.
+    """
+    first_event = ps.player_id not in s.game_memory.events_played_this_round
+    s.game_memory.events_played_this_round.add(ps.player_id)
+    if first_event:
+        suppressor = _find_event_suppressor(s, ps.player_id)
+        if suppressor is not None:
+            s.event_log.append(EventAbilitiesSuppressed(
+                player_id=ps.player_id,
+                instance_id=event_ci.instance_id,
+                card_name=event_ci.card_def.display_name,
+                source_instance_id=suppressor.instance_id,
+                source_name=suppressor.card_def.display_name,
+            ))
+            return
+
+    from swu.abilities.registry import get_abilities, EventAbility, TriggerAbility
+    from swu.abilities.resolver import _ability_can_inline
+    sc = event_ci.card_def.set_code or ""
+    cn = event_ci.card_def.card_number or ""
+    for idx, spec in enumerate(get_abilities(sc, cn)):
+        if not isinstance(spec, EventAbility):
+            continue
+        wrapper = TriggerAbility(trigger=None, effects=spec.effects, optional=False)
+        event_ctx: dict = {}
+        if _ability_can_inline(wrapper, s, event_ci, event_ctx):
+            from swu.abilities.resolver import _resolve_inline as _ri
+            _ri(s, wrapper, event_ci, event_ctx)
+        else:
+            dec = PendingDecision(
+                deciding_player_id=ps.player_id,
+                kind="resolve_effects",
+                context={
+                    "set_code": sc,
+                    "card_number": cn,
+                    "ability_idx": idx,
+                    "source_id": event_ci.instance_id,
+                    "effect_idx": 0,
+                    "resolved_targets": {},
+                    "event_ctx": event_ctx,
+                    "after_all_player_idx": after_idx,
+                },
+                after_resolve_player_index=after_idx,
+            )
+            s.pending_decisions.append(dec)
+            s.event_log.append(DecisionPushed(
+                deciding_player_id=ps.player_id,
+                kind="resolve_effects",
+            ))

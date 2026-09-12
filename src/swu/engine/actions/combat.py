@@ -36,7 +36,7 @@ from typing import Optional
 
 from swu.engine.decisions import PendingDecision
 from swu.engine.events import (
-    AttackDeclared, DamageDealt, DecisionPushed, DecisionResolved, OverwhelmDamage,
+    AttackDeclared, DamageDealt, DamagePrevented, DecisionPushed, DecisionResolved, OverwhelmDamage,
     RestoreHealing,
 )
 from swu.engine.keywords import Keyword, has_keyword, keyword_value, shields_on
@@ -49,6 +49,7 @@ from swu.engine.triggers import get_bus
 from swu.engine.actions.base import (
     Action, IllegalActionError,
 )
+from swu.engine.actions.dispatch import register_decisions
 from swu.engine.actions.stats import (
     _expire_modifiers, compute_hp, compute_power,
 )
@@ -2940,3 +2941,341 @@ def _resolve_two_unit_combat_step2(
                                           only_ids=adv_snapshot)   # ASH_2
     _clear_this_attack_combat_flags(attacker)
     _expire_modifiers(s, "this_attack")
+
+
+# ── Decision-resolving actions ────────────────────────────────────────────────
+
+@dataclass
+class UseAmbush(Action):
+    """Attack with an Ambush unit immediately after it enters play."""
+    attacker_id: str
+    target_id: str
+
+    def apply(self, state: GameState) -> GameState:
+        if not state.pending_decisions or state.pending_decisions[-1].kind != "ambush":
+            raise IllegalActionError("No pending Ambush decision")
+        s = copy.deepcopy(state)
+        top = s.pending_decisions[-1]
+
+        if self.attacker_id != top.context["unit_id"]:
+            raise IllegalActionError("UseAmbush: wrong attacker id")
+
+        deciding_ps = s.player_by_id(top.deciding_player_id)
+        enemy_ps = s.players[1 - s.player_index(top.deciding_player_id)]
+
+        attacker = _find_in_arenas(deciding_ps, self.attacker_id)
+        defender = _find_in_arenas(enemy_ps, self.target_id)
+        if attacker is None:
+            raise IllegalActionError(f"Ambush attacker {self.attacker_id} not in play")
+        if defender is None:
+            raise IllegalActionError(f"Ambush target {self.target_id} not in play")
+        if attacker.zone != defender.zone:
+            raise IllegalActionError("Ambush target not in same arena")
+
+        # Consume the Ambush decision BEFORE resolving combat (an Ambush unit
+        # attacks once).  _resolve_unit_combat may push a pre_attack continuation
+        # when an OnAttack trigger needs a choice, inserting it at the current
+        # stack depth — so the Ambush decision must already be gone, or the pop
+        # would discard the OnAttack-trigger/pre_attack decision instead and leave
+        # the Ambush decision live to be re-used (a second free attack with the
+        # same unit, double-defeating its targets).  Mirrors how AttackWithUnit
+        # consumes its granted_attack decision first and then honours
+        # needs_continuation.
+        s.pending_decisions.pop()
+        s.event_log.append(DecisionResolved(
+            deciding_player_id=top.deciding_player_id,
+            kind="ambush",
+            choice=f"attack {self.target_id}",
+        ))
+
+        # Enfys Nest SHD_219: "While a friendly unit (including this one) is attacking
+        # using Ambush, the defender gets -3/-0."  This is the sole path an Ambush
+        # attack is declared, so the debuff is applied here as a this_attack stats
+        # modifier on the defender (expiring with the attack, like Jyn Erso SOR_18's
+        # granted-attack defender debuff).
+        _apply_ambush_defender_debuff(s, deciding_ps, attacker, defender)
+        # "While attacking using Ambush, this unit gets +2/+0" (Heroic Purrgil
+        # ASH_207) — the attacker-side mirror, read off the attacker alone.
+        _apply_ambush_attacker_bonus(s, attacker)
+
+        # Resolve the attack (unit vs unit only — never base for Ambush)
+        needs_continuation = _resolve_unit_combat(
+            s, deciding_ps, enemy_ps, attacker, defender)
+        if not needs_continuation and not s.is_terminal() and not s.pending_decisions:
+            s.active_player_index = top.after_resolve_player_index
+        return s
+
+    def describe(self) -> str:
+        return f"Use Ambush: attack {self.target_id} with {self.attacker_id}"
+
+
+@dataclass
+class DeclineAmbush(Action):
+    """Decline to use an Ambush unit's optional attack."""
+    unit_id: str
+
+    def apply(self, state: GameState) -> GameState:
+        if not state.pending_decisions or state.pending_decisions[-1].kind != "ambush":
+            raise IllegalActionError("No pending Ambush decision")
+        top = state.pending_decisions[-1]
+        if self.unit_id != top.context["unit_id"]:
+            raise IllegalActionError("DeclineAmbush: wrong unit id")
+        s = copy.deepcopy(state)
+        top_d = s.pending_decisions.pop()
+        s.event_log.append(DecisionResolved(
+            deciding_player_id=top_d.deciding_player_id,
+            kind="ambush",
+            choice="decline",
+        ))
+        s.active_player_index = top_d.after_resolve_player_index
+        return s
+
+    def describe(self) -> str:
+        return f"Decline Ambush for {self.unit_id}"
+
+
+# ── apply convenience wrapper ─────────────────────────────────────────────────
+
+def discard_from_deck(s: GameState, ps: PlayerState,
+                      count: int = 1) -> list["CardInstance"]:
+    """"Discard <count> cards from your deck" — the shared self-mill primitive.
+
+    Moves up to ``count`` cards off the top of ``ps``'s deck into ``ps``'s discard
+    pile face up and returns them (fewer than ``count`` on a short deck; an empty
+    deck returns ``[]`` and does nothing — a mill is not the empty-deck DRAW
+    penalty).  Each card is routed through ``note_hand_or_deck_discard``, so the
+    ``cards_discarded_this_phase`` ledger and the ``WhenThisIsDiscarded`` observer
+    drain (That's a Rock LAW_206) both fire for free.
+
+    Several cards spell a deck discard as an ability COST ("Action [Exhaust,
+    discard a card from your deck]" — Sebulba LAW_12): there is no cost spec for it
+    and none is needed, since a mill is always payable (the "deal 2 damage to your
+    base" half-cost convention, Anakin TWI_12) — bundle this call into the payoff's
+    own ``CustomEffect`` so cost and effect stay atomic.  Returning the cards lets a
+    caller inspect what was milled ("If it has the chosen aspect…" — Lando LAW_18).
+    """
+    discarded: list["CardInstance"] = []
+    for _ in range(max(0, int(count))):
+        if not ps.deck:
+            break
+        card = ps.deck.pop(0)
+        card.face_down = False
+        card.zone = Zone.DISCARD
+        ps.discard.append(card)
+        note_hand_or_deck_discard(s, card, from_deck=True)
+        discarded.append(card)
+    return discarded
+
+
+# ── Ambush ────────────────────────────────────────────────────────────
+
+def _ambush_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    deciding_ps = state.player_by_id(top.deciding_player_id)
+    unit_id = top.context["unit_id"]
+    unit_ci = _find_in_arenas(deciding_ps, unit_id)
+    acts: list[Action] = []
+    if unit_ci is not None:
+        owner_idx = state.player_index(top.deciding_player_id)
+        enemy_ps = state.players[1 - owner_idx]
+        enemy_arena = (
+            enemy_ps.ground_arena
+            if unit_ci.zone.name == "GROUND_ARENA"
+            else enemy_ps.space_arena
+        )
+        saboteur = has_keyword(state, unit_ci, Keyword.SABOTEUR)
+        # Hidden units can't be attacked the phase they were played (Ambush is
+        # an attack), so drop them from the eligible defenders before Sentinel.
+        attackable = [u for u in enemy_arena
+                      if not _is_hidden_from_attack(state, u)
+                      and not _cannot_be_attacked(state, u)]
+        sentinels = [u for u in attackable if has_keyword(state, u, Keyword.SENTINEL)]
+        if saboteur or not sentinels:
+            targets = attackable
+        else:
+            targets = sentinels
+        for tgt in targets:
+            acts.append(UseAmbush(unit_id, tgt.instance_id))
+    acts.append(DeclineAmbush(top.context["unit_id"]))
+    return acts
+
+
+# ── Interactive combat-damage prevention (Queen Amidala SEC_101) ────────────────
+
+def _combat_damage_prevention_actions(state: GameState, top) -> list["Action"]:
+    """Legal actions for the top combat_damage_prevention decision (never empty —
+    the decision is only pushed with ≥1 eligible sacrifice, and DeclineCombatPrevention
+    is always offered for the "you may")."""
+    ctx = top.context
+    res = state.find_instance(ctx["protect_id"])
+    acts: list[Action] = []
+    if res is not None:
+        acts = [ChoosePreventionSacrifice(t)
+                for t in _prevention_sacrifice_targets(state, res[1])]
+    acts.append(DeclineCombatPrevention())
+    return acts
+
+
+def _resolve_combat_damage_prevention(
+    s: GameState, top, sacrifice_id: Optional[str]
+) -> GameState:
+    """Pop the decision; if a sacrifice was chosen, defeat it (AFTER popping — the
+    "pop, then act" gotcha so its WhenDefeated lands on a clean stack) and arm the
+    protected unit's one-shot ``prevent_next_combat_damage`` flag.  Hand the turn to
+    the next pending decision's decider (the pre_attack continuation always remains
+    beneath, so ContinueAttack resumes combat)."""
+    ctx = top.context
+    s.pending_decisions.pop()
+    prevented = False
+    if sacrifice_id is not None:
+        from swu.abilities.resolver import _apply_defeat_unit
+        protect_res = s.find_instance(ctx["protect_id"])
+        _apply_defeat_unit(s, sacrifice_id)
+        protect_res = s.find_instance(ctx["protect_id"])
+        if protect_res is not None:
+            protect_res[1].prevent_next_combat_damage = True
+            prevented = True
+    s.event_log.append(DecisionResolved(
+        deciding_player_id=top.deciding_player_id,
+        kind="combat_damage_prevention",
+        choice=(f"defeated {sacrifice_id} to prevent combat damage"
+                if prevented else "declined"),
+    ))
+    if s.pending_decisions:
+        s.active_player_index = s.player_index(s.pending_decisions[-1].deciding_player_id)
+    elif not s.is_terminal():
+        s.active_player_index = top.after_resolve_player_index
+    return s
+
+
+# ── Interactive ABILITY-damage prevention (Queen Amidala SEC_101 — the DAMAGE half's
+
+def _try_defer_ability_damage_prevention(
+    state: GameState, ci: CardInstance, ps: PlayerState, amount: int,
+    source_name: Optional[str], dealer_id: Optional[str], source_id: Optional[str],
+) -> bool:
+    """If ``ci`` (a unit about to take >0 ability damage) carries the
+    InteractiveDamagePrevention marker, is unshielded (a shield would absorb the hit —
+    the same simplification as the combat half), and has ≥1 eligible trait-sharing
+    friendly to sacrifice, DEFER the damage: push an ``ability_damage_prevention``
+    decision to ``ci``'s controller and return True (the caller returns without
+    dealing).  Otherwise return False (deal normally)."""
+    if not _has_interactive_damage_prevention(state, ci):
+        return False
+    if shields_on(ci) > 0:
+        return False
+    if not _prevention_sacrifice_targets(state, ci):
+        return False
+    state.pending_decisions.append(PendingDecision(
+        deciding_player_id=ps.player_id,
+        kind="ability_damage_prevention",
+        context={
+            "protect_id": ci.instance_id,
+            "controller_id": ps.player_id,
+            "amount": int(amount),
+            "source_name": source_name,
+            "dealer_id": dealer_id,
+            "source_id": source_id,
+        },
+        after_resolve_player_index=state.active_player_index,
+    ))
+    state.event_log.append(DecisionPushed(
+        deciding_player_id=ps.player_id, kind="ability_damage_prevention"))
+    state.active_player_index = state.player_index(ps.player_id)
+    return True
+
+
+def _resolve_ability_damage_prevention(
+    s: GameState, top, sacrifice_id: Optional[str]
+) -> GameState:
+    """Pop the ability_damage_prevention decision.  On a sacrifice: defeat the chosen
+    friendly (AFTER popping — the "pop, then act" gotcha so its WhenDefeated lands on a
+    clean stack) and DROP the deferred damage (prevented).  On decline: re-apply the
+    deferred ability damage now (``_skip_prevention=True`` so it does not re-defer).
+    Hand control to the next pending decision's decider, else the captured
+    after_resolve_player_index."""
+    ctx = top.context
+    s.pending_decisions.pop()
+    if sacrifice_id is not None:
+        from swu.abilities.resolver import _apply_defeat_unit
+        _apply_defeat_unit(s, sacrifice_id)
+        protect_res = s.find_instance(ctx["protect_id"])
+        if protect_res is not None:
+            s.event_log.append(DamagePrevented(
+                unit_instance_id=ctx["protect_id"],
+                unit_name=protect_res[1].card_def.display_name,
+                owner_id=ctx["controller_id"],
+                amount=int(ctx["amount"]),
+            ))
+        choice = f"defeated {sacrifice_id} to prevent {ctx['amount']} damage"
+    else:
+        from swu.abilities.resolver import _apply_deal_damage
+        _apply_deal_damage(
+            s, ctx["protect_id"], int(ctx["amount"]), ctx.get("source_name"),
+            dealer_id=ctx.get("dealer_id"), source_id=ctx.get("source_id"),
+            _skip_prevention=True)
+        choice = "declined"
+    s.event_log.append(DecisionResolved(
+        deciding_player_id=top.deciding_player_id,
+        kind="ability_damage_prevention", choice=choice))
+    if s.pending_decisions:
+        s.active_player_index = s.player_index(s.pending_decisions[-1].deciding_player_id)
+    elif not s.is_terminal():
+        s.active_player_index = top.after_resolve_player_index
+    return s
+
+
+_PREVENTION_KINDS = ("combat_damage_prevention", "ability_damage_prevention")
+
+
+@dataclass
+class ChoosePreventionSacrifice(Action):
+    """Defeat the chosen friendly trait-sharing unit to prevent the damage that would
+    be dealt to the protected unit (Queen Amidala SEC_101 — combat or ability half)."""
+    target_id: str
+
+    def apply(self, state: GameState) -> GameState:
+        if (not state.pending_decisions
+                or state.pending_decisions[-1].kind not in _PREVENTION_KINDS):
+            raise IllegalActionError("No damage-prevention decision pending")
+        s = copy.deepcopy(state)
+        top = s.pending_decisions[-1]
+        res = s.find_instance(top.context["protect_id"])
+        legal = _prevention_sacrifice_targets(s, res[1]) if res is not None else []
+        if self.target_id not in legal:
+            raise IllegalActionError("Illegal prevention sacrifice target")
+        if top.kind == "ability_damage_prevention":
+            return _resolve_ability_damage_prevention(s, top, self.target_id)
+        return _resolve_combat_damage_prevention(s, top, self.target_id)
+
+    def describe(self) -> str:
+        return f"Defeat {self.target_id} to prevent damage"
+
+
+@dataclass
+class DeclineCombatPrevention(Action):
+    """Decline the interactive damage prevention (the "you may") — combat or ability."""
+
+    def apply(self, state: GameState) -> GameState:
+        if (not state.pending_decisions
+                or state.pending_decisions[-1].kind not in _PREVENTION_KINDS):
+            raise IllegalActionError("No damage-prevention decision pending")
+        s = copy.deepcopy(state)
+        top = s.pending_decisions[-1]
+        if top.kind == "ability_damage_prevention":
+            return _resolve_ability_damage_prevention(s, top, None)
+        return _resolve_combat_damage_prevention(s, top, None)
+
+    def describe(self) -> str:
+        return "Decline damage prevention"
+
+
+# ── Decision-kind registration ─────────────────────────────────────────────
+# Ambush and damage prevention are combat's own decisions, so their rows live with
+# their handlers rather than in `_legacy`. `ability_damage_prevention` shares
+# `_combat_damage_prevention_actions` with `combat_damage_prevention` -- it was the
+# single if-chain arm that tested two kinds, and the two are one handler here too.
+register_decisions({
+    "ambush":                        _ambush_actions,
+    "combat_damage_prevention":      _combat_damage_prevention_actions,
+    "ability_damage_prevention":     _combat_damage_prevention_actions,
+})
