@@ -90,6 +90,7 @@ LAYERS = [
     "tokens",
     "sacrifice",
     "discard",
+    "reveal",
     "_legacy",
     "api",
 ]
