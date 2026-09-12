@@ -89,6 +89,7 @@ LAYERS = [
     "deck",
     "tokens",
     "sacrifice",
+    "discard",
     "_legacy",
     "api",
 ]
