@@ -73,6 +73,7 @@ LAYERS = [
     # for `push_*` is needed.
     "targeting",
     "upgrades",
+    "modal",
     "_legacy",
     "api",
 ]
