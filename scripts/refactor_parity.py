@@ -339,14 +339,23 @@ def _registrations() -> tuple[dict[str, str], dict[str, ast.FunctionDef], list[s
     return table, handlers, problems
 
 
+# Waiver key prefix for this gate. A handler body will eventually need a legitimate
+# edit — this gate outlives the refactor, so without an escape hatch the only way
+# past it would be to stop running it. Waivers share the main file and the same
+# MAX_WAIVERS budget, so they stay visible and stay countable.
+ARM_WAIVER_PREFIX = "dispatch-arm:"
+
+
 def decision_arms(ref: str, quiet: bool) -> int:
     arms, duplicated, fell_through = _baseline_arms(ref)
     table, handlers, problems = _registrations()
+    waivers = load_waivers()
 
     if not table:
         sys.exit("no register_decisions({...}) block found — nothing to check")
 
     delegated, inlined, mismatched, unregistered, extra = [], [], [], [], []
+    waived: list[str] = []
 
     for kind, arm in sorted(arms.items()):
         target = table.get(kind)
@@ -389,6 +398,23 @@ def decision_arms(ref: str, quiet: bool) -> int:
 
     extra = sorted(set(table) - set(arms))
 
+    # Apply waivers last, so a waiver for an arm that in fact still matches is
+    # reported as stale rather than sitting there forever implying a change.
+    stale = []
+    kept = []
+    for entry in mismatched:
+        kind = entry.split(":", 1)[0]
+        reason = waivers.get(f"{ARM_WAIVER_PREFIX}{kind}")
+        (waived if reason else kept).append(
+            f"{kind} — {reason}" if reason else entry)
+    mismatched = kept
+    matched_kinds = set(delegated) | set(inlined)
+    stale = sorted(
+        key for key in waivers
+        if key.startswith(ARM_WAIVER_PREFIX)
+        and key[len(ARM_WAIVER_PREFIX):] in matched_kinds
+    )
+
     if not quiet:
         print(f"baseline {ref}:{BASELINE_PATH} — {DISPATCH_FUNC} handled "
               f"{len(arms)} decision kinds")
@@ -423,13 +449,21 @@ def decision_arms(ref: str, quiet: bool) -> int:
     report("KINDS HANDLED TWICE in the baseline", duplicated,
            "first-match-wins was load-bearing; a table is not equivalent — stop")
     report("REGISTRATION PROBLEMS", problems)
+    report("STALE WAIVERS — waived but the body now matches the baseline arm", stale,
+           "remove these from the waiver file")
+
+    if waived and not quiet:
+        print(f"\nWAIVED ({len(waived)}):")
+        for item in waived:
+            print(f"  {item}")
 
     print()
     if count:
         print(f"DISPATCH PARITY FAILED — {count} problem(s)")
         return 1
-    print(f"DISPATCH PARITY OK — all {len(arms)} decision kinds route to the same "
-          f"code as the baseline chain")
+    print(f"DISPATCH PARITY OK — {len(matched_kinds)} of {len(arms)} decision kinds "
+          f"route to code proved identical to the baseline chain"
+          + (f", {len(waived)} waived" if waived else ""))
     return 0
 
 

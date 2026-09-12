@@ -8214,7 +8214,6 @@ def _pre_attack_actions(state: GameState, top: PendingDecision) -> list[Action]:
 # ── Play a unit from hand as an ability (Admiral Ozzel, SOR_129) ───────
 def _play_from_hand_actions(state: GameState, top: PendingDecision) -> list[Action]:
     deciding_ps = state.player_by_id(top.deciding_player_id)
-    cost_reduction = top.context.get("cost_reduction", 0)  # noqa: F841
     # Mandatory if able: only affordable matching units are offered (the
     # decision is pushed only when at least one such unit exists, and the
     # state is unchanged since, so this list is non-empty).  ``up_to`` adds
