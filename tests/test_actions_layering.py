@@ -86,6 +86,7 @@ LAYERS = [
     # records the measurement, so the seam does not get re-litigated.
     "hand",
     "capture",
+    "deck",
     "_legacy",
     "api",
 ]
