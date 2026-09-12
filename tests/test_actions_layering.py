@@ -79,6 +79,12 @@ LAYERS = [
     # modules, one word, and the distinction is the point: this one never deals damage.
     "distribute",
     "scheduling",
+    # `hand` covers both playing from an unusual source AND the opponent-facing
+    # decisions (say_no, opponent_ready, look-at-hand). Splitting those two apart was
+    # tried and measured: they are mutually recursive, because SayNo.apply plays a card
+    # from hand while PlayFromHand pushes an opponent-ready decision. Its docstring
+    # records the measurement, so the seam does not get re-litigated.
+    "hand",
     "_legacy",
     "api",
 ]
