@@ -78,6 +78,7 @@ LAYERS = [
     # kernel's `damage` module, far below, is what actually happens when it lands. Two
     # modules, one word, and the distinction is the point: this one never deals damage.
     "distribute",
+    "scheduling",
     "_legacy",
     "api",
 ]
