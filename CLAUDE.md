@@ -253,7 +253,7 @@ helper + `Action` subclasses. Push the decision **only when it can do something*
   damage currently on the source unit ("for each damage on this unit", Krrsantan SHD_139 On Attack).
   **`Condition.ENEMY_CONTROLS_BOUNTY_UNIT`** — an enemy unit carries a Bounty (reuses
   `resolver._unit_has_bounty`); gates Krrsantan's "if an enemy unit has a Bounty, you may ready this
-  unit". **CardPlayed observer fire threads `event_ctx["played_card_id"]`** (actions.py PlayCard
+  unit". **CardPlayed observer fire threads `event_ctx["played_card_id"]`** (`actions/api.py`, PlayCard
   observer fire) so a "When you play an upgrade …: deal 1 to THAT unit" observer can locate the
   played upgrade's host by scanning in-play units (Dengar SHD_133); purely additive (existing
   WhenYouPlayCard observers ignore the key).
@@ -3819,7 +3819,7 @@ upgrade-trigger bug):
 - **Phase-scoped GameMemory** — `units_played_this_phase` /
   `villainy_played_this_phase` must be empty immediately after a round rollover.
   Checked at the round boundary, NOT "outside ACTION": `clear_phase()` runs at
-  the REGROUP→ACTION rollover (`actions.py:1473`), so the fields legitimately
+  the REGROUP→ACTION rollover (`actions/turn.py`, `_regroup_rollover`), so the fields legitimately
   persist through REGROUP and are only read during ACTION.
 - **Upgrade zone == host zone** — every attached upgrade carries its host's zone tag.
 - **Pass consistency** — `passed_players` holds valid indices; no settled ACTION
@@ -4005,7 +4005,7 @@ below. New decision kinds must be added to `_KNOWN_DECISION_KINDS` in
 ### Play-a-unit-from-hand-as-an-ability (Admiral Ozzel, SOR_129)
 
 `push_play_from_hand(s, source_ci, *, trait, enters_ready, then_opponents_ready)`
-(actions.py) is the seam for "Play a unit from your hand as part of an ability".
+(`actions/hand.py`) is the seam for "Play a unit from your hand as part of an ability".
 A card's `CustomEffect` calls it; it pushes a `"play_from_hand"` decision listing
 a `PlayFromHand` per affordable matching hand unit (mandatory-if-able — no
 decline; the decision is only pushed when ≥1 such unit exists). `PlayFromHand`
@@ -4053,7 +4053,7 @@ never read `card_def.power` directly in combat.
 
 ### Attack pipeline (CR steps)
 
-`_resolve_unit_combat` in `actions.py` follows these CR steps:
+`_resolve_unit_combat` in `actions/combat.py` follows these CR steps:
 1. Declare + exhaust attacker
 2. On-attack triggers: Restore healing; Saboteur strips defender's shields
 3. Compute powers: `compute_power(is_attacking=True)` vs `compute_power(is_attacking=False)`
@@ -4085,11 +4085,24 @@ holds during the decision. `all_instances_for_player()` also counts it.
 
 ### Adding a new action type (e.g. UseLeaderAbility)
 
-1. Define the `Action` subclass in `actions.py`.
-2. Add it to `legal_actions()` under the appropriate phase guard.
+1. Define the `Action` subclass in the `engine/actions/` module for its mechanic —
+   **beside the handler that emits it.** Do NOT place it by what the code is
+   "about": the old section banners named the motivating card, and following them
+   scatters a family across modules. If nothing emits it yet, it belongs with the
+   `legal_actions` arm that will.
+2. Add it to `legal_actions()` (in `api.py`) under the appropriate phase guard.
 3. Implement `apply()` — always `deepcopy(state)` first, then mutate.
 4. Emit a typed `GameEvent` and call `get_bus().fire(state, event)`.
-5. Write tests.
+5. Add the name to `actions/__init__.py`'s `__all__` — the facade is explicit, and
+   `tests/test_actions_contract.py` pins the surface.
+6. If it introduces a decision kind, add the row to the `register_decisions({...})`
+   call **in the same module as its handler**. It must be a module-scope call, not
+   a decorator, and a row separated from its handler fails SILENTLY because
+   `_registrations()` reads the whole package.
+7. Respect the layering (`tests/test_actions_layering.py`): import only from
+   modules lower in the stack. If you need something from a module above, the
+   helper belongs lower down, not in a function-local import.
+8. Write tests.
 
 ### Adding a Phase 2 zone (e.g. capture pile, bounty)
 

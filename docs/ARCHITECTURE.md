@@ -162,7 +162,8 @@ emits — the event log doubles as the animation script.
 Roughly in dependency order:
 
 1. `engine/state.py` — the state model and serialisation
-2. `engine/actions.py` — the contract and every action
+2. `engine/actions/` — the contract and every action (`base.py` for the `Action`
+   ABC, `api.py` for `legal_actions`/`apply`, then one module per mechanic)
 3. `engine/decisions.py` — mid-resolution player input
 4. `abilities/registry.py` — the card DSL
 5. `abilities/resolver.py` — how specs become state changes
@@ -174,11 +175,14 @@ Roughly in dependency order:
 
 ### A note on file size
 
-`engine/actions.py` is around 25,000 lines. It grew by accretion but not
-carelessly: it is divided into ~96 labelled sections, each named for the card or
-mechanic that motivated it, following a consistent `push_* / _finish_* / _*_actions`
-triplet per decision kind. Splitting it is a known, deliberate piece of deferred
-work — the seams are already marked.
+`engine/actions.py` was a single ~25,000-line module, grown a labelled section at
+a time across the encoding campaign. It is now the layered 24-module package
+described in the [README](../README.md#engineactions--layered-not-one-file), split
+as provable text motion rather than as a rewrite. The `push_* / _finish_* /
+_*_actions` triplet per decision kind survived the move unchanged; what changed is
+that each triplet now lives in the module for its mechanic, and the decision kinds
+are claimed from a dispatch table instead of resolved by a 601-line `if
+top.kind == "…"` chain.
 
 The per-set `cards/*/abilities.py` files are large for a different and less
 interesting reason: they are data.
@@ -190,9 +194,14 @@ interesting reason: they are data.
 `keyword_triggers.py` registered on `UnitEntersPlay`; for attack-time effects add
 it to the right CR step in `_resolve_unit_combat`.
 
-**An action type:** define the `Action` subclass in `actions.py`; offer it from
-`legal_actions()` under the right phase guard; implement `apply()` (deepcopy
-first); emit a typed `GameEvent` through the bus; test it.
+**An action type:** define the `Action` subclass in the `engine/actions/` module
+for its mechanic — **with the handler that emits it**, not in a module named after
+the card that motivated it; offer it from `legal_actions()` under the right phase
+guard; implement `apply()` (deepcopy first); emit a typed `GameEvent` through the
+bus; add the name to the facade's `__all__`; test it. If it introduces a decision
+kind, register that kind with `register_decisions({...})` in the same module — a
+module-scope call, and the row must live beside its handler, because a row naming
+a handler that has moved away fails silently.
 
 **A zone:** add it to the `Zone` enum, add the field to `PlayerState`, and update
 `all_instances()`, `all_instances_for_player()` and the JSON helpers together —

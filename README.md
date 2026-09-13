@@ -19,7 +19,7 @@ front end you can actually play in a browser.
 | | |
 |---|---|
 | **Card coverage** | **2,636 / 2,636 playable (100%)** — 2,176 registered in the ability framework, the rest fully handled by the keyword and vanilla layers. **0 escape hatches**, 0 keyword-deferred. Measured by `scripts/audit_coverage.py`, written to [`docs/coverage_report.md`](docs/coverage_report.md). |
-| **Tests** | 4,427 test functions across 74 files → **5,638 passing, 6 skipped** with parametrisation, plus 138 front-end tests and 2 Playwright e2e specs. |
+| **Tests** | 4,442 test functions across 75 files → **5,655 passing, 6 skipped** with parametrisation, plus 138 front-end tests and 2 Playwright e2e specs. |
 | **Engine** | ~101k lines of Python across `src/swu/`; ~8k lines of TypeScript in `web/src/`. |
 | **Opponents** | A transparent weighted-heuristic bot, an LLM-backed bot (Claude) that degrades visibly to the heuristic, and random/aggro/chaos bots for soak testing. |
 
@@ -115,10 +115,48 @@ one contract.
   redacted view, shows the legal actions the backend assigned, and animates the
   event stream.
 
-Two files look alarming and are deliberate: `engine/actions.py` is one large
-module (~25k lines) organised into ~96 labelled sections, each naming the card
-that motivated it; and `benchmarks/heuristic_baseline.py` is a frozen copy of the
-heuristic bot, kept so `scripts/bot_arena.py` can A/B against a fixed reference.
+One file looks alarming and is deliberate: `benchmarks/heuristic_baseline.py` is
+a frozen copy of the heuristic bot, kept so `scripts/bot_arena.py` can A/B
+against a fixed reference.
+
+### `engine/actions/` — layered, not one file
+
+For most of this project's life `engine/actions.py` was a single 24,788-line
+module in 96 labelled sections. It is now a 24-module package. The split was done
+as **pure text motion and proved as such**: all 1,098 definitions were checked
+AST-identical to the pre-split file by `scripts/refactor_parity.py`, which
+compares `{qualname: ast.dump(node)}` either side of the move, so the diff needed
+no behavioural review. `swu.engine.actions` stays importable and still exposes
+all **638** names, so none of the ~3,500 call sites changed.
+
+A module may import only from modules **above** it in this table. That is
+enforced rather than documented — `tests/test_actions_layering.py` parses the
+package with `ast` and asserts on the edge set, because a layering with no test
+decays back into a cycle one convenient import at a time.
+
+| Layer | Modules | Lines |
+|---|---|---|
+| **Floor** — imports nothing in the package | `base` (the `Action` ABC) · `dispatch` (the decision-kind table) | 45 · 94 |
+| **Kernel** — the cross-cutting primitives | `stats` · `costs` · `damage` · `zones` · `flow` · `shared` | 750 · 1,167 · 606 · 1,317 · 56 · 687 |
+| **Pipelines** | `combat` · `observers` · `turn` | 3,288 · 660 · 532 |
+| **Decision families** — one per mechanic, each claiming its own decision kinds from `dispatch` | `targeting` `upgrades` `modal` `distribute` `scheduling` `hand` `capture` `deck` `tokens` `sacrifice` `discard` `reveal` | 607–1,815 |
+| **Top** | `api` (`legal_actions` / `apply`) · `__init__` (the facade, with an explicit `__all__`) | 1,933 · 1,357 |
+
+Three details are worth knowing before reading it. `damage` sits *below* `zones`,
+because putting a unit into play and drawing cards can both deal damage — the
+placements came from the measured dependency graph, not from the names. `combat`
+at 3,288 lines is the one module still over the 2,700-line target that the split
+aimed at. And the assignment rule throughout was **dependency closure, not
+section banner**: the old banners named the card that motivated the code rather
+than what the code does, so following them would have scattered the kernel.
+
+The package no longer imports the ability layer at module scope, which is what
+the old file's ~319 function-local imports existed to avoid. The remaining lazy
+imports are the genuinely cyclic ones and are pinned as such by the same test:
+`swu/cards/__init__.py` registers every set's abilities on import, and
+`engine/state.py` needs `cards.models` at runtime, so the card modules and
+`abilities.resolver` must keep reaching into `actions` from inside their
+functions.
 
 Deeper notes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
 [`docs/ability_framework.md`](docs/ability_framework.md) ·
@@ -144,6 +182,18 @@ Deeper notes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
 - **A resumable data pipeline** that samples the API schema before committing to
   a 90-minute harvest, and gates the database build on a manifest proving the
   harvest completed.
+- **A refactor gate that proves rather than samples.** Decomposing the 24,788-line
+  `actions.py` was verified by `scripts/refactor_parity.py`, which compares
+  `{qualname: ast.dump(node)}` between the pre-split file read out of git and the
+  new package: a pure move gives exact equality, while any edit to a body shows up
+  as a mismatch. It carries a `--self-test` and a short waiver list, and a second
+  mode (`--decision-arms`) proves 74 of the 75 decision kinds still route to code
+  identical to the 601-line `if/elif` chain the dispatch table replaced — the one
+  waiver is a dead store the split exposed, recorded with its reason rather than
+  silenced. The seeded
+  trace oracle alongside it (`scripts/trace_oracle.py`) is deliberately documented
+  as **sampling** — it missed a `max(0,` → `max(1,` perturbation that AST parity
+  pinpointed, which is the argument for having both.
 
 ## Tests
 
