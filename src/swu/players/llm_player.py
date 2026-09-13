@@ -13,7 +13,8 @@ Design principles (from the project owner):
 1.  **No silent failures.**  Every way the model call can go wrong — API error,
     timeout, ``max_tokens``/truncation, a malformed/parse-less response, or an
     ``action_id`` that is not legal even after one corrective retry — is caught,
-    logged with detail to ``data/llm.log``, and surfaced as a *visible* entry in
+    logged with detail to ``data/llm.log`` (when a ``data/`` directory exists —
+    the logger never creates one), and surfaced as a *visible* entry in
     the in-game event log (the heuristic quietly takes over for that one
     decision).  We never let a truncated response masquerade as a clean answer.
 2.  **Cost & latency matter.**  We default to the smallest fast model
@@ -114,17 +115,31 @@ def _build_logger() -> logging.Logger:
     log.setLevel(logging.DEBUG)
     log.propagate = False
     if not any(isinstance(h, RotatingFileHandler) for h in log.handlers):
-        try:
-            path = _data_dir() / "llm.log"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            handler = RotatingFileHandler(
-                path, maxBytes=1_000_000, backupCount=3, encoding="utf-8"
-            )
-            handler.setFormatter(
-                logging.Formatter("%(asctime)s %(levelname)s %(message)s")
-            )
-            log.addHandler(handler)
-        except OSError:  # pragma: no cover - never let logging setup break play
+        # Attach the file handler only if `data/` is ALREADY there -- deliberately
+        # never mkdir it. This runs at import time (see `_LOG` below), so creating
+        # the directory here would manufacture a `data/` in any tree that merely
+        # imports this package, a fresh clone that has never built the corpus
+        # included. That is worse than untidy: the ABSENCE of `data/` is the signal
+        # that no corpus exists, and once the directory is there a bare
+        # `sqlite3.connect` can silently leave a 0-byte `data/swu.db` that then wins
+        # over the test fixture and turns the whole suite into `no such table:
+        # cards`. Anyone actually playing has built the corpus and therefore has a
+        # `data/`, so no log line is lost by waiting for it.
+        directory = _data_dir()
+        if directory.is_dir():
+            try:
+                # delay=True so an import alone does not create an empty log file.
+                handler = RotatingFileHandler(
+                    directory / "llm.log", maxBytes=1_000_000, backupCount=3,
+                    encoding="utf-8", delay=True,
+                )
+                handler.setFormatter(
+                    logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+                )
+                log.addHandler(handler)
+            except OSError:  # pragma: no cover - never let logging setup break play
+                log.addHandler(logging.NullHandler())
+        else:
             log.addHandler(logging.NullHandler())
     return log
 
