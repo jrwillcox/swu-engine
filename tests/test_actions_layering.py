@@ -198,6 +198,45 @@ def test_the_intra_package_import_graph_is_acyclic():
     assert not cycle, "import cycle inside the actions package: " + " -> ".join(cycle)
 
 
+ENGINE = Path(__file__).resolve().parent.parent / "src" / "swu" / "engine"
+
+
+def test_no_module_scope_cycle_between_actions_and_its_engine_peers():
+    """An engine peer may import ``actions`` at module scope, or be imported by it —
+    never both.
+
+    This is the Phase B invariant, and it is stated as a rule rather than a list so
+    a future import in *either* direction is caught. Measured at the time of
+    writing: ``views``, ``invariants`` and ``keyword_triggers`` import the actions
+    package at module scope and are not imported by it, so their edges are
+    one-directional and safe. ``keywords`` and ``tokens`` are the opposite case —
+    the actions package imports *them* at module scope (``stats``, ``combat``,
+    ``damage``, ``zones``, …), so they must keep reaching back into it from inside
+    their functions. Promoting one of those two is the specific mistake this guards.
+    """
+    # direction 1: which engine peers does the actions package import at module scope?
+    imported_by_actions = set()
+    for tree in _modules().values():
+        for m in _module_scope_imports(tree):
+            if m.startswith("swu.engine.") and not m.startswith("swu.engine.actions"):
+                imported_by_actions.add(m[len("swu.engine."):].split(".")[0])
+
+    # direction 2: which engine peers import the actions package at module scope?
+    imports_actions = set()
+    for path in sorted(ENGINE.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        if any(m.startswith("swu.engine.actions") for m in _module_scope_imports(tree)):
+            imports_actions.add(path.stem)
+
+    both = sorted(imported_by_actions & imports_actions)
+    assert not both, (
+        "module-scope import cycle between the actions package and: "
+        + ", ".join(both)
+        + "\nThe actions package imports these at module scope, so they must import "
+          "it inside the functions that need it, as keywords.py and tokens.py do."
+    )
+
+
 @pytest.mark.parametrize("module", ["base", "dispatch", "stats"])
 def test_the_bottom_modules_depend_on_nothing_in_the_package(module):
     """``base`` and ``stats`` are the floor; 206 definitions rest on ``base`` alone.

@@ -34,6 +34,11 @@ if TYPE_CHECKING:
 
 from swu.engine.triggers import get_bus
 from swu.engine.keywords import Keyword, has_keyword
+# The attack pipeline, at module scope. Nothing under ``swu.engine.actions``
+# imports this module, so the edge is one-directional and no cycle exists —
+# unlike ``keywords`` and ``tokens``, which the actions package *does* import at
+# module scope and which therefore still reach back into it lazily.
+from swu.engine.actions.combat import _filter_granted_attacks, push_granted_attack
 
 
 # ── Shielded ──────────────────────────────────────────────────────────────────
@@ -130,7 +135,6 @@ def _push_support_attack(state: "GameState", source_ci) -> "GameState":
     function ``legal_actions`` will use to enumerate the options.
     """
     from swu.engine.state import Phase
-    from swu.engine.actions import _filter_granted_attacks, push_granted_attack
     # An attack can only be declared in the action phase; a Support unit that
     # entered play in any other phase (a regroup-time effect) simply does nothing.
     if state.phase != Phase.ACTION or state.is_terminal():

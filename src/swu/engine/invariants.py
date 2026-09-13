@@ -42,6 +42,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from swu.engine.state import GameState
 
+# The oracle sits above the whole engine — nothing under ``swu.engine.actions``
+# imports this module — so it may depend on both the bottom of that package
+# (``stats``) and the top of it (``api.legal_actions``) at module scope.
+from swu.engine.actions.stats import compute_hp
+from swu.engine.actions.api import legal_actions
+
 _KNOWN_DECISION_KINDS = frozenset({
     "ambush", "exploit", "test",
     "trigger_option", "resolve_effects", "use_ability", "pre_attack",
@@ -172,7 +178,6 @@ def _check_damage(state: "GameState", ctx: CheckContext) -> None:
     # Use compute_hp() not ci.effective_hp() — the latter ignores ConstantAbility
     # HP bonuses and Modifier records, which can diverge from the engine's view.
     if not state.is_terminal():
-        from swu.engine.actions import compute_hp
         for ps in state.players:
             for ci in ps.ground_arena + ps.space_arena:
                 if ci.damage >= compute_hp(state, ci):
@@ -287,7 +292,6 @@ def _check_game_fields(state: "GameState", ctx: CheckContext) -> None:
 def _check_legal_actions(state: "GameState", ctx: CheckContext) -> None:
     if state.is_terminal():
         return
-    from swu.engine.actions import legal_actions
     acts = legal_actions(state)
     assert acts, (
         f"[invariant] legal_actions() empty at action {ctx.action_count}, "
@@ -500,7 +504,6 @@ def _check_terminal_quiescence(state: "GameState", ctx: CheckContext) -> None:
     """
     if not state.is_terminal():
         return
-    from swu.engine.actions import legal_actions
     acts = legal_actions(state)
     assert not acts, (
         f"[invariant] {len(acts)} legal action(s) offered in a terminal state "

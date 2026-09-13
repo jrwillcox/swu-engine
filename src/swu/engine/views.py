@@ -20,6 +20,14 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from swu.engine.state import GameState, CardInstance, PlayerState
 
+# Effective stats and cost arithmetic, at module scope. A view is *above* the
+# actions package — nothing under ``swu.engine.actions`` imports this module — so
+# these edges are one-directional and cannot re-form the cycle this refactor
+# broke. ``keywords`` is still imported inside the function below, because the
+# actions package imports *it* at module scope.
+from swu.engine.actions.stats import compute_power, compute_hp
+from swu.engine.actions.costs import _aspect_penalty, _smuggle_cost_parts
+
 
 @dataclass
 class CardView:
@@ -260,7 +268,6 @@ def _effective_stats_and_keywords(gs, ci, grantable=None) -> tuple:
 
     Returns ``(power, hp, keyword_names, numeric_keyword_values)``.
     """
-    from swu.engine.actions import compute_power, compute_hp
     from swu.engine.keywords import Keyword, has_keyword, keyword_value
     try:
         power = compute_power(gs, ci)
@@ -349,7 +356,6 @@ def _zone_view(gs: "GameState", ps: "PlayerState", viewer_id: str,
     # Aspect-penalty surcharge is only meaningful (and only shown) for the
     # viewer's own hand — the cards they're deciding whether to afford.
     if is_self:
-        from swu.engine.actions import _aspect_penalty
         hand_views = [
             _card_view(
                 c, True,
@@ -367,7 +373,6 @@ def _zone_view(gs: "GameState", ps: "PlayerState", viewer_id: str,
     # (base + aspect penalty) so the UI can show a "<base> +<penalty>" badge on a
     # smuggle-able resource.  Opponent resources stay hidden stubs with no cost.
     if is_self:
-        from swu.engine.actions import _smuggle_cost_parts
         resource_views = []
         for r in ps.resources:
             parts = _smuggle_cost_parts(gs, r, ps)
