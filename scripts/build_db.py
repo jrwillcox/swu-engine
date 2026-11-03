@@ -277,7 +277,7 @@ def _build_variants(con) -> int:
 
     # Resolve a variant to its base card id.  Prefer the direct variantOf.id link
     # (a cards.id); fall back to (set_code, card_number) of the base, preferring a
-    # non-token row (a Leader and its Token share a card_number — see docs/encoding_guide.md).
+    # non-token row (a Leader and its Token share a card_number — see docs/dev/encoding_guide.md).
     existing_ids: set[int] = {r[0] for r in con.execute("SELECT id FROM cards")}
     by_set_number: dict[tuple[str, str], tuple[int, bool]] = {}  # key -> (id, is_token)
     for cid, set_code, number, type_name in con.execute(

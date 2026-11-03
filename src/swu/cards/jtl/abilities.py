@@ -157,7 +157,7 @@ def _ahsoka_tano_jtl_201():
 # the source's controller) chooses one target that absorbs all the points, and
 # ``_apply_indirect_damage`` applies it directly (bypassing shields).  The choice
 # always has a legal action because a base is always present, so there is no
-# confirm step.  See docs/history/seams_log.md for the primitive note.
+# confirm step.  See docs/dev/history/seams_log.md for the primitive note.
 
 
 def _boba_fett_noncombat_indirect(state, source_ci, target_id, event_ctx):
@@ -1225,7 +1225,7 @@ def _commandeer_jtl_235():
     ])
 
 
-# ── Reprint-duplicate encodes (Stage 4 of docs/reprint_duplicates_plan.md) ────
+# ── Reprint-duplicate encodes (Stage 4 of docs/dev/plans/reprint_duplicates_plan.md) ────
 
 @card_ability("JTL", "85")
 def _victor_leader():

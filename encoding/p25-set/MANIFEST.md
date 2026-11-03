@@ -2,7 +2,7 @@
 
 Deck readiness: **130/130** cards playable. Encoding groups: **5/5** complete.
 
-Encode one group per session: paste its **group id** into `docs/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py p25-set --group NN`.
+Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py p25-set --group NN`.
 
 ## Groups (in dependency order)
 

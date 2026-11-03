@@ -111,7 +111,7 @@ the fast test suite stays green. No behaviour change yet (empty alias table).
 **Ready-made prompt**
 
 ```
-Read docs/reprint_duplicates_plan.md (Stage 1) and docs/encoding_guide.md.
+Read docs/dev/plans/reprint_duplicates_plan.md (Stage 1) and docs/dev/encoding_guide.md.
 Implement Stage 1 ONLY:
 
 1. Create scripts/find_reprints.py — a re-runnable, offline reprint detector built
@@ -168,7 +168,7 @@ number of aliased members.
 **Ready-made prompt**
 
 ```
-Read docs/reprint_duplicates_plan.md (Stage 2). Stage 1 tooling exists. Do Stage 2:
+Read docs/dev/plans/reprint_duplicates_plan.md (Stage 2). Stage 1 tooling exists. Do Stage 2:
 
 1. Run `python scripts/find_reprints.py` to regenerate docs/reprints_worklist.json.
 2. Populate REPRINT_ALIASES in src/swu/cards/reprints.py with EVERY entry in the
@@ -211,7 +211,7 @@ exceptions are re-bucketed and documented.
 **Ready-made prompt**
 
 ```
-Read docs/reprint_duplicates_plan.md (Stage 3). Verify the already_playable and
+Read docs/dev/plans/reprint_duplicates_plan.md (Stage 3). Verify the already_playable and
 keyword_deferred reprint buckets from docs/reprints_worklist.json need no work:
 
 1. For every member of both buckets, confirm audit_coverage.classify labels it
@@ -232,7 +232,7 @@ Report the exceptions found (expect few or none) and how each was resolved.
 
 **What.** The `needs_encoding` bucket (≈150 groups): no member is implemented and
 the card has functional text. For each group, encode **one** canonical member with
-the standard per-card recipe (docs/encoding_guide.md),
+the standard per-card recipe (docs/dev/encoding_guide.md),
 then **alias the siblings** into `REPRINT_ALIASES`. So each encode makes the whole
 group playable.
 
@@ -263,15 +263,15 @@ groups resolved.
 **Ready-made prompt**
 
 ```
-Read docs/reprint_duplicates_plan.md (Stage 4) and the recipe in
-docs/encoding_guide.md. Work ONE batch of the needs_encoding reprint bucket.
+Read docs/dev/plans/reprint_duplicates_plan.md (Stage 4) and the recipe in
+docs/dev/encoding_guide.md. Work ONE batch of the needs_encoding reprint bucket.
 
 1. Run `python scripts/find_reprints.py` to refresh docs/reprints_worklist.json.
    From the needs_encoding bucket pick the next 5-8 groups whose CANONICAL member
    is in a shipped set (SOR/SHD/TWI/JTL/LOF/SEC/LAW) and looks implementable with
    EXISTING primitives (skip anything that smells like a new engine primitive —
    flag those for their own session, do not encode them here).
-2. For each chosen group: encode the canonical member per the docs/encoding_guide.md recipe
+2. For each chosen group: encode the canonical member per the docs/dev/encoding_guide.md recipe
    (register in the correct src/swu/cards/<set>/abilities.py, reuse primitives),
    add a focused test with the card number in each method name.
 3. Add every sibling of each encoded group to REPRINT_ALIASES in
@@ -295,6 +295,6 @@ List the groups done, the primitives reused, and any escalations flagged.
 - **Canonical choice is deterministic and shipped-set-preferred**, so re-running
   the detector never churns the alias table.
 - **Tokens excluded** (`audit_coverage.TOKEN_TYPES`) — a Leader and its same-numbered
-  Token are not reprints of each other (see "Gotchas" in docs/encoding_guide.md).
+  Token are not reprints of each other (see "Gotchas" in docs/dev/encoding_guide.md).
 - Re-run `python scripts/find_reprints.py` at the top of every stage — the DB and
   the registry both move as decks graduate.

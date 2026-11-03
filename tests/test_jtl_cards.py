@@ -1599,7 +1599,7 @@ class TestCommandeer:
         assert targets == {good.instance_id}
 
 
-# ── Reprint-duplicate encodes (Stage 4 of docs/reprint_duplicates_plan.md) ────
+# ── Reprint-duplicate encodes (Stage 4 of docs/dev/plans/reprint_duplicates_plan.md) ────
 
 class TestVictorLeader:
     """JTL_85 — "Each other friendly space unit gets +1/+1." (sibs P25_154/164)."""

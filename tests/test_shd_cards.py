@@ -3866,7 +3866,7 @@ class TestIncineratorTrooper:
             "first striker takes no return damage from a defeated defender"
 
 
-# ── Reprint-duplicate encode (Stage 4 of docs/reprint_duplicates_plan.md) ─────
+# ── Reprint-duplicate encode (Stage 4 of docs/dev/plans/reprint_duplicates_plan.md) ─────
 
 class TestSupremeLeaderSnoke:
     """SHD_37 — "Each enemy non-leader unit gets -2/-2." (sibs J24_3, P25_76)."""

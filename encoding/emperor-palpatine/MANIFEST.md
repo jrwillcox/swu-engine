@@ -2,7 +2,7 @@
 
 Deck readiness: **52/52** cards playable. Encoding groups: **0/0** complete.
 
-Encode one group per session: paste its **group id** into `docs/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py emperor-palpatine --group NN`.
+Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py emperor-palpatine --group NN`.
 
 ## Groups (in dependency order)
 

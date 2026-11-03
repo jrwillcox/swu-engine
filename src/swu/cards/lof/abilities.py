@@ -1199,7 +1199,7 @@ def _darth_tyranus():
     )
 
 
-# ── Reprint-duplicate encode (Stage 4 of docs/reprint_duplicates_plan.md) ─────
+# ── Reprint-duplicate encode (Stage 4 of docs/dev/plans/reprint_duplicates_plan.md) ─────
 
 @card_ability("LOF", "165")
 def _asajj_ventress():

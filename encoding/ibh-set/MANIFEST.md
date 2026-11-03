@@ -2,7 +2,7 @@
 
 Deck readiness: **104/104** cards playable. Encoding groups: **4/4** complete.
 
-Encode one group per session: paste its **group id** into `docs/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py ibh-set --group NN`.
+Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py ibh-set --group NN`.
 
 ## Groups (in dependency order)
 

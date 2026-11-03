@@ -61,9 +61,9 @@ If the queue prints `QUEUE EMPTY`, the campaign is done — report that and stop
 
 1. **Read the spec file** at the printed `spec=` path (self-contained: card text,
    mechanical analysis, suggested primitives, acceptance criteria).
-2. **Read** `docs/engine_seams.md` (reuse patterns and decision kinds **by name**)
-   and `docs/encoding_guide.md` (the recipe). For a named precedent, `grep`
-   `docs/history/seams_log.md` and `docs/history/encoding_history.md` for the card
+2. **Read** `docs/dev/engine_seams.md` (reuse patterns and decision kinds **by name**)
+   and `docs/dev/encoding_guide.md` (the recipe). For a named precedent, `grep`
+   `docs/dev/history/seams_log.md` and `docs/dev/history/encoding_history.md` for the card
    id; never read those in full.
 3. **Implement declaratively** in `src/swu/cards/<set>/abilities.py` with
    `@card_ability(SET, NUM)`. If the set module doesn't exist yet, create it and add
@@ -77,8 +77,8 @@ If the queue prints `QUEUE EMPTY`, the campaign is done — report that and stop
 6. **KEYWORD-ENGINE (Support)**: implement the keyword in the engine once, with
    synthetic tests; then move `"Support"` from `PHASE3_KEYWORDS` to
    `PHASE2_KEYWORDS` in `scripts/audit_coverage.py`, and update the keyword list in
-   `docs/engine_seams.md`. Encode no residual card text this invocation.
-7. **Escalation rule** (`docs/engine_seams.md`): a primitive that touches core
+   `docs/dev/engine_seams.md`. Encode no residual card text this invocation.
+7. **Escalation rule** (`docs/dev/engine_seams.md`): a primitive that touches core
    resolution, the trigger system or decision machinery → **STOP, implement nothing,
    flag it** for a dedicated framework session. A small, self-contained primitive may
    land inline; a new decision kind must follow "Adding a decision kind" there.
@@ -112,12 +112,12 @@ ends at a clean, tested boundary, so it's always safe to stop.
 ## Doc & memory discipline (keeps context lean — follow exactly)
 
 - **Do NOT write per-card or per-group notes anywhere.** Two exceptions: a genuinely
-  NEW primitive → **one row** in `docs/engine_seams.md` plus an entry in
-  `docs/history/seams_log.md`; a keyword completing → the keyword-list update.
+  NEW primitive → **one row** in `docs/dev/engine_seams.md` plus an entry in
+  `docs/dev/history/seams_log.md`; a keyword completing → the keyword-list update.
   Never add to `CLAUDE.md`.
 - **No per-batch history document.** Progress lives in the generated
   `encoding/<slug>-set/manifest.json` + `MANIFEST.md` and `docs/coverage_report.md`
-  (all machine-regenerated). Add **no** campaign entries to `docs/history/encoding_history.md`.
+  (all machine-regenerated). Add **no** campaign entries to `docs/dev/history/encoding_history.md`.
   The batch report is ephemeral chat output.
 - **Memory: one file, in place.** Update the campaign memory topic file
   `project_gap_campaign.md` (in your persistent memory dir — the path is in your

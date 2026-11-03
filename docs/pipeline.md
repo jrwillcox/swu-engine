@@ -108,7 +108,7 @@ the card explorer.
 
 ## Refreshing after a new set
 
-See [`new_releases.md`](new_releases.md) for the full runbook — detecting new
+See [`new_releases.md`](dev/new_releases.md) for the full runbook — detecting new
 cards with a count probe, re-harvesting, re-auditing coverage, sweeping reprints,
 and planning the encoding work for the new set.
 

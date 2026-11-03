@@ -255,8 +255,8 @@ Per-card mechanics:
 - [`encoding_guide.md`](encoding_guide.md): the step-by-step recipe.
 - [`engine_seams.md`](engine_seams.md): the reusable patterns and decision kinds.
   **If a card looks like an existing pattern, copy it; don't invent a new one.**
-- For the reasoning behind a pattern, grep `docs/history/seams_log.md` and
-  `docs/history/encoding_history.md` for a card id (e.g. `SOR_135`). Never read them
+- For the reasoning behind a pattern, grep `docs/dev/history/seams_log.md` and
+  `docs/dev/history/encoding_history.md` for a card id (e.g. `SOR_135`). Never read them
   whole.
 
 **Step 4 — respect the escalation rule.** A small, self-contained new primitive may
@@ -280,7 +280,7 @@ A new keyword is engine work, not card work, and it comes first.
    `scripts/audit_coverage.py`. (Add it to `PHASE3_KEYWORDS` first if you want the
    audit to name it explicitly while the work is in flight; an unlisted keyword is
    already reported as `keyword-deferred` either way.)
-3. Update the keyword list in `docs/engine_seams.md`.
+3. Update the keyword list in `docs/dev/engine_seams.md`.
 4. Re-run `audit_coverage.py` — every pure-keyword card carrying it flips to
    playable for free.
 5. Only *then* encode the residual ability text on cards that have both the
@@ -315,7 +315,7 @@ need a new sanitiser rule.
    ```
    The gate requires: 100% of cards `implemented`+, every per-card test green, fast
    **and** medium suites passing, and a clean seeded soak using that exact deck. On
-   a full pass it marks the deck shippable in `docs/decks_status.md` **and**
+   a full pass it marks the deck shippable in `docs/dev/decks_status.md` **and**
    registers it on the web start screen via `swu.web.decks.register_ui_deck` — so a
    graduated deck is selectable without a code edit. The manual UI smoke pass
    remains the human's sign-off.
@@ -355,7 +355,7 @@ baseline in `benchmarks/` — **never by taste**.
 [ ] fast + medium suites green
 [ ] soak clean for any newly graduated deck
 [ ] new set code present in SET_ORDER and in src/swu/cards/__init__.py
-[ ] docs/coverage_report.md and docs/decks_status.md regenerated
+[ ] docs/coverage_report.md and docs/dev/decks_status.md regenerated
 [ ] manual UI smoke pass
 ```
 
@@ -395,7 +395,7 @@ and any deployment staging directories, or the push will be enormous.
 | `compose.swu.yml` | Default hostname in `SWU_ALLOWED_HOSTS` | Leave the env var, drop the personal default |
 | `README.md`, `CLAUDE.md`, `docs/*` | Absolute paths beginning with a personal home directory | Rewrite as repo-relative paths |
 | `src/swu/web/auth.py` | `ALLOWED` — a hard-coded whitelist of two real first names, one flagged admin | Move to configuration (env var or an untracked config file) with an empty or example default |
-| `docs/bug_triage_prompt.md`, `docs/soak_*.md`, `docs/phase6b_llm_handoff.md`, `encoding/*/MANIFEST.md` | Incidental personal names, hostnames, machine paths | Grep and scrub (§3.4) |
+| `docs/dev/bug_triage_prompt.md`, `docs/dev/plans/phase6b_llm_handoff.md`, `encoding/*/MANIFEST.md` | Incidental personal names, hostnames, machine paths | Grep and scrub (§3.4) |
 | `.claude/` | Hooks and skills referencing absolute personal paths; `settings.local.json` | Parameterise the skill's paths; never commit `settings.local.json` |
 | `web/screenshots/`, `web/test-results/`, `swu-game/failures/` | Local artefacts that may embed paths or player data | Add to `.gitignore` |
 

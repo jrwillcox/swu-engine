@@ -64,5 +64,5 @@ regression test
 [~] [manual] UI smoke pass
 ```
 
-Marked shippable in `docs/decks_status.md` and registered on the **dev** start
+Marked shippable in `docs/dev/decks_status.md` and registered on the **dev** start
 screen (`data/ui_decks.json`). The deployed instance is untouched until a deploy.

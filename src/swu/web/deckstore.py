@@ -7,7 +7,7 @@ on-disk contract, the store, and the derived-rules glue; ``app.py`` wires the HT
 routes and ``decks.resolve_deck`` builds a playable card list from a stored deck.
 
 Identity is the DB card **id** (not ``(set, number)``, which collides between a
-Leader and its same-numbered Token — see ``docs/encoding_guide.md``).
+Leader and its same-numbered Token — see ``docs/dev/encoding_guide.md``).
 
 On-disk layout — one JSON file per deck under the owner's folder, resolved via
 ``data_dir()`` so it lands in the right instance and survives ``deploy.ps1`` (which

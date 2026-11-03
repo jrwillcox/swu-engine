@@ -55,17 +55,17 @@ fixes Prettier failures.
 | Need | Read |
 |---|---|
 | Engine contract, state model, adding a keyword, action or zone | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
-| Encoding a card | [`docs/encoding_guide.md`](docs/encoding_guide.md) |
-| Patterns, decision kinds, engine internals | [`docs/engine_seams.md`](docs/engine_seams.md) |
-| Precedent for a card or primitive | Search [`docs/history/seams_log.md`](docs/history/seams_log.md) and [`docs/history/encoding_history.md`](docs/history/encoding_history.md) for the card id |
+| Encoding a card | [`docs/dev/encoding_guide.md`](docs/dev/encoding_guide.md) |
+| Patterns, decision kinds, engine internals | [`docs/dev/engine_seams.md`](docs/dev/engine_seams.md) |
+| Precedent for a card or primitive | Search [`docs/dev/history/seams_log.md`](docs/dev/history/seams_log.md) and [`docs/dev/history/encoding_history.md`](docs/dev/history/encoding_history.md) for the card id |
 | Bots and measuring them | [`docs/bots.md`](docs/bots.md) |
 | Tests, soak campaigns, invariants | [`docs/testing.md`](docs/testing.md) |
-| A new set or card release | [`docs/new_releases.md`](docs/new_releases.md) |
-| A player's bug report | [`docs/bug_triage_prompt.md`](docs/bug_triage_prompt.md) |
+| A new set or card release | [`docs/dev/new_releases.md`](docs/dev/new_releases.md) |
+| A player's bug report | [`docs/dev/bug_triage_prompt.md`](docs/dev/bug_triage_prompt.md) |
 | Everything else | [`docs/README.md`](docs/README.md) |
 
 ## Keeping this file short
 
 Claude Code reads this file at the start of every session. Add a rule here only if it
 is easy to break and costly when broken. Put reference material in `docs/` and
-history in `docs/history/`.
+history in `docs/dev/history/`.

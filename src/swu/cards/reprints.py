@@ -769,7 +769,7 @@ TOKEN_TYPES = frozenset({
 })
 
 # The DB columns that make up a printed face — the identity key defined in
-# docs/reprint_duplicates_plan.md.
+# docs/dev/plans/reprint_duplicates_plan.md.
 _FACE_COLUMNS = (
     "name", "subtitle", "type", "cost",
     "power", "hp", "upgrade_power", "upgrade_hp",
