@@ -10,82 +10,97 @@ pattern, reuse that pattern by name; don't invent a new one.
 
 ## Recurring patterns
 
-| Pattern | What it is | Canonical card |
+| Pattern | What it is | Example |
 |---|---|---|
-| **Thin CustomEffect adapter** | A card's trigger/event is one `CustomEffect` that just calls a `push_*` decision helper — no logic in the card. Most decision-kind cards are this. | Palpatine SOR_135 |
-| **Pop-then-deal / pop-then-act** | When a decision resolves into damage/defeat, **pop the decision FIRST, then apply**, so a resulting defeat trigger lands on a clean stack. | push_distribute_damage |
-| **"Don't offer a no-op"** | Gate an activated ability / optional trigger with a `Condition` so it isn't offered when it would change nothing (protects errata + bot). | Ozzel SOR_129, Han SHD_13 |
-| **"If you do" binding** | When a cost and its payoff must be atomic, put BOTH in one `CustomEffect` (not two effects) so an unpaid cost can't apply the payoff and the optional trigger auto-declines with no legal use. | Bright Hope SOR_99, Kihraxz SHD_118 |
-| **Conditional magnitude** | Magnitude decided from board state (e.g. 3 vs 5) inside a `CustomEffect.target` fn — expresses OR-of-aspects and other things a single `Condition` can't. | Zeb Orellios LAW_45 |
-| **Shared event_ctx for dependent targets** | Two sequential effects share the `resolve_effects` decision's `event_ctx` dict so the 2nd target's eligibility keys off the 1st chosen target. | Nothing Left to Fear LAW_41, Haymaker LAW_168 |
-| **Fixed-before-targeted single prompt** | Order a fixed-SELF effect AFTER a targeted one so the resolver prompts exactly once (it consumes the choice at the current `effect_idx` without skipping an earlier gated effect). | The Mandalorian SHD_18, C-3PO SEC_93 |
-| **Separate single-effect abilities** | A multi-clause card (each clause one target choice) → register each clause as its own single-effect ability, sidestepping the resolve_effects skip-earlier-no-target wart. | Sabine's Masterpiece JTL_250 |
-| **GrantedAbility (resolves from host)** | Upgrade confers "Attached unit gains: '<ability>'" — wrap the ability in `GrantedAbility`; it matches/resolves with the HOST as source. Also fires from a defeated host's detached upgrades (bounties). | Armed to the Teeth SHD_175 |
-| **GrantedAbility wrapping an ActivatedAbility** | An upgrade grants its host an *Action* — `GrantedAbility(ActivatedAbility(...))`. The trigger collector skips it (its `.ability` isn't a TriggerAbility); a scan in `legal_actions` walks each host's `attached_upgrades` and emits `UseAbility(UPGRADE.instance_id, idx)`. `UseAbility.apply` finds the host (`_find_upgrade_host`), resolves the effect FROM the host, and routes a `DefeatSelf` cost to `_defeat_attached_upgrade` (detach + owner-discard THIS upgrade) instead of `_defeat_unit`. A push_granted_attack CustomEffect adapter must `return state`. | Heroic Resolve SHD_155 |
-| **AuraGrantedAbility (aura grant to a group)** | A SOURCE grants a triggered ability to EVERY unit matching a `target` — "Each friendly … unit gains: '<ability>'", the group analogue of GrantedAbility. Collected at the UnitDefeated defeat path (`_collect_triggers`), resolving from the matched unit; `unwrap_granted` unwraps it. WhenDefeated inner only today; in-play-scan ⇒ leader-side auras are deployed-only for free. | Gar Saxon SHD_1 |
-| **Play-from-discard (legal-action source)** | The discard pile as a new ACTION-phase legal-action source (`_enumerate_discard_play_actions` → `PlayFromDiscard`, which mirrors `PlayCard`'s CardPlayed/WhenPlayed firing). Two feeders: (1) `PlayFromDiscardAction` spec = a printed "Action: play this from your discard pile (paying its cost)", gated by a `condition` (SHD_38 reuses `ENEMY_UNIT_DEFEATED_THIS_PHASE`); (2) a granted "When Defeated: for this phase, owner may play it from discard for free" = a phase-scoped per-instance permission (`game_memory.free_discard_play_this_phase`, cleared in `clear_phase`, consumed on replay) → `PlayFromDiscard(free=True)`. | Brutal Traditions SHD_38 / Second Chance SHD_53 |
-| **Conditional self-grant + sanitiser** | "While X, this unit gains <keyword>" = `ConstantAbility(target=SELF, KeywordGrant, condition=…)`, read passively by `has_keyword`. The keyword sanitiser strips the mis-tagged printed keyword when such a spec is registered. | Hunting Nexu SHD_168, Protector SHD_247 |
-| **First-card discard simplification** | "opponent discards a (named) card" → `DiscardFromHand(chooser="opponent")` drops their first card. Documented deviation; used wherever a look-at-hand-and-pick decision would be overkill. | K-2SO SOR_145, Garindan SEC_186 |
-| **Decider-shift decisions** | A decision stage decided by the OPPONENT (or a third player) — walk an `order`/stage list and flip `deciding_player_id`/`active_player_index` between stages. | say_no SOR_233 |
-| **EACH_* auto-target** | `fixed=EACH_FRIENDLY/EACH_ENEMY/EACH_IN_PLAY` resolves to every matching card inline, no prompt. | many |
+| **Thin `CustomEffect` adapter** | The card's ability is one `CustomEffect` that calls a `push_*` helper; no logic in the card. Most decision-kind cards work this way. | Palpatine SOR_135 |
+| **Pop, then act** | When a decision resolves into damage or defeat, pop the decision first, so any resulting trigger lands on a clean stack. | `push_distribute_damage` |
+| **Don't offer a no-op** | Gate an activated ability or optional trigger with a `Condition`, so it isn't offered when it would change nothing. | Ozzel SOR_129, Han SHD_13 |
+| **"If you do" in one effect** | Put a cost and its payoff in a single `CustomEffect`, so an unpaid cost can't grant the payoff. | Bright Hope SOR_99, Kihraxz SHD_118 |
+| **Conditional magnitude** | Choose the amount from the board inside a `CustomEffect.target` function, for logic one `Condition` can't express (e.g. either of two aspects). | Zeb Orellios LAW_45 |
+| **Shared `event_ctx`** | Sequential effects share the `resolve_effects` decision's `event_ctx`, so the second target can depend on the first. | Nothing Left to Fear LAW_41, Haymaker LAW_168 |
+| **Fixed after targeted** | Put a fixed-`SELF` effect after a targeted one, so the resolver prompts once (it consumes the choice at the current `effect_idx`). | The Mandalorian SHD_18, C-3PO SEC_93 |
+| **One ability per clause** | Register each single-target clause as its own ability, avoiding the resolver's skip-earlier-effect quirk. | Sabine's Masterpiece JTL_250 |
+| **`GrantedAbility`** | "Attached unit gains: '…'". Resolves with the host as source; also fires from a defeated host's detached upgrades (bounties). | Armed to the Teeth SHD_175 |
+| **`GrantedAbility(ActivatedAbility(...))`** | An upgrade gives its host an Action. `legal_actions` scans each host's `attached_upgrades` and emits `UseAbility(UPGRADE.instance_id, idx)`; `UseAbility.apply` finds the host (`_find_upgrade_host`) and routes a `DefeatSelf` cost to `_defeat_attached_upgrade`, not `_defeat_unit`. A `push_granted_attack` adapter must `return state`. | Heroic Resolve SHD_155 |
+| **`AuraGrantedAbility`** | A source grants a triggered ability to every unit matching a `target` ("Each friendly … unit gains"). Collected on the defeat path (`_collect_triggers`), resolving from the matched unit; `unwrap_granted` unwraps it. Only `WhenDefeated` inner abilities so far. | Gar Saxon SHD_1 |
+| **Play from discard** | `_enumerate_discard_play_actions` offers `PlayFromDiscard`, which fires `CardPlayed`/`WhenPlayed` like `PlayCard`. Fed by a `PlayFromDiscardAction` spec gated by a `condition` (SHD_38 uses `ENEMY_UNIT_DEFEATED_THIS_PHASE`), or by `game_memory.free_discard_play_this_phase` (cleared in `clear_phase`) for `PlayFromDiscard(free=True)`. | Brutal Traditions SHD_38, Second Chance SHD_53 |
+| **Conditional self-grant** | "While X, this unit gains <keyword>" is `ConstantAbility(target=SELF, KeywordGrant, condition=…)`, read by `has_keyword`. The keyword sanitiser strips the mis-tagged printed keyword. | Hunting Nexu SHD_168, Protector SHD_247 |
+| **First-card discard** | "Opponent discards a card" is `DiscardFromHand(chooser="opponent")`, which takes their first card. A documented simplification. | K-2SO SOR_145, Garindan SEC_186 |
+| **Decider shift** | A stage decided by the opponent: walk an `order` list, switching `deciding_player_id` and `active_player_index` between stages. | `say_no` SOR_233 |
+| **`EACH_*` targets** | `fixed=EACH_FRIENDLY`/`EACH_ENEMY`/`EACH_IN_PLAY` hits every match with no prompt. | many |
 
 ## Decision kinds
 
 A decision kind models a mid-resolution choice: a `push_*` helper puts it on the
 decision stack, and its `Action` subclasses resolve it. Reuse an existing kind before
-adding one. `granted_attack` and `play_from_hand` in particular have many optional
-fields.
+adding one; `granted_attack` and `play_from_hand` take many options:
 
-| Kind | "…" it models | Canonical card |
+- **`granted_attack`:** `attacker_predicates`, `attacker_id`, `attacker_trait`,
+  `attacker_arena`, `attacker_cost_max`, `attacker_pilot_related`, `optional`,
+  `repeat`, `allow_exhausted`, `no_base`, `exclude_source`, `grant_keywords` (a name
+  or `(name, value)`), `bonus_trait`, `bonus_if_defender_unit`,
+  `bonus_if_odd_cost_diff_from`, `then_defeat_attacker` (Heroic Sacrifice SOR_150),
+  and `defender_power_bonus`/`defender_hp_bonus`, a `this_attack` debuff on the chosen
+  defender (Jyn Erso SOR_18).
+- **`play_from_hand`:** `trait`, `enters_ready`, `then_opponents_ready`,
+  `cost_reduction`, `then_damage`, `cost_max`, `grant_keyword`, `free`, `aspect`,
+  `exclude_aspect`, `from_discard`, `ignore_aspect_penalty`, `defeat_at_regroup`,
+  `grant_keyword_if_credit_spent`, `then_self_base_damage_cost` (Galactic Ambition
+  SOR_235), `eligible_ids` (restricts the choice, e.g. to discard cards),
+  `then_defeat_ids` (Consolidation of Power TWI_89), and `cost_reduction_if_trait`, a
+  `(trait, reduction)` pair that replaces `cost_reduction` for a card with that trait
+  (Palpatine's Return SHD_94; applied by `_play_reduction_for`).
+
+| Kind | Models | Example |
 |---|---|---|
-| `granted_attack` | "Attack with a unit, +X/+Y". Fields: `attacker_predicates`, `attacker_id`, `attacker_trait`, `attacker_arena`, `attacker_cost_max`, `attacker_pilot_related`, `optional`, `repeat`, `allow_exhausted`, `no_base`, `exclude_source`, `grant_keywords` (name or (name,value)), `bonus_trait`, `bonus_if_defender_unit`, `bonus_if_odd_cost_diff_from`, `then_defeat_attacker` (self-defeat the attacker after combat settles — Heroic Sacrifice SOR_150 "gains: 'When this unit deals combat damage: Defeat it'"), `defender_power_bonus`/`defender_hp_bonus` (a stat debuff applied to the CHOSEN unit-defender for this attack, as a this_attack modifier — Jyn Erso SOR_18 "the defender gets −1/−0 for this attack") | Surprise Strike SOR_220 |
-| `play_from_hand` | "Play a unit from hand as an ability". Fields: `trait`, `enters_ready`, `then_opponents_ready`, `cost_reduction`, `then_damage`, `cost_max`, `grant_keyword`, `free`, `aspect`, `exclude_aspect`, `from_discard`, `ignore_aspect_penalty`, `defeat_at_regroup`, `grant_keyword_if_credit_spent`, `then_self_base_damage_cost` (deal the played unit's printed cost to your own base — Galactic Ambition SOR_235), `eligible_ids` (whitelist ids → discard-only play), `cost_reduction_if_trait` (a `(trait, reduction)` pair that REPLACES the base `cost_reduction` for a chosen card carrying that trait — "costs 6 less; if a Force unit, costs 8 less instead", Palpatine's Return SHD_94; threaded via `_play_reduction_for` at both the enumeration and apply sites) | Admiral Ozzel SOR_129 |
-| `play_event_from_hand` | "Play an EVENT from hand as an ability, at `cost_reduction` off" — the event sibling of `play_from_hand` (events resolve via `_resolve_event_ability`, not the unit path). `push_play_event_from_hand(cost_reduction=)` + `PlayEventFromHand`; gate an activating ability with `Condition.CONTROLLER_CAN_PLAY_EVENT_FROM_HAND(param=reduction)` so the exhaust is never wasted | Bib Fortuna SOR_177 |
-| `play_via_smuggle` | "Play a card using Smuggle as an ability, at `cost_reduction` off, then optionally defeat a resource you own" — the Smuggle sibling of `play_event_from_hand` (reuses SmugglePlay mechanics WITHOUT handing the turn over). `push_play_via_smuggle(cost_reduction=, then_defeat_own_resource=)` + `PlayViaSmuggle` + `_smuggle_eligible_from_resources`; gate with `Condition.CONTROLLER_CAN_SMUGGLE(param=reduction)` | Lando Calrissian SHD_17 |
-| `play_via_piloting` | "Play a card from your hand using Piloting, at `cost_reduction` off" — the Piloting sibling of `play_via_smuggle` (reuses `_piloting_cost` → `_attach_pilot` but resolves inside the ability, without handing the turn over). `push_play_via_piloting(cost_reduction=)` + `PlayViaPiloting(instance_id, vehicle_target_id)` + `_piloting_eligible_from_hand`, which enumerates **(pilot, host) PAIRS** so a Piloting card with no friendly Vehicle to ride is never offered; gate an activating ability with `Condition.CONTROLLER_CAN_PILOT(param=reduction)` | Wedge Antilles JTL_8 |
-| `distribute_damage` | "Deal N divided as you choose" (modes pool/source_pool/sequence; `up_to`) | Palpatine SOR_135 |
-| `deck_search` | "Search top N, draw/play chosen, bottom rest random" (`disposition="play"` for search-and-play; `disposition="discard_free_replay"` discards the chosen card + flags `free_discard_play_this_phase` for a free replay — Cobb Vanth SHD_115) | Grand Moff Tarkin SOR_84 |
-| `modal` | "Choose one: … then target" (extensible mode set; fungible modes resolve on an arbitrary/throwaway target — e.g. `bomb_ground`/`bomb_space` "choose an arena, deal 3 to each unit in it", Bombing Run SOR_173, pop-then-deal for the multi-defeat) | Leia SOR_189 |
-| `say_no` | "Do X unless opponent says no" | I Am Your Father SOR_233 |
-| `reveal_top` | "Reveal top N, keep/discard, reorder" (`disposition`, `deal_aspect_damage`) | For a Cause I Believe In SOR_152 |
-| `sacrifice_resource` | "You may defeat a friendly resource, then deal N" | Wrecker SHD_154 |
-| `opponent_chooses_target` | "Opponent picks their own unit/base, you may damage it" (`ground_only`) | Grey Squadron Y-Wing SHD_246 |
-| `reveal_resource_ramp` | "Reveal a resource; if it shares a name with a friendly unique unit, return it to hand + ramp the deck top" (`optional`; only name-matching resources offered; gate `CONTROLLER_HAS_REVEAL_RAMP_RESOURCE`) | Hunter SHD_9 |
-| `select_distinct_return_random` | "Choose N discard cards with different names; return 1 of them at random." Forced full selection (no finish/decline) — remaining candidates filtered by name after each pick; auto-finishes at N, then `rng.choice` returns one. Pushed only when ≥N distinct names exist. Also new gate atom `CONTROLLER_DISCARD_DISTINCT_COSTS_MIN` (param) for "while ≥N different costs in your discard, +X/+Y". | Doctor Aphra SHD_15 |
-| `repeated_modal` | "Discard up to N; per discard, choose a different option" | Poe Dameron SHD_153 |
-| `select_token` | "Give a token to up to N units" (`decider_id`, `after_resolve_idx`) | Medal Ceremony SOR_245 |
-| `select_damage` | "Deal 1 to each of up to N units" | IG-2000 JTL_140 |
-| `move_upgrade` | "Move an upgrade to another eligible host" | Survivors' Gauntlet SHD_64 |
-| `return_from_discard` | "Return up to N eligible cards from discard to hand" (`eligible_instance`) | Razor Crest SHD_44 |
-| `resource_from_discard` | "Choose a qualifying discard card → put it into play as a resource (facedown + exhausted per CR)". `push_resource_from_discard(eligible=<CardInstance predicate>, up_to=)`; candidates pre-filtered to the qualifiers (fizzles if none) — the gate ("shares a name with a friendly unit" / "was defeated this phase" via `units_defeated_this_round`) lives in the closure | The Marauder SHD_102 / Spark of Hope SHD_105 |
-| `discard_for_experience` | "You may discard a same-named hand card → give 2 Experience to that unit". `push_discard_for_experience`; candidates = hand cards whose name matches a friendly unit in play (auto-picks the token target) | Echo SHD_99 |
-| `discard_for_search` | "Discard a card, then search" (generalised; `optional`, `search_name`, windows) | Great Pit LAW_23 / R2-D2 TWI_193 |
+| `granted_attack` | "Attack with a unit; it gets +X/+Y" (options above) | Surprise Strike SOR_220 |
+| `play_from_hand` | "Play a unit from your hand" as part of an ability (options above) | Admiral Ozzel SOR_129 |
+| `play_event_from_hand` | "Play an event from your hand for N less" (`push_play_event_from_hand(cost_reduction=)`, `PlayEventFromHand`; resolves via `_resolve_event_ability`). Gate with `Condition.CONTROLLER_CAN_PLAY_EVENT_FROM_HAND(param=reduction)`. | Bib Fortuna SOR_177 |
+| `play_via_smuggle` | "Play a card using Smuggle for N less, then you may defeat a resource you own" (`push_play_via_smuggle(cost_reduction=, then_defeat_own_resource=)`, `PlayViaSmuggle`, `_smuggle_eligible_from_resources`). Gate with `Condition.CONTROLLER_CAN_SMUGGLE(param=reduction)`. | Lando Calrissian SHD_17 |
+| `play_via_piloting` | "Play a card from your hand using Piloting for N less" (`push_play_via_piloting(cost_reduction=)`, `PlayViaPiloting(instance_id, vehicle_target_id)`). `_piloting_eligible_from_hand` lists (pilot, vehicle) pairs, so a pilot with nothing to ride isn't offered. Reuses `_piloting_cost` and `_attach_pilot`. Gate with `Condition.CONTROLLER_CAN_PILOT(param=reduction)`. | Wedge Antilles JTL_8 |
+| `distribute_damage` | "Deal N damage divided as you choose" (modes `pool`, `source_pool`, `sequence`; `up_to`) | Palpatine SOR_135 |
+| `deck_search` | "Search the top N; take or play one; bottom the rest at random" (`disposition="play"`; `disposition="discard_free_replay"` sets `free_discard_play_this_phase`, Cobb Vanth SHD_115) | Grand Moff Tarkin SOR_84 |
+| `modal` | "Choose one: …", then a target. Some modes need no real target, e.g. `bomb_ground`/`bomb_space` (Bombing Run SOR_173). | Leia SOR_189 |
+| `say_no` | "Do X unless an opponent says no" | I Am Your Father SOR_233 |
+| `reveal_top` | "Reveal the top N; discard any; reorder the rest" (`disposition`, `deal_aspect_damage`) | For a Cause I Believe In SOR_152 |
+| `sacrifice_resource` | "You may defeat a friendly resource; if you do, deal N" | Wrecker SHD_154 |
+| `opponent_chooses_target` | "An opponent picks one of their units or their base; you may damage it" (`ground_only`) | Grey Squadron Y-Wing SHD_246 |
+| `reveal_resource_ramp` | "Reveal a resource that shares a name with a friendly unique unit; return it to hand and resource the top of your deck" (`optional`; gate `CONTROLLER_HAS_REVEAL_RAMP_RESOURCE`) | Hunter SHD_9 |
+| `select_distinct_return_random` | "Choose N differently named cards in your discard; return one at random" (`rng.choice`). No decline; pushed only when N distinct names exist. Related gate: `CONTROLLER_DISCARD_DISTINCT_COSTS_MIN`. | Doctor Aphra SHD_15 |
+| `repeated_modal` | "Discard up to N; for each, choose a different option" | Poe Dameron SHD_153 |
+| `select_token` | "Give a token to each of up to N units" (`decider_id`, `after_resolve_idx`) | Medal Ceremony SOR_245 |
+| `select_damage` | "Deal 1 damage to each of up to N units" | IG-2000 JTL_140 |
+| `move_upgrade` | "Move an upgrade to another eligible unit" | Survivors' Gauntlet SHD_64 |
+| `return_from_discard` | "Return up to N eligible cards from your discard to your hand" (`eligible_instance`) | Razor Crest SHD_44 |
+| `resource_from_discard` | "Put a qualifying discard card into play as a resource" (facedown, exhausted). `push_resource_from_discard(eligible=, up_to=)`; the qualifying test lives in `eligible`, a `CardInstance` predicate, e.g. via `units_defeated_this_round`. | The Marauder SHD_102, Spark of Hope SHD_105 |
+| `discard_for_experience` | "You may discard a card with the same name as a friendly unit; give that unit 2 Experience" (`push_discard_for_experience`) | Echo SHD_99 |
+| `discard_for_search` | "Discard a card, then search your deck" (`optional`, `search_name`) | Great Pit LAW_23, R2-D2 TWI_193 |
 | `each_player_defeats` | "Each player defeats one of their own units" | Merciless Contest TWI_238 |
-| `bottom_from_hand` | "Put N cards from hand on bottom of deck" | Private Manufacturing TWI_257 |
-| `may_discard` | "Opponent may discard a random card, else you get tokens" | Political Pressure TWI_222 |
-| `exhaust_for_base_damage` | "Exhaust any number of units → N base damage each" | The Invisible Hand TWI_234 |
-| `exhaust_combined_cost` | "Exhaust any number of units" (`budget`, `max_units`, `arena`) | Qui-Gon's Lightsaber LOF_201 |
-| `recur_and_buff` | "Recur up to N from discard, buff that many units" | Luminous Beings LOF_104 |
-| `pay_resources_for_tokens` | "Pay up to N resources, a token each" | Curious Flock LOF_255 |
-| `use_force` | "You may use the Force for a rider" (`decline_penalty`) | Impossible Escape LOF_218 |
-| `discard_unit_damage` | "Recycle a discarded unit, deal its power as damage" | Sarlacc LAW_163 |
-| `cull_for_damage` | "Give up any number of your own cards (hand / tokens), deal that many damage" | Vader LAW_11, Han LAW_17 |
-| `reveal_play_credit` | "Reveal top, a player may play free, another gets credits" | Vermillion LAW_215 |
-| `per_exploit_damage` | "Per exploited unit, deal its power to an enemy" | Count Dooku TWI_138 |
-| `assign_indirect_damage` | "Deal N indirect (receiver assigns, bypasses shields)" | First Order Stormtrooper JTL_132 |
-| `peek_top` | "Look at top card; keep/discard/**play** it" (`may_play_discard` mode) | Ezra Bridger SOR_192 |
-| `plot` / `smuggle` / `pilot` | keyword play paths (PlotPlay / SmugglePlay / PilotPlay) | Garindan SEC_186 / Cassian SHD_148 / Dengar JTL_139 |
-| `DeployLeaderAsUpgrade` | Deploy a Piloting leader as a Pilot upgrade on a Vehicle | Boba Fett JTL_9 |
-| `reveal_cost_damage` | "Choose a unit; reveal from your deck one at a time until you stop or hit N; if the combined cost ≤ M, deal that much to it; bottom the revealed in random order" — a push-your-luck loop (RevealNextCard/StopRevealing; pop-then-deal) | Don't Get Cocky SOR_223 |
-| `opponent_split_bounce` | "Choose up to 2 non-leader units; an opponent chooses 1 of them — return that to its owner's hand, put the other on the bottom of its owner's deck." Two-stage decider-shift (controller selects, then opponent picks); 1 pick returns just it, 0 fizzles; reuses `_apply_return_to_hand` / `_apply_put_on_deck`, pop-then-act (SelectSplitBounceUnit/FinishSplitBounce/ChooseSplitReturn) | I Had No Choice SOR_187 |
-| `bottom_from_discard` | "Choose up to N cards in a discard pile; put them on the bottom of their owner's deck in a random order." Select-up-to-N over BOTH players' discards; picks shuffled then bottomed onto each card's owner deck (SelectBottomDiscardCard/FinishBottomFromDiscard). (`peek_top` also gained a `may_play` mode + `cost_reduction`/`free` for "look at top, may play it discounted" — You're My Only Hope SOR_246) | Restock SOR_252 |
-| `discard_excess_from_hand` | "Each player discards down to N cards of their choice." Symmetric per-stage decider-shift reusing the each_player_defeats `order`/`idx` walk (controller first); a player already at/below N is skipped; records the reveal/discard observer per player (SelectExcessHandCardToDiscard) | Smoke and Cinders SOR_174 |
-| `name_and_discard` | "Name a card; an opponent reveals their hand and discards a copy." Private decision carrying opp hand identities (card_id+name only — look_hand hidden-info shape); offers only present names (optimal-play collapse of name-blind, no whiff) then discards one match (NameAndDiscard). `optional` adds `DeclineNameAndDiscard` ("you may"); `discarder_draws` makes the discarding player draw after — models "look at hand, may discard 1, if you do they draw" (Bazine Netal SHD_184) | Chimaera SOR_185 |
-| `combined_power_play` | "Choose any number of friendly units; their combined power caps a FREE play from hand; then defeat them." Select-any-number loop (the multi_capture_pairing shape) whose payoff is a DYNAMIC cap: the pooled `compute_power` becomes `push_play_from_hand(free=True, cost_max=…, then_defeat_ids=…)`, and the new `then_defeat_ids` field defers the sacrifice until after the play (so a unit's power still counts while it is spent). Nothing playable ⇒ the defeat settles in `_resolve_combined_power_play` (SelectCombinedPowerUnit/FinishCombinedPowerPlay) | Consolidation of Power TWI_89 |
-| `play_captured_card` | "Choose a captured card guarded by a unit you control; you may play it for free under your control." Select-one-from-a-zone (the resource_from_discard pattern): candidates = the Unit captives in the controller's own capture pile (all guarded by their units); the chosen captive leaves the pile and enters play under the controller (owner unchanged) at cost 0, firing its own When Played / keyword triggers (pop-then-act). `up_to` adds `DeclineCapturedPlay` (SelectCapturedToPlay/DeclineCapturedPlay) | Dryden Vos SHD_192 |
-| `rescue_guarded` | "The DEFENDING player may rescue a card they own guarded by this unit. If they do, draw N." A binary decision handed to the OPPONENT (the say_no deciding-player shift) that canNOT collapse to an optimal-play default — the rescue costs its owner two cards of tempo for the attacker, so both branches are real. Candidates are only captives the DECIDER owns, guarded by the source; pushed only when one exists. Both actions hand the seat back unconditionally (an On Attack leaves a `pre_attack` bookmark buried below). New shared `actions._rescue_captured_card(s, ci)` = the CR rescue destination, the OWNER'S HAND (vs `_release_captured_cards`' leave-play return to arena); SHD_76 now calls it too (RescueGuardedCard/DeclineRescue) | Cad Bane TWI_187 |
-| `reveal_cull_draw` | "Reveal the top N cards of your deck.  An opponent discards X of them.  Draw 1 of the remaining cards and discard the other." A two-stage DECIDER-SHIFT over one fixed revealed set (the say_no SOR_233 seat-flip with a select-N stage on each side): the OPPONENT culls first (`CullRevealedCard`), then the seat moves to the controller, who takes one survivor (`DrawRevealedCard`) and discards the rest. Neither stage collapses to an optimal default — one player is denying, the other keeping — so both are real prompts. The revealed cards stay in the DECK while the decision is open (the deck_search convention: nothing else can happen with a decision pending, so no set-aside zone and conservation holds); `cull` is capped at `len(revealed) - 1` so a short deck still leaves something to draw | Admiral Trench JTL_14 |
-| `play_resource_units` | "Reveal any number of resources you control; play each unit revealed this way for free (one at a time)." A repeated single-select LOOP over the controller's Unit resources (revealing a non-unit is pointless → optimal-play collapse offers only units): each pick removes that resource from the row (NOT replaced from deck — the resource count drops, the card's tradeoff) and enters the unit for free; the finish RE-PUSHES the loop with the remaining units BEFORE playing, so the just-played unit's triggers (pushed on top) resolve before the next pick — faithful "one at a time" LIFO. Decline always offered (the "any number", incl. zero); fizzles with no unit resources (SelectResourceUnitToPlay/DeclineResourceUnitPlay) | Endless Legions SHD_109 |
+| `bottom_from_hand` | "Put N cards from your hand on the bottom of your deck" | Private Manufacturing TWI_257 |
+| `may_discard` | "An opponent may discard a random card; if they don't, you get tokens" | Political Pressure TWI_222 |
+| `exhaust_for_base_damage` | "Exhaust any number of units; deal N base damage for each" | The Invisible Hand TWI_234 |
+| `exhaust_combined_cost` | "Exhaust any number of units" within a cost budget (`budget`, `max_units`, `arena`) | Qui-Gon's Lightsaber LOF_201 |
+| `recur_and_buff` | "Put up to N units from your discard on the bottom of your deck; buff that many units" | Luminous Beings LOF_104 |
+| `pay_resources_for_tokens` | "Pay up to N resources; get a token for each" | Curious Flock LOF_255 |
+| `use_force` | "You may use the Force for a bonus" (`decline_penalty`) | Impossible Escape LOF_218 |
+| `discard_unit_damage` | "Put a unit from your discard on the bottom of your deck; deal damage equal to its power" | Sarlacc LAW_163 |
+| `cull_for_damage` | "Give up any number of your own cards (hand or tokens); deal that much damage" | Vader LAW_11, Han LAW_17 |
+| `reveal_play_credit` | "Reveal the top card; a player may play it free; the other gets credits" | Vermillion LAW_215 |
+| `per_exploit_damage` | "For each exploited unit, deal its power to an enemy" | Count Dooku TWI_138 |
+| `assign_indirect_damage` | "Deal N indirect damage" (the receiver assigns it; shields don't apply) | First Order Stormtrooper JTL_132 |
+| `peek_top` | "Look at the top card; keep, discard or play it" (`may_play_discard`; `may_play` with `cost_reduction`/`free`, You're My Only Hope SOR_246) | Ezra Bridger SOR_192 |
+| `plot` / `smuggle` / `pilot` | Keyword play routes (`PlotPlay`, `SmugglePlay`, `PilotPlay`) | Garindan SEC_186, Cassian SHD_148, Dengar JTL_139 |
+| `DeployLeaderAsUpgrade` | Deploy a Piloting leader as a pilot on a vehicle | Boba Fett JTL_9 |
+| `reveal_cost_damage` | "Reveal cards one at a time until you stop; if their total cost is at most M, deal that much damage" (`RevealNextCard`, `StopRevealing`) | Don't Get Cocky SOR_223 |
+| `opponent_split_bounce` | "Choose up to 2 units; an opponent picks one to return to hand; bottom the other." Controller picks, then opponent (`SelectSplitBounceUnit`, `FinishSplitBounce`, `ChooseSplitReturn`; reuses `_apply_return_to_hand`, `_apply_put_on_deck`). | I Had No Choice SOR_187 |
+| `bottom_from_discard` | "Put up to N cards from either discard on the bottom of their owners' decks at random" (`SelectBottomDiscardCard`, `FinishBottomFromDiscard`) | Restock SOR_252 |
+| `discard_excess_from_hand` | "Each player discards down to N cards", controller first, reusing the `each_player_defeats` `order`/`idx` walk (`SelectExcessHandCardToDiscard`) | Smoke and Cinders SOR_174 |
+| `name_and_discard` | "Name a card; an opponent reveals their hand and discards a copy." Offers only names actually in that hand (`NameAndDiscard`). `optional` adds `DeclineNameAndDiscard`; `discarder_draws` covers Bazine Netal SHD_184. | Chimaera SOR_185 |
+| `combined_power_play` | "Choose units; play a card from your hand for free costing up to their combined power; then defeat them" → `push_play_from_hand(free=True, cost_max=…, then_defeat_ids=…)`. If nothing is playable, `_resolve_combined_power_play` still defeats them (`SelectCombinedPowerUnit`, `FinishCombinedPowerPlay`). | Consolidation of Power TWI_89 |
+| `play_captured_card` | "Play a card captured by one of your units for free, under your control" (`SelectCapturedToPlay`; `up_to` adds `DeclineCapturedPlay`) | Dryden Vos SHD_192 |
+| `rescue_guarded` | "The defending player may rescue a card they own guarded by this unit; if they do, you draw N." Decided by the opponent; always hands the seat back, since an On Attack leaves a `pre_attack` decision beneath it. Uses `actions._rescue_captured_card(s, ci)` (to the owner's hand, unlike `_release_captured_cards`), which SHD_76 also uses (`RescueGuardedCard`, `DeclineRescue`). | Cad Bane TWI_187 |
+| `reveal_cull_draw` | "Reveal the top N; an opponent discards X of them; draw 1 of the rest, discard the others." Opponent culls (`CullRevealedCard`), then the controller draws (`DrawRevealedCard`). The cards stay in the deck while it is open; `cull` is capped at `len(revealed) - 1`. | Admiral Trench JTL_14 |
+| `play_resource_units` | "Reveal any number of your resources; play each unit revealed for free, one at a time." Each pick leaves the resource row unreplaced. The loop re-pushes itself before playing, so each unit's triggers resolve before the next pick (`SelectResourceUnitToPlay`, `DeclineResourceUnitPlay`). | Endless Legions SHD_109 |
 
 ### Adding a decision kind
 
