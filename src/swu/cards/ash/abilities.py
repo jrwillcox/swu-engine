@@ -5,7 +5,7 @@ half: the 22 Support cards that also carry ability text (the keyword itself land
 engine-side in the previous batch — see ``engine/keyword_triggers.py``).
 
 Everything here composes from existing primitives except four small additive engine
-seams introduced with it (all documented in CLAUDE.md's seams catalog):
+seams introduced with it (all in docs/history/seams_log.md):
   * ``WhenAttackEnds(require_defender_defeated=True)`` — "If the defending unit was
     defeated" (Thrawn ASH_33, Halo ASH_223), plus the ``attack_ended_combat_damaged``
     list on the same fire (The Great Mothers ASH_101).

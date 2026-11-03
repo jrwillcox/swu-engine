@@ -12,9 +12,8 @@ frozen except for the genuinely engine-level mechanics noted below.
 
 ## 1. Read the context
 
-1. Read `CLAUDE.md` in full — especially the Phase 3 ability-framework guide
-   ("How to implement a new card"), the effect/TargetSpec/condition references,
-   the Phase 2 keyword pattern, and the frozen-engine rules.
+1. Read `docs/encoding_guide.md` (the recipe) and `docs/engine_seams.md` (patterns,
+   decision kinds, engine internals and the escalation rule).
 2. Resolve the group id `<slug>:NN` to its spec file: it is
    `encoding/<slug>/group_NN_*.md`. Read that file completely. It lists every
    card with full rules text, a mechanical analysis, the existing primitives that
@@ -33,9 +32,9 @@ one — implement the keyword **once, engine-side**, following the Phase 2 patte
 1. Add the keyword to the `Keyword` enum (`src/swu/engine/keywords.py`) and wire
    whatever layer it needs: the keyword query layer (`has_keyword`/`keyword_value`),
    the effective-stats layer (`compute_power`), enter-play/attack triggers
-   (`keyword_triggers.py`), and/or the pending-decision stack — exactly as Phase 2
-   did for Sentinel/Ambush/Exploit. New decision kinds go in
-   `_KNOWN_DECISION_KINDS` (`invariants.py`) **and** get a prompt in `web/session.py`.
+   (`keyword_triggers.py`), and/or the pending-decision stack, as was done for
+   Sentinel, Ambush and Exploit. A new decision kind follows "Adding a decision
+   kind" in `docs/engine_seams.md`.
 2. **Write synthetic-card framework tests first** (in `tests/test_keywords.py` or
    a new `tests/test_<keyword>.py`): construct a minimal state exercising the
    keyword via the public `legal_actions`/`apply` interface, independent of any
@@ -46,9 +45,8 @@ one — implement the keyword **once, engine-side**, following the Phase 2 patte
    registration — note which cards still need that (a later ability group will
    pick them up after a planner re-run; do not encode the residual text here
    unless it is trivial and clearly in scope).
-4. **Update `CLAUDE.md`**: move the keyword out of the Phase-2 "Deferred" list
-   into the implemented list, with a one-paragraph note on the seam (mirroring the
-   existing keyword notes).
+4. **Record it**: add the keyword to the list in `docs/engine_seams.md`, and a note on
+   the seam to `docs/history/seams_log.md`.
 
 ## 3. If this is an ABILITY group
 
@@ -95,7 +93,7 @@ In `swu-game/`, using the project venv (`.venv/Scripts/python.exe`):
 # the group's new tests
 .venv/Scripts/python.exe -m pytest tests/test_<file>.py -q -k "<CardOrKeyword>"
 # the fast suite (must stay green)
-.venv/Scripts/python.exe -m pytest tests/ --ignore=tests/test_engine_soak.py --ignore=tests/test_hypothesis_engine.py -q
+.venv/Scripts/python.exe -m pytest -q
 # re-run the deck audit / progress
 .venv/Scripts/python.exe scripts/verify_encoding.py <slug> --group NN
 ```

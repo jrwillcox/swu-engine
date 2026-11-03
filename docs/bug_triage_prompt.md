@@ -55,9 +55,9 @@ STEP 1 — READ.
 STEP 2 — DECIDE. Is the bug clear enough to act on?
 
   CLEAR (report + replay make the cause obvious):
-    - Investigate and FIX it, following CLAUDE.md's recipes. Add/adjust tests; run
-      the fast tier (see CLAUDE.md) before claiming a fix. If it's an engine or
-      card bug, add a regression test.
+    - Investigate and FIX it on a branch, following CLAUDE.md. Add or adjust
+      tests, and run the checks CLAUDE.md lists before claiming a fix. An engine
+      or card bug gets a regression test.
     - Append a `claude` message to thread.json: confirm what went wrong in plain
       words and that it's fixed (or will be after the next update).
     - Set "status": "resolved".

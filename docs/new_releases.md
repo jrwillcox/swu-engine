@@ -250,26 +250,21 @@ exactly this loop (pull queue → read spec → implement declaratively → focu
 per card → run the printed `VERIFY:` command → one fast suite for the batch →
 stop at a clean boundary).
 
-Per-card mechanics live in `CLAUDE.md`:
+Per-card mechanics:
 
-- **"How to implement a new card (Phase 3 recipe)"** — the authoritative
-  step-by-step (registration decorator, spec selection table, `TargetSpec`
-  reference, testing).
-- **"Engine seams & patterns catalog"** — the reusable patterns and decision kinds,
-  by name. **When a card looks like an existing pattern, copy that pattern; do not
-  invent a new one.** `granted_attack` and `play_from_hand` in particular have
-  accreted many optional fields — check them before adding machinery.
-- `docs/history/encoding_history.md` — grep it for a canonical card id (e.g. `SOR_135`) for
-  the full reasoning behind a pattern. Never read it whole.
+- [`encoding_guide.md`](encoding_guide.md): the step-by-step recipe.
+- [`engine_seams.md`](engine_seams.md): the reusable patterns and decision kinds.
+  **If a card looks like an existing pattern, copy it; don't invent a new one.**
+- For the reasoning behind a pattern, grep `docs/history/seams_log.md` and
+  `docs/history/encoding_history.md` for a card id (e.g. `SOR_135`). Never read them
+  whole.
 
-**Step 4 — respect the escalation rule.** A small, self-contained new primitive (a
-new effect dataclass + its resolver arm, or a new decision kind) may land inline
-*with synthetic-card tests* — registered in all four places (spec dataclass,
-resolver/actions, `legal_actions`, and web/bot if it is a decision). But anything
-touching **core resolution, the trigger/decision machinery, or needing a
-replacement-effect system must STOP and be flagged for a dedicated framework
-session** — never jammed into a card batch. The planner pre-flags suspected new
-primitives as their own one-card groups so this is visible before you start.
+**Step 4 — respect the escalation rule.** A small, self-contained new primitive may
+land with a card, with synthetic-card tests; a new decision kind follows "Adding a
+decision kind" in `engine_seams.md`. Anything touching **core resolution, the
+trigger/decision machinery, or needing a replacement-effect system must stop and be
+flagged for a dedicated framework session.** The planner flags suspected new
+primitives as their own one-card groups, so this is visible before you start.
 
 **Step 5 — cadence.** Focused `-k` test per group; **one** fast suite per batch
 (not per group); medium tier plus a fresh `audit_coverage.py` only at a set
@@ -285,7 +280,7 @@ A new keyword is engine work, not card work, and it comes first.
    `scripts/audit_coverage.py`. (Add it to `PHASE3_KEYWORDS` first if you want the
    audit to name it explicitly while the work is in flight; an unlisted keyword is
    already reported as `keyword-deferred` either way.)
-3. Update the keyword lists in `CLAUDE.md`.
+3. Update the keyword list in `docs/engine_seams.md`.
 4. Re-run `audit_coverage.py` — every pure-keyword card carrying it flips to
    playable for free.
 5. Only *then* encode the residual ability text on cards that have both the
@@ -337,8 +332,8 @@ need a new sanitiser rule.
 
 | Tier | Command | When |
 |---|---|---|
-| fast | `pytest tests/ --ignore=tests/test_engine_soak.py --ignore=tests/test_hypothesis_engine.py -q` | every batch |
-| medium | `pytest tests/test_engine_soak.py tests/test_hypothesis_engine.py -q` | set milestone, before a release |
+| fast | `pytest` | every batch |
+| slow | `pytest -m slow` | set milestone, before a release |
 | campaign | `python scripts/soak.py --games 10000 --jobs 8 --decks starter,vanilla,keyword` | manual / overnight |
 
 Additional whole-DB checks worth running after a release lands:

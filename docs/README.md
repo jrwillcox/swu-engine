@@ -7,7 +7,11 @@ design notes and the generated evidence behind the coverage and quality claims.
 
 | Document | What it covers |
 |---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | The engine contract, state model, serialisation, and how to add a mechanic or encode a card. Start here to read the code. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | The engine contract, state model, serialisation, and how to add a keyword, action or zone. Start here to read the code. |
+| [encoding_guide.md](encoding_guide.md) | How to encode a card: the workflow, the recipe, gotchas and rules notes. |
+| [engine_seams.md](engine_seams.md) | The reusable encoding patterns, every decision kind, and the engine internals worth knowing. |
+| [bots.md](bots.md) | The difficulty levels, the heuristic and LLM bots, and how to measure a bot change. |
+| [testing.md](testing.md) | Test tiers, the invariant oracle, soak campaigns and regression tests. |
 | [ability_framework.md](ability_framework.md) | The original design document for the declarative card DSL — ability types, targeting, conditions, durations, and the rules citations behind each. |
 | [methodology.md](methodology.md) | How the encoding campaign was run: the offline planner, the escalation rule, and the automated release gate. |
 | [pipeline.md](pipeline.md) | Building `data/swu.db` from the publisher's API, and refreshing it when a set releases. |
@@ -37,7 +41,7 @@ Regenerate rather than edit these.
 | [coverage_report.md](coverage_report.md) | `python scripts/audit_coverage.py` — the 100% card-coverage number |
 | [decks_status.md](decks_status.md) | `python scripts/verify_encoding.py <slug> --graduate` |
 | `soak_*.md` / `soak_*.json` | `python scripts/soak.py` — measured soak campaigns per deck |
-| [history/](history/) | Per-session encoding and reprint-sweep logs, kept for provenance |
+| [history/](history/) | Encoding, engine-primitive ([seams_log.md](history/seams_log.md)) and reprint-sweep logs, kept for provenance and precedent |
 
 ## Operational
 
