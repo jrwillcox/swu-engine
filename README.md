@@ -1,18 +1,17 @@
 # SWU — a Star Wars: Unlimited rules engine
 
-A complete, tested implementation of the *Star Wars: Unlimited* trading card game:
-a deterministic rules engine, a declarative card-encoding framework covering the
-full card pool, three tiers of computer opponent, a FastAPI backend and a React
-front end you can actually play in a browser.
+A complete rules engine for the *Star Wars: Unlimited* card game, with all 2,636
+cards playable. Play it in your browser against a heuristic or Claude-backed opponent.
+
+![A turn against the bot: play a unit, attack with Luke and shield C-3PO, then destroy a TIE Fighter](docs/images/demo.gif)
 
 > **Unofficial fan project.** Not affiliated with, endorsed by, or sponsored by
 > Lucasfilm, Disney, Fantasy Flight Games or Asmodee. All card text, artwork,
-> rules and trademarks belong to their respective owners. **No card data or
-> artwork is distributed in this repository** — the pipeline in `scripts/` builds
-> the card database locally from the publisher's public API. The code is MIT
-> licensed; see [LICENSE](LICENSE).
-
-![The game board — two arenas, leaders, bases, resources and hand](docs/images/game-board.png)
+> rules and trademarks belong to their respective owners. **The repository ships
+> no card art, and no card database beyond a small test fixture**; the pipeline in
+> `scripts/` builds both locally from the publisher's public API. The screenshots
+> show the app running on a locally built database. The code is MIT licensed; see
+> [LICENSE](LICENSE).
 
 ## What's here
 
@@ -20,7 +19,7 @@ front end you can actually play in a browser.
 |---|---|
 | **Card coverage** | **2,636 / 2,636 playable (100%)** — 2,176 registered in the ability framework, the rest fully handled by the keyword and vanilla layers. **0 escape hatches**, 0 keyword-deferred. Measured by `scripts/audit_coverage.py`, written to [`docs/coverage_report.md`](docs/coverage_report.md). |
 | **Tests** | 4,442 test functions across 75 files → **5,655 passing, 6 skipped** with parametrisation, plus 138 front-end tests and 2 Playwright e2e specs. |
-| **Engine** | ~101k lines of Python across `src/swu/`; ~8k lines of TypeScript in `web/src/`. |
+| **Engine** | ~101k lines of Python across `src/swu/`, with a FastAPI backend; ~8k lines of React and TypeScript in `web/src/`. |
 | **Opponents** | A transparent weighted-heuristic bot, an LLM-backed bot (Claude) that degrades visibly to the heuristic, and random/aggro/chaos bots for soak testing. |
 
 ## Quick start
@@ -71,6 +70,8 @@ cd web && npm install && npm run dev   # front end on :5173, proxies /api
 Open <http://localhost:5173>, register an account and pick a deck. By default the
 only username permitted to register is `player`; set `SWU_ALLOWED_USERS` to change
 that (see [`.env.example`](.env.example)).
+
+![Mid-game, round 5: units in both arenas, a shielded C-3PO and the battle log](docs/images/game-board.png)
 
 **No Anthropic API key is required.** *Easy* is a pure heuristic and never calls
 an API. *Normal* and *Hard* use a small Claude model but fall back to the
@@ -243,4 +244,4 @@ coverage with green suites. See [`docs/methodology.md`](docs/methodology.md).
 ## Licence
 
 Code: MIT ([LICENSE](LICENSE)). Card text, artwork and trademarks are not covered
-by that licence and are not redistributed here.
+by that licence.
