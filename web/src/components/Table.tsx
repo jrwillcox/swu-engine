@@ -197,6 +197,52 @@ export function Table({ game, onToggleLog }: { game: Game; onToggleLog?: () => v
           finish: findFinish("FinishReturnFromDiscard"),
           finishLabel: "Done",
         } as Cfg;
+      case "resource_from_discard":
+        return {
+          title: "Resource from discard",
+          prompt: "Choose a card in your discard pile to put into play as a resource.",
+          candidates: ctxCandidates,
+          pickKind: "SelectResourceFromDiscard",
+          finish: findFinish("DeclineResourceFromDiscard"),
+          finishLabel: "Decline",
+        } as Cfg;
+      case "bottom_from_discard":
+        return {
+          title: "Choose from a discard pile",
+          prompt: "Pick cards one at a time, then finish.",
+          candidates: ctxCandidates,
+          pickKind: "SelectBottomDiscardCard",
+          finish: findFinish("FinishBottomFromDiscard"),
+          finishLabel: "Done",
+        } as Cfg;
+      case "select_distinct_return_random":
+        return {
+          title: "Choose from your discard",
+          prompt:
+            "Pick cards with different names — one of them returns to your hand at random.",
+          candidates: ctxCandidates,
+          pickKind: "SelectDistinctDiscardCard",
+          finishLabel: "",
+        } as Cfg;
+      case "play_captured_card":
+        return {
+          title: "Play a captured card",
+          prompt: "Choose a card captured by one of your units to play for free.",
+          candidates: ctxCandidates,
+          pickKind: "SelectCapturedToPlay",
+          finish: findFinish("DeclineCapturedPlay"),
+          finishLabel: "Decline",
+        } as Cfg;
+      case "recur_and_buff":
+        if (ctx.stage !== "recur") return null; // the buff targets are on-board
+        return {
+          title: "Recycle units from your discard",
+          prompt: "Put units from your discard pile on the bottom of your deck, then finish.",
+          candidates: ctxCandidates,
+          pickKind: "SelectRecurUnit",
+          finish: findFinish("FinishRecur"),
+          finishLabel: "Done",
+        } as Cfg;
       case "cull_for_damage":
         if (ctx.stage !== "select") return null; // the damage target is on-board
         return {

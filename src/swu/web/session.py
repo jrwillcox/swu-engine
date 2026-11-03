@@ -66,6 +66,8 @@ _PROMPTS: dict[str, str] = {
     "reveal_top": "Revealed cards — discard any, then keep the rest on top in the order you choose.",
     "select_token": "Choose eligible units — each gets a token or a bonus — pick one at a time, or finish.",
     "return_from_discard": "Return eligible cards from your discard pile to your hand — pick one at a time, or finish.",
+    "discard_for_experience": "You may discard a card from your hand with the same name as your unit to give it 2 Experience tokens — or decline.",
+    "resource_from_discard": "Choose a card in your discard pile to put into play as a resource.",
     "bottom_from_discard": "Choose up to 4 cards in a discard pile to put on the bottom of their owner's deck (random order) — pick one at a time, or finish.",
     "select_distinct_return_random": "Choose cards in your discard pile with different names — one at a time; when the last is chosen, one of them returns to your hand at random.",
     "move_upgrade": "You may move an upgrade to another eligible unit controlled by the same player — or decline.",

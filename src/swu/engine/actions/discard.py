@@ -1313,6 +1313,7 @@ def push_recur_and_buff(
             "controller_id": controller_id,
             "stage": "recur",
             "candidate_ids": candidate_ids,
+            "candidates": _candidate_card_views(s, candidate_ids),
             "selected_ids": [],
             "max_select": int(max_select),
             "power": int(power),
