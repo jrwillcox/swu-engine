@@ -61,11 +61,10 @@ If the queue prints `QUEUE EMPTY`, the campaign is done — report that and stop
 
 1. **Read the spec file** at the printed `spec=` path (self-contained: card text,
    mechanical analysis, suggested primitives, acceptance criteria).
-2. **Consult only** these `CLAUDE.md` sections — never read the whole file:
-   `## Engine seams & patterns catalog` (reuse primitives/decision kinds **by
-   name**) and `## How to implement a new card (Phase 3 recipe)` (Steps 0–12).
-   For a named canonical precedent, `grep` `docs/history/encoding_history.md` for the card
-   id — never read it in full.
+2. **Read** `docs/engine_seams.md` (reuse patterns and decision kinds **by name**)
+   and `docs/encoding_guide.md` (the recipe). For a named precedent, `grep`
+   `docs/history/seams_log.md` and `docs/history/encoding_history.md` for the card
+   id; never read those in full.
 3. **Implement declaratively** in `src/swu/cards/<set>/abilities.py` with
    `@card_ability(SET, NUM)`. If the set module doesn't exist yet, create it and add
    its import to `src/swu/cards/__init__.py`. **Reuse** existing primitives and
@@ -77,13 +76,12 @@ If the queue prints `QUEUE EMPTY`, the campaign is done — report that and stop
 5. **escape_hatch=True only when irreducible** — and say so in the report.
 6. **KEYWORD-ENGINE (Support)**: implement the keyword in the engine once, with
    synthetic tests; then move `"Support"` from `PHASE3_KEYWORDS` to
-   `PHASE2_KEYWORDS` in `scripts/audit_coverage.py`, and update the keyword lists in
-   `CLAUDE.md`. Encode no residual card text this invocation.
-7. **Escalation rule** (from `CLAUDE.md` "The escalation rule"): a primitive that
-   touches core resolution / the trigger system / decision machinery → **STOP,
-   implement nothing, flag it** for a dedicated framework session. A small,
-   self-contained primitive may land inline — but register it in **all 4 places**
-   (spec dataclass, resolver/actions, `legal_actions`, web/bot if it's a decision).
+   `PHASE2_KEYWORDS` in `scripts/audit_coverage.py`, and update the keyword list in
+   `docs/engine_seams.md`. Encode no residual card text this invocation.
+7. **Escalation rule** (`docs/engine_seams.md`): a primitive that touches core
+   resolution, the trigger system or decision machinery → **STOP, implement nothing,
+   flag it** for a dedicated framework session. A small, self-contained primitive may
+   land inline; a new decision kind must follow "Adding a decision kind" there.
 8. **Run the printed `VERIFY:` command** for the group. It must pass before you move
    to the next group.
 
@@ -91,14 +89,14 @@ If the queue prints `QUEUE EMPTY`, the campaign is done — report that and stop
 
 1. **One fast suite** (the only full run this batch):
    ```
-   .venv/Scripts/python.exe -m pytest tests/ --ignore=tests/test_engine_soak.py --ignore=tests/test_hypothesis_engine.py -q
+   .venv/Scripts/python.exe -m pytest -q
    ```
    Fix regressions. A stand-in test that rots because you just encoded its
    placeholder card → refresh the stand-in. A regression that resists two fix
    attempts → **revert that one card** and flag it; don't sink the batch.
 2. **Refresh the queue + peek next**: `.venv/Scripts/python.exe scripts/next_group.py --n 1`.
 3. **On a `MILESTONE:` line** (a set just completed): run the medium tier
-   (`.venv/Scripts/python.exe -m pytest tests/test_engine_soak.py -q`) and
+   (`.venv/Scripts/python.exe -m pytest -m slow -q`) and
    `.venv/Scripts/python.exe scripts/audit_coverage.py` (regenerates
    `docs/coverage_report.md`). Do NOT `--graduate` a `*-set` slug and do NOT soak it
    (sets aren't decks).
@@ -113,10 +111,10 @@ ends at a clean, tested boundary, so it's always safe to stop.
 
 ## Doc & memory discipline (keeps context lean — follow exactly)
 
-- **Do NOT write per-card or per-group notes to `CLAUDE.md`.** It is touched only
-  for: (a) a genuinely NEW primitive that landed → **one row** in the
-  "Engine seams & patterns catalog"; or (b) a keyword completing (Support) → the
-  keyword-list move. Nothing else.
+- **Do NOT write per-card or per-group notes anywhere.** Two exceptions: a genuinely
+  NEW primitive → **one row** in `docs/engine_seams.md` plus an entry in
+  `docs/history/seams_log.md`; a keyword completing → the keyword-list update.
+  Never add to `CLAUDE.md`.
 - **No per-batch history document.** Progress lives in the generated
   `encoding/<slug>-set/manifest.json` + `MANIFEST.md` and `docs/coverage_report.md`
   (all machine-regenerated). Add **no** campaign entries to `docs/history/encoding_history.md`.

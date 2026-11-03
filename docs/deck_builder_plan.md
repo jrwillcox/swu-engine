@@ -18,8 +18,8 @@ tests. Backend stages land before the frontend stages that consume them.
 - **Identity by DB `id`, not (set, number).** The whole app already keys cards by
   the unique DB primary key `id` (the Card Explorer, the image endpoint, the game
   serializer). Custom decks store **card ids**, sidestepping the Leader/Token
-  `(set, number)` collision entirely (see `CLAUDE.md` — "`(set_code, card_number)`
-  is NOT unique").
+  `(set, number)` collision entirely (see "Gotchas" in
+  [`encoding_guide.md`](encoding_guide.md)).
 - **Per-user, server-backed, file storage** — mirror the existing `auth.py` /
   `bugs.py` pattern. Decks live under `data_dir()/custom_decks/<username>/<id>.json`
   (path overridable via `SWU_CUSTOM_DECKS` for tests). `data/` survives deploys

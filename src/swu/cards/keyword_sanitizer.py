@@ -71,7 +71,7 @@ _LOSES = re.compile(r"\bloses?\b", re.IGNORECASE)
 
 
 def _normalise(text: str | None) -> str:
-    # Non-breaking spaces appear in some DB rows (see CLAUDE.md).
+    # Non-breaking spaces appear in some DB rows.
     return (text or "").replace("\xa0", " ")
 
 

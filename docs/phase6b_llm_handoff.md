@@ -318,7 +318,7 @@ the **opponent's visible cards in play** (they are public). Non-breaking spaces
 - HTTP: the frontend calls `POST /api/games/{id}/actions/{action_id}` for the
   human action (animates that event batch), then `POST /api/games/{id}/advance`
   to run the bot's turn(s) and animate the second batch. `apply` and `advance`
-  are deliberately separate (see `CLAUDE.md` Phase 5).
+  are deliberately separate.
 
 **Latency / "thinking" indicator.** Today `advance` is synchronous and fast
 (heuristic). The LLM call adds seconds. Two options for 6B:

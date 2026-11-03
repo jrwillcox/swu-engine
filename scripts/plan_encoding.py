@@ -548,8 +548,8 @@ def write_group_spec(group: Group, out_dir: Path) -> Path:
         L.append(f"Implement the **{group.keyword}** keyword engine-side once "
                  f"(Phase 2 pattern: keyword query layer / effective-stats / "
                  f"decision-stack as needed), with synthetic-card framework tests "
-                 f"first. Then confirm every card below becomes playable and remove "
-                 f"`{group.keyword}` from the Phase-2 deferred list in `CLAUDE.md`.")
+                 f"first. Then confirm every card below becomes playable and add "
+                 f"`{group.keyword}` to the keyword list in `docs/engine_seams.md`.")
         L.append("")
         L.append("Note: a card may have rules text *beyond* the keyword. Where "
                  "flagged 'residual text' below, the keyword unblocks the card but "

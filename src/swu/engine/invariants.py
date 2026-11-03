@@ -514,9 +514,9 @@ def _check_terminal_quiescence(state: "GameState", ctx: CheckContext) -> None:
 def _check_serialization_roundtrip(state: "GameState", ctx: CheckContext) -> None:
     """Verify to_json() / from_json() roundtrip produces identical JSON.
 
-    The event_log is intentionally NOT restored by from_json() (CLAUDE.md:
-    "not needed for replay; re-run actions instead"), so we exclude it from
-    the comparison.
+    from_json() deliberately doesn't restore the event_log (replay re-runs the
+    actions instead; see docs/ARCHITECTURE.md), so it is excluded from the
+    comparison.
     """
     import json as _json
     from swu.engine.state import GameState

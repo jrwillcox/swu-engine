@@ -11,8 +11,7 @@ hardcode a card here.
 
 Read docs/reprint_duplicates_plan.md (Stage 4), the [[reprint-duplicates]] memory
 (project_reprint_duplicates.md) for the per-primitive roadmap of the remaining
-shipped-canonical needs_encoding groups, and CLAUDE.md's "How to implement a new card"
-recipe.
+shipped-canonical needs_encoding groups, and the recipe in docs/encoding_guide.md.
 
 The iterative easy-encode phase is OVER — every remaining group needs a genuinely new
 engine primitive. This session builds ONE such primitive end to end.
@@ -35,7 +34,7 @@ engine primitive. This session builds ONE such primitive end to end.
 
 3. IMPLEMENT the primitive in the engine (actions.py / registry.py / abilities as
    appropriate), then encode the CANONICAL member of each group it serves per the
-   CLAUDE.md recipe, reusing the new primitive. Register in the correct
+   docs/encoding_guide.md recipe, reusing the new primitive. Register in the correct
    src/swu/cards/<set>/abilities.py.
 
 4. Add focused tests with the card number in each method name, covering the primitive's

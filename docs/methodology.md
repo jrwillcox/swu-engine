@@ -42,7 +42,7 @@ should be enough"* — so if they are not, that is a signal, not an inconvenienc
 ## 2. An escalation rule instead of a workaround
 
 The failure mode to avoid is an agent inventing a bespoke one-off mechanism to
-make one card pass. The standing instruction (see `CLAUDE.md`) is the opposite:
+make one card pass. The standing instruction (the [escalation rule](engine_seams.md#the-escalation-rule)) is the opposite:
 if a card genuinely needs a new engine primitive, **stop and flag it** for a
 dedicated design session rather than jamming it into a card batch.
 
@@ -99,6 +99,7 @@ unchanged.
 | `scripts/verify_encoding.py` | Per-group verification and the `--graduate` gate |
 | `scripts/audit_coverage.py` | The independent coverage audit |
 | `encoding/*/MANIFEST.md` | Per-set boards with per-card acceptance criteria |
-| `CLAUDE.md` | The working reference the agent reads — architecture notes, the engine-seam catalog, and the escalation rule |
+| `CLAUDE.md` | The short brief every agent session loads: commands, workflow, and the rules that are easy to break |
+| `docs/encoding_guide.md`, `docs/engine_seams.md` | The card recipe, and the catalogue of reusable patterns and decision kinds |
 | `.claude/skills/encode-next/` | The batch workflow itself |
 | `docs/soak_*.md` | Measured soak evidence per deck |
