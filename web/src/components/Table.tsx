@@ -218,8 +218,7 @@ export function Table({ game, onToggleLog }: { game: Game; onToggleLog?: () => v
       case "select_distinct_return_random":
         return {
           title: "Choose from your discard",
-          prompt:
-            "Pick cards with different names — one of them returns to your hand at random.",
+          prompt: "Pick cards with different names — one of them returns to your hand at random.",
           candidates: ctxCandidates,
           pickKind: "SelectDistinctDiscardCard",
           finishLabel: "",
