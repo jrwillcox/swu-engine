@@ -42,7 +42,7 @@ should be enough"* — so if they are not, that is a signal, not an inconvenienc
 ## 2. An escalation rule instead of a workaround
 
 The failure mode to avoid is an agent inventing a bespoke one-off mechanism to
-make one card pass. The standing instruction (the [escalation rule](engine_seams.md#the-escalation-rule)) is the opposite:
+make one card pass. The standing instruction (the [escalation rule](dev/engine_seams.md#the-escalation-rule)) is the opposite:
 if a card genuinely needs a new engine primitive, **stop and flag it** for a
 dedicated design session rather than jamming it into a card batch.
 
@@ -64,7 +64,7 @@ advisory. For a deck to be marked shippable it must clear, in order:
   (`src/swu/engine/invariants.py`) run after every single action.
 
 Only then does it self-register the deck as playable. Measured evidence from those
-runs is kept in `docs/soak_*.md`.
+runs is summarised in [`docs/soak_results.md`](soak_results.md).
 
 ## 4. An oracle strong enough to be worth passing
 
@@ -100,6 +100,6 @@ unchanged.
 | `scripts/audit_coverage.py` | The independent coverage audit |
 | `encoding/*/MANIFEST.md` | Per-set boards with per-card acceptance criteria |
 | `CLAUDE.md` | The short brief every agent session loads: commands, workflow, and the rules that are easy to break |
-| `docs/encoding_guide.md`, `docs/engine_seams.md` | The card recipe, and the catalogue of reusable patterns and decision kinds |
+| `docs/dev/encoding_guide.md`, `docs/dev/engine_seams.md` | The card recipe, and the catalogue of reusable patterns and decision kinds |
 | `.claude/skills/encode-next/` | The batch workflow itself |
-| `docs/soak_*.md` | Measured soak evidence per deck |
+| `docs/soak_results.md` | Measured soak evidence per campaign |

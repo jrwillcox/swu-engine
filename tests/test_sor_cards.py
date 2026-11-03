@@ -3162,7 +3162,7 @@ class TestEzraBridger:
         assert not state.pending_decisions
 
 
-# ── Reprint-duplicate encodes (Stage 4 of docs/reprint_duplicates_plan.md) ────
+# ── Reprint-duplicate encodes (Stage 4 of docs/dev/plans/reprint_duplicates_plan.md) ────
 
 class TestSuperlaserBlast:
     """SOR_43 — "Defeat all units." (reprint canonical; sib P25_66)."""

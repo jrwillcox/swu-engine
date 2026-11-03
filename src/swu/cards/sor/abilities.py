@@ -1607,7 +1607,7 @@ def _ezra_bridger():
     )
 
 
-# ── Reprint-duplicate encodes (Stage 4 of docs/reprint_duplicates_plan.md) ────
+# ── Reprint-duplicate encodes (Stage 4 of docs/dev/plans/reprint_duplicates_plan.md) ────
 # Canonicals whose only reason for being unregistered was that no encoded deck
 # pulled them in; each is a plain reuse of an existing primitive.  Siblings are
 # aliased in src/swu/cards/reprints.py.

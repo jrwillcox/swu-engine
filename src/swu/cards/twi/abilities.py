@@ -502,7 +502,7 @@ def _ahsokas_padawan_lightsaber():
 # DrawCards) routed through ``actions._create_token_units`` → ``_put_unit_in_play``,
 # so each token enters the controller's ground arena exhausted and is buffable like
 # any unit.  Token units are excluded from card conservation and cease to exist
-# when they leave play (see docs/history/seams_log.md).
+# when they leave play (see docs/dev/history/seams_log.md).
 
 @card_ability("TWI", "94")
 def _shaak_ti():

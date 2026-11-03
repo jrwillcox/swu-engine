@@ -2226,7 +2226,7 @@ class TestVermillion:
         assert not state.pending_decisions
 
 
-# ── Reprint-duplicate encodes (Stage 4 of docs/reprint_duplicates_plan.md) ────
+# ── Reprint-duplicate encodes (Stage 4 of docs/dev/plans/reprint_duplicates_plan.md) ────
 
 class TestIncapacitate:
     """LAW_131 — "Give a unit -2/-2 for this phase." (sib LAWP_12)."""

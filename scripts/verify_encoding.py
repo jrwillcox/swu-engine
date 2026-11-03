@@ -9,7 +9,7 @@ It re-runs the planner's (registry-aware, strong) audit, updates
 `manifest.json` / `MANIFEST.md` progress in place (stable group ids preserved),
 and prints what remains.  ``--group NN`` additionally runs a focused pytest for
 that group's cards.  ``--graduate`` runs the automated graduation gate and, on a
-full pass, marks the deck shippable in ``docs/decks_status.md`` **and registers
+full pass, marks the deck shippable in ``docs/dev/decks_status.md`` **and registers
 it on the web start screen** (``swu.web.decks.register_ui_deck`` → the catalog
 the new-game screen lists), so a graduated deck is immediately selectable without
 a code edit.
@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import plan_encoding as P  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-DECKS_STATUS = ROOT / "docs" / "decks_status.md"
+DECKS_STATUS = ROOT / "docs" / "dev" / "decks_status.md"
 PY = sys.executable
 
 # pytest arguments for the two suites the graduation gate runs.  pyproject's

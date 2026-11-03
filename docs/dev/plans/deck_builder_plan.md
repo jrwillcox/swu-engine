@@ -7,7 +7,7 @@ Card Explorer while a live panel shows the target deck's contents and remaining
 space. SWU deckbuilding rules are enforced.
 
 This doc is the **source of truth**. Implement one stage per clean session
-(prompt: "Read docs/deck_builder_plan.md and implement Stage N"). Each stage is
+(prompt: "Read docs/dev/plans/deck_builder_plan.md and implement Stage N"). Each stage is
 self-contained, lists the files it touches, its acceptance criteria, and its
 tests. Backend stages land before the frontend stages that consume them.
 
@@ -19,7 +19,7 @@ tests. Backend stages land before the frontend stages that consume them.
   the unique DB primary key `id` (the Card Explorer, the image endpoint, the game
   serializer). Custom decks store **card ids**, sidestepping the Leader/Token
   `(set, number)` collision entirely (see "Gotchas" in
-  [`encoding_guide.md`](encoding_guide.md)).
+  [`encoding_guide.md`](../encoding_guide.md)).
 - **Per-user, server-backed, file storage** — mirror the existing `auth.py` /
   `bugs.py` pattern. Decks live under `data_dir()/custom_decks/<username>/<id>.json`
   (path overridable via `SWU_CUSTOM_DECKS` for tests). `data/` survives deploys

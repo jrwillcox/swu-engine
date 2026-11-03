@@ -43,7 +43,7 @@ adjacent on the printed list but belong to **different sets**.
 
 No escape-hatches, no reprint aliases, no deferred keywords. The gap-filling
 campaign had already covered every card; this deck needed **no new card encoding
-at all**, so there are no group specs to hand to `docs/encode_group_prompt.md`.
+at all**, so there are no group specs to hand to `docs/dev/encode_group_prompt.md`.
 
 ## Interaction hot-spots (all clean, but this is where to look first)
 
@@ -76,6 +76,6 @@ starting point, not because anything is outstanding.
 [~] [manual] UI smoke pass
 ```
 
-Marked shippable in `docs/decks_status.md` and registered on the **dev** start
+Marked shippable in `docs/dev/decks_status.md` and registered on the **dev** start
 screen (`data/ui_decks.json`) as *Luke Skywalker — Vigilance/Heroism (Ashes of the
 Empire)*. The deployed instance is untouched until a deploy.

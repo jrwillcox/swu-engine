@@ -32,8 +32,9 @@ node_modules/
 web/dist/
 
 # ── Local artifacts (regenerable; noisy in review) ────────────────────────────
-# Soak-campaign failure bundles, written by scripts/soak.py on an invariant break.
+# Soak-campaign output from scripts/soak.py: failure bundles and run reports.
 failures/
+soak_reports/
 # QA screenshots and Playwright output. A curated few live in docs/images/.
 web/screenshots/
 web/test-results/

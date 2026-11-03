@@ -2,7 +2,7 @@
 
 Deck readiness: **6/6** cards playable. Encoding groups: **1/1** complete.
 
-Encode one group per session: paste its **group id** into `docs/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py j24-set --group NN`.
+Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py j24-set --group NN`.
 
 ## Groups (in dependency order)
 

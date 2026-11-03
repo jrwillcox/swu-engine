@@ -1,56 +1,35 @@
-# Documentation index
+# Documentation
 
-Start with the [top-level README](../README.md). This directory holds the deeper
-design notes and the generated evidence behind the coverage and quality claims.
+Start with the [top-level README](../README.md).
 
-## Design & reference
+## Design
 
 | Document | What it covers |
 |---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | The engine contract, state model, serialisation, and how to add a keyword, action or zone. Start here to read the code. |
-| [encoding_guide.md](encoding_guide.md) | How to encode a card: the workflow, the recipe, gotchas and rules notes. |
-| [engine_seams.md](engine_seams.md) | The reusable encoding patterns, every decision kind, and the engine internals worth knowing. |
-| [bots.md](bots.md) | The difficulty levels, the heuristic and LLM bots, and how to measure a bot change. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | The engine contract, state model and serialisation, and how to add a keyword, action or zone. Start here to read the code. |
+| [ability_framework.md](ability_framework.md) | The design of the declarative card DSL: ability types, targeting, conditions, durations, and the rules behind each. |
+| [methodology.md](methodology.md) | How the encoding campaign was run: the offline planner, the escalation rule and the automated release gate. |
+
+## Reference
+
+| Document | What it covers |
+|---|---|
+| [bots.md](bots.md) | Difficulty levels, the heuristic and LLM bots, and how to measure a bot change. |
 | [testing.md](testing.md) | Test tiers, the invariant oracle, soak campaigns and regression tests. |
-| [ability_framework.md](ability_framework.md) | The original design document for the declarative card DSL — ability types, targeting, conditions, durations, and the rules citations behind each. |
-| [methodology.md](methodology.md) | How the encoding campaign was run: the offline planner, the escalation rule, and the automated release gate. |
-| [pipeline.md](pipeline.md) | Building `data/swu.db` from the publisher's API, and refreshing it when a set releases. |
-| [new_releases.md](new_releases.md) | Runbook for new cards, sets, keywords and decks — detection, implementation, and publishing hygiene. |
+| [pipeline.md](pipeline.md) | Building `data/swu.db` from the publisher's API, and refreshing it for a new set. |
 | [openapi.json](openapi.json) | Generated backend schema (`python -m swu.web --export-openapi docs/openapi.json`). |
 
-## Feature design notes
+## Evidence
 
-Staged implementation plans, all of which shipped. Useful as worked examples of
-how a feature was specified before it was built.
-
-| Document | Feature |
+| Document | What it shows |
 |---|---|
-| [bug_reporting_plan.md](bug_reporting_plan.md) | In-app bug reports and two-way threaded messaging |
-| [deck_builder_plan.md](deck_builder_plan.md) | Per-user custom deck builder |
-| [tutorial_plan.md](tutorial_plan.md) | In-app tutorial |
-| [reprint_duplicates_plan.md](reprint_duplicates_plan.md) | Reprint aliasing — one encoding serving every printing |
-| [phase6b_llm_handoff.md](phase6b_llm_handoff.md) | The LLM opponent |
-| [design_when_you_draw_observer.md](design_when_you_draw_observer.md) · [design_when_you_use_force_observer.md](design_when_you_use_force_observer.md) | Two framework escalations — worked examples of the "don't jam it into a card batch" rule |
+| [coverage_report.md](coverage_report.md) | 100% card coverage, from `python scripts/audit_coverage.py`. Regenerate, don't edit. |
+| [soak_results.md](soak_results.md) | 15,100 bot-vs-bot games with zero failures. |
 
-## Generated evidence
+## Internal
 
-Regenerate rather than edit these.
-
-| Document | Produced by |
-|---|---|
-| [coverage_report.md](coverage_report.md) | `python scripts/audit_coverage.py` — the 100% card-coverage number |
-| [decks_status.md](decks_status.md) | `python scripts/verify_encoding.py <slug> --graduate` |
-| `soak_*.md` / `soak_*.json` | `python scripts/soak.py` — measured soak campaigns per deck |
-| [history/](history/) | Encoding, engine-primitive ([seams_log.md](history/seams_log.md)) and reprint-sweep logs, kept for provenance and precedent |
-
-## Operational
-
-| Document | What it covers |
-|---|---|
-| [bug_triage_prompt.md](bug_triage_prompt.md) | The paste-ready prompt for processing a bug report out of band |
-| [encode_group_prompt.md](encode_group_prompt.md) | The standing prompt for encoding one card group |
-| [reprint_escalation_prompt.md](reprint_escalation_prompt.md) | Escalation prompt for an ambiguous reprint |
-| [ui_qa.md](ui_qa.md) | Manual web-UI QA checklist |
+[dev/](dev/README.md) holds the working files: the card-encoding guide, LLM
+prompts, runbooks, shipped feature plans and build logs.
 
 > The *Star Wars: Unlimited* Comprehensive Rules are the rules authority for this
 > engine, but they are the publisher's copyrighted document and are **not**

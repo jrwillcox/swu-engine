@@ -549,7 +549,7 @@ def write_group_spec(group: Group, out_dir: Path) -> Path:
                  f"(Phase 2 pattern: keyword query layer / effective-stats / "
                  f"decision-stack as needed), with synthetic-card framework tests "
                  f"first. Then confirm every card below becomes playable and add "
-                 f"`{group.keyword}` to the keyword list in `docs/engine_seams.md`.")
+                 f"`{group.keyword}` to the keyword list in `docs/dev/engine_seams.md`.")
         L.append("")
         L.append("Note: a card may have rules text *beyond* the keyword. Where "
                  "flagged 'residual text' below, the keyword unblocks the card but "
@@ -668,7 +668,7 @@ def write_manifest(slug: str, groups: list[Group], progress: dict, out_dir: Path
              f"Encoding groups: **{done_groups}/{len(groups)}** complete.")
     L.append("")
     L.append("Encode one group per session: paste its **group id** into "
-             "`docs/encode_group_prompt.md`, review, then run "
+             "`docs/dev/encode_group_prompt.md`, review, then run "
              "`python scripts/verify_encoding.py " + slug + " --group NN`.")
     L.append("")
     L.append("## Groups (in dependency order)")

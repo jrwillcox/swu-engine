@@ -208,7 +208,7 @@ in the reporter's inbox.
 ## Stage 5 — Operational: reusable step-4 prompt + docs
 **Depends on:** Stages 1–4 landed.
 
-- Draft `docs/bug_triage_prompt.md` — the reusable prompt the maintainer pastes to have Claude
+- Draft `docs/dev/bug_triage_prompt.md` — the reusable prompt the maintainer pastes to have Claude
   process a report out of band: read `swu-game-deployed/data/bug_reports/<id>/`;
   if the report + replay make the bug clear, investigate/fix, append a `claude`
   message written for a **non-developer** audience, and set `status: resolved`; if

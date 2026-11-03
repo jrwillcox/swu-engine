@@ -19,7 +19,7 @@ Options
 --jobs N            Parallel worker count (default: cpu_count or 4)
 --action-cap N      Max actions per game before declaring a cap-hit failure (default: 2000)
 --failures-dir DIR  Directory to write repro bundles (default: failures/)
---report PATH       Path for the JSON statistics report (default: docs/soak_report.json)
+--report PATH       Path for the JSON statistics report (default: soak_reports/soak_report.json)
 --quiet             Suppress per-game progress output
 
 Exit code: 0 if all games completed cleanly; 1 if any failures occurred.
@@ -959,7 +959,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Re-run every Nth game (by seed) from scratch and assert "
                         "an identical outcome; 0 disables (default: 50).")
     p.add_argument("--failures-dir", default="failures", dest="failures_dir")
-    p.add_argument("--report", default="docs/soak_report.json")
+    p.add_argument("--report", default="soak_reports/soak_report.json")
     p.add_argument("--quiet", action="store_true", default=False)
     return p.parse_args(argv)
 

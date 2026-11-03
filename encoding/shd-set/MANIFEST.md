@@ -2,7 +2,7 @@
 
 Deck readiness: **262/262** cards playable. Encoding groups: **22/22** complete.
 
-Encode one group per session: paste its **group id** into `docs/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py shd-set --group NN`.
+Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py shd-set --group NN`.
 
 ## Groups (in dependency order)
 

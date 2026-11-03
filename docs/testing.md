@@ -35,7 +35,8 @@ check(state, ctx)                               # after every apply()
 ## Soak campaigns
 
 `scripts/soak.py` plays bot-vs-bot games in parallel and writes a report to
-`docs/soak_report.json` and `.md` (change with `--report`).
+`soak_reports/soak_report.json` and `.md`, which are gitignored (change with
+`--report`). Past campaigns are summarised in [soak_results.md](soak_results.md).
 
 - Pick bots and decks with `--bots heuristic,easy,random,…` and
   `--decks starter,vanilla,keyword`.

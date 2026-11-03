@@ -2134,7 +2134,7 @@ class TestDarthTyranus:
         assert "Shielded" in names
 
 
-# ── Reprint-duplicate encode (Stage 4 of docs/reprint_duplicates_plan.md) ─────
+# ── Reprint-duplicate encode (Stage 4 of docs/dev/plans/reprint_duplicates_plan.md) ─────
 
 class TestAsajjVentress:
     """LOF_165 — "When Played/On Attack: Give another friendly Force unit +2/+0

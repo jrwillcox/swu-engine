@@ -1,6 +1,6 @@
 # Phase 5 — Manual QA checklist (Web UI)
 
-Run the backend and frontend (see [web/README.md](../web/README.md)), open
+Run the backend and frontend (see [web/README.md](../../web/README.md)), open
 `http://localhost:5173`, and walk this list. Tick each on a fresh game of
 **Luke (you) vs Vader (bot)**.
 

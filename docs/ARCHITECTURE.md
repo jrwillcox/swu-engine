@@ -2,7 +2,7 @@
 
 How the engine is put together, and the invariants everything else relies on.
 For the reusable engine patterns and decision kinds, see
-[`engine_seams.md`](engine_seams.md).
+[`engine_seams.md`](dev/engine_seams.md).
 
 ## The two-function contract
 
@@ -207,5 +207,5 @@ a handler that has moved away fails silently.
 `all_instances()`, `all_instances_for_player()` and the JSON helpers together —
 conservation checks depend on all four agreeing.
 
-**A card:** follow [`encoding_guide.md`](encoding_guide.md). Never string-match
+**A card:** follow [`encoding_guide.md`](dev/encoding_guide.md). Never string-match
 card text at the point of use; query the keyword layer.
