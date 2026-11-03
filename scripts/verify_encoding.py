@@ -39,6 +39,13 @@ ROOT = Path(__file__).resolve().parents[1]
 DECKS_STATUS = ROOT / "docs" / "decks_status.md"
 PY = sys.executable
 
+# pytest arguments for the two suites the graduation gate runs.  pyproject's
+# `addopts = "-m 'not slow'"` makes a plain run the fast tier, and means the
+# medium tier must be selected with `-m slow`: naming the soak file instead
+# deselects every test in it, and pytest exits 5 ("no tests ran").
+FAST_SUITE = ["tests/", "-q"]
+MEDIUM_SUITE = ["tests/", "-q", "-m", "slow"]
+
 
 def _run(cmd: list[str]) -> tuple[int, str]:
     print(f"\n$ {' '.join(cmd)}")
@@ -140,12 +147,10 @@ def _graduate(slug: str, info: dict, soak_games: int) -> bool:
     fast_ok = medium_ok = soak_ok = None
     if full:
         # 2/3. fast + medium suites
-        code, _ = _run([PY, "-m", "pytest", "tests/",
-                        "--ignore=tests/test_engine_soak.py",
-                        "--ignore=tests/test_hypothesis_engine.py", "-q"])
+        code, _ = _run([PY, "-m", "pytest", *FAST_SUITE])
         fast_ok = (code == 0)
         checklist.append(("fast suite green", fast_ok, ""))
-        code, _ = _run([PY, "-m", "pytest", "tests/test_engine_soak.py", "-q"])
+        code, _ = _run([PY, "-m", "pytest", *MEDIUM_SUITE])
         medium_ok = (code == 0)
         checklist.append(("medium suite green", medium_ok, ""))
 
