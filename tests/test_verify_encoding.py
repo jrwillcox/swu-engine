@@ -1,6 +1,8 @@
 """Tests for the Phase 7 verifier (scripts/verify_encoding.py)."""
 from __future__ import annotations
 
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -112,6 +114,25 @@ def test_graduation_passes_when_complete_and_green(info, tmp_path, monkeypatch):
     assert calls, "graduation should have run the verification subprocesses"
     assert (tmp_path / "decks_status.md").exists()
     assert "shippable" in (tmp_path / "decks_status.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("suite", ["FAST_SUITE", "MEDIUM_SUITE"])
+def test_graduation_suites_select_tests(suite):
+    """Each suite the gate runs must actually select tests.
+
+    The graduation tests above mock ``_run``, so they never notice a command that
+    selects nothing.  The medium suite once named ``tests/test_engine_soak.py``,
+    whose tests are all marked ``slow`` and so deselected by pyproject's addopts:
+    pytest exited 5 and every deck failed to graduate.  Collecting (not running)
+    with the gate's real arguments catches that, without recursing into pytest."""
+    proc = subprocess.run(
+        [V.PY, "-m", "pytest", *getattr(V, suite), "--collect-only"],
+        cwd=_ROOT, capture_output=True, text=True,
+    )
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 0, out[-2000:]
+    m = re.search(r"(\d+)(?:/\d+)? tests? collected", out)
+    assert m and int(m.group(1)) > 0, out[-2000:]
 
 
 def test_mark_shippable_writes_registry(tmp_path, monkeypatch):

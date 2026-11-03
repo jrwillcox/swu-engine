@@ -171,7 +171,7 @@ def main() -> None:
         print(f"ACTIVE SET {active_slug}: {pl}/{tot} cards playable, {dg}/{ng} groups")
     if milestone_slug:
         print(f"MILESTONE: {milestone_slug} complete — run the medium tier "
-              f"(pytest tests/test_engine_soak.py -q) + audit_coverage.py, then "
+              f"(pytest -m slow -q) + audit_coverage.py, then "
               f"regenerate docs/coverage_report.md")
 
 
