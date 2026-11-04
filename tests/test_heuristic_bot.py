@@ -402,6 +402,8 @@ def test_difficulty_coerce_defaults_to_normal():
     assert Difficulty.coerce("garbage") is Difficulty.NORMAL
     assert Difficulty.coerce("EASY") is Difficulty.EASY
     assert Difficulty.coerce(Difficulty.HARD) is Difficulty.HARD
+    # Saves written before the fix stored str(Difficulty.HARD).
+    assert Difficulty.coerce("Difficulty.HARD") is Difficulty.HARD
 
 
 def test_seeded_heuristic_is_deterministic(repo):
