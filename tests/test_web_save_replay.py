@@ -104,6 +104,20 @@ def test_save_restore_roundtrips_mid_game(client):
     assert a == b
 
 
+@pytest.mark.parametrize("difficulty", ["easy", "hard"])
+def test_save_restore_keeps_difficulty(client, difficulty):
+    """Regression: saves stored str(Difficulty.EASY) == "Difficulty.EASY", which
+    coerce() read as NORMAL, so a restored Easy game got the LLM bot.  NORMAL is
+    the fallback, so only EASY and HARD can catch this."""
+    require_db()  # engine token lookup / from_json needs the card database
+    gid = _new(client, seed=4, difficulty=difficulty)["game_id"]
+    assert client.get(f"/api/games/{gid}/replay").json()["difficulty"] == difficulty
+
+    client.post(f"/api/games/{gid}/save", params={"slot": "diff"})
+    new_gid = client.post("/api/saves/diff/load").json()["game_id"]
+    assert webapp.STORE.get(new_gid).difficulty.value == difficulty
+
+
 def test_restored_game_is_playable(client):
     require_db()  # engine token lookup / from_json needs the card database
     game = _new(client, seed=3)

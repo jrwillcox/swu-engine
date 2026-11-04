@@ -51,14 +51,16 @@ class Difficulty(str, Enum):
         """Best-effort parse from a request string; defaults to NORMAL.
 
         Unknown/empty values fall back to NORMAL rather than raising, so a stale
-        or malformed client value can never break game creation.
+        or malformed client value can never break game creation.  Also accepts
+        ``"Difficulty.EASY"``, which saves written before the fix contain.
         """
         if value is None:
             return cls.NORMAL
         if isinstance(value, cls):
             return value
+        text = str(value).strip().lower().removeprefix("difficulty.")
         try:
-            return cls(str(value).strip().lower())
+            return cls(text)
         except ValueError:
             return cls.NORMAL
 

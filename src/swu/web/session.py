@@ -614,7 +614,7 @@ class GameSession:
             "format": SAVE_FORMAT,
             "kind": "replay",
             "seed": self.seed,
-            "difficulty": str(self.difficulty),
+            "difficulty": self.difficulty.value,
             "human_deck": self.human_deck,
             "bot_deck": self.bot_deck,
             "action_history": list(self.action_history),
