@@ -368,10 +368,12 @@
   grid-template-rows: 1fr 1fr;
   min-height: 0;
 }
+/* Centred with auto margins, not justify-content: center, which pushes an
+   overflowing row's first units off the left edge where they can't be scrolled
+   to. Auto margins centre a row that fits and collapse to 0 when it overflows. */
 .arena-units {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
   padding: 0 12px;
   min-height: 0;
@@ -384,6 +386,12 @@
 }
 .arena-units .card {
   height: 92%;
+}
+.arena-units > :first-child {
+  margin-left: auto;
+}
+.arena-units > :last-child {
+  margin-right: auto;
 }
 .arena-units::-webkit-scrollbar {
   height: 5px;
