@@ -5,6 +5,8 @@ import { expect, test } from "@playwright/test";
 // import box reports gaps. Requires the auto-started backend + dev server.
 // HIDDEN 2026-09-01: these cover the start-screen tools (Resume a saved game /
 // Import a deck), which are commented out in NewGameScreen.tsx. Un-skip with them.
+// Before un-skipping: add the sign-in step from smoke.spec.ts, and give the e2e
+// backend its own save folder, or this test overwrites data/saves/quicksave.json.
 test.skip("save a game and resume it from the start screen", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
