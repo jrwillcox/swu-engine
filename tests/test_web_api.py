@@ -456,6 +456,30 @@ def test_no_button_label_shows_a_raw_instance_id(client):
     assert {"PlayCard", "AttackWithUnit", "ResourceCard"} <= seen, seen
 
 
+def test_deployed_leader_prompt_quotes_its_unit_side():
+    """Regression: a deployed leader's optional-ability prompt quoted its leader
+    side (``text``) instead of its unit side (``deploy_box``)."""
+    from swu.web.session import GameSession
+    from swu.engine.actions import AttackWithUnit
+    from swu.cards.repository import CardRepository
+    from tests.test_golden_scenarios import _make_action_state, _get_card, _place
+
+    repo = CardRepository(require_db())
+    state = _make_action_state()
+    luke = _place(state, "P0", _get_card(repo, "SOR", "5"), "ground")
+    luke.deployed = True
+    _place(state, "P0", _get_card(repo, "SOR", "240"), "ground")  # a Shield target
+    sess = GameSession(game_id="t", state=state, bot=_NoopBot(),
+                       human_id="P0", bot_id="P1")
+    attack = next(aid for aid, a in sess.human_actions()
+                  if isinstance(a, AttackWithUnit) and a.attacker_id == luke.instance_id)
+    sess.apply_human(attack)
+
+    prompt = sess.prompt() or ""
+    assert "On Attack: You may give another unit a Shield token" in prompt, prompt
+    assert "Action [" not in prompt, prompt
+
+
 def test_label_does_not_name_an_opponents_hidden_card():
     """The name lookup must not reveal a face-down enemy resource."""
     from swu.web.session import GameSession

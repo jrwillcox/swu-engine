@@ -320,10 +320,13 @@ class GameSession:
             # Name the source card and quote its ability text so the player knows
             # what "use it" actually does (e.g. heal a unit), rather than a bare
             # "a triggered ability is ready".
+            # A deployed leader's abilities are on its unit side, in deploy_box.
             found = s.find_instance(top.context.get("source_id", ""))
             if found is not None:
-                name = found[1].card_def.display_name
-                text = (getattr(found[1].card_def, "text", "") or "").strip()
+                ci = found[1]
+                name = ci.card_def.display_name
+                side = "deploy_box" if ci.deployed else "text"
+                text = (getattr(ci.card_def, side, "") or "").strip()
                 base = (f"{name} — {text} Use it, or decline."
                         if text else f"{name}'s ability is ready — use it, or decline.")
         return base
