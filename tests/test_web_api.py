@@ -480,6 +480,27 @@ def test_deployed_leader_prompt_quotes_its_unit_side():
     assert "Action [" not in prompt, prompt
 
 
+def test_force_and_pilot_labels_name_the_cards():
+    """The Force cost choice read "Use force option exhaust_friendly" for every
+    unit, and a pilot play read "PilotPlay <pilot> on <vehicle>"."""
+    from swu.web.session import GameSession
+    from swu.engine.actions import PilotPlay, UseForceOption
+    from swu.cards.repository import CardRepository
+    from tests.test_golden_scenarios import _make_action_state, _get_card, _place
+
+    repo = CardRepository(require_db())
+    state = _make_action_state()
+    unit = _place(state, "P0", _get_card(repo, "SOR", "240"), "ground")
+    other = _place(state, "P0", _get_card(repo, "SHD", "148"), "ground")
+    sess = GameSession(game_id="t", state=state, bot=_NoopBot(),
+                       human_id="P0", bot_id="P1")
+    a, b = unit.card_def.display_name, other.card_def.display_name
+    assert sess.label_for(UseForceOption("force")) == "Use the Force (spend your Force token)"
+    assert sess.label_for(UseForceOption("exhaust_friendly", unit.instance_id)) == \
+        f"Exhaust {a} to use the Force"
+    assert sess.label_for(PilotPlay(unit.instance_id, other.instance_id)) == f"Pilot {a} onto {b}"
+
+
 def test_label_does_not_name_an_opponents_hidden_card():
     """The name lookup must not reveal a face-down enemy resource."""
     from swu.web.session import GameSession

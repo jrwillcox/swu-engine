@@ -194,7 +194,7 @@ export interface ReplayBundle {
   difficulty: string;
   human_deck: string;
   bot_deck: string;
-  action_history: { kind: string; desc: string }[];
+  action_history: { kind: string; desc: string; params?: Record<string, unknown> }[];
 }
 
 export interface ReplayStep {

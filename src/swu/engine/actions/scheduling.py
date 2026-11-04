@@ -1098,7 +1098,7 @@ class UseForceOption(Action):
         return _resolve_use_force_payoff(s, top)
 
     def describe(self) -> str:
-        return f"Use force option {self.option}"
+        return f"Use force option {self.option}" + (f" ({self.target_id})" if self.target_id else "")
 
 
 @dataclass

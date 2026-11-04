@@ -183,6 +183,22 @@ def test_seedless_game_records_concrete_seed_and_replays(client):
     assert replayed.winner == live.state.winner
 
 
+def test_replay_matches_recorded_fields_not_description():
+    """Regression: replay matched moves by describe(), which gave both targets of
+    a Force exhaust the same text, so a replay could exhaust the wrong unit."""
+    from swu.engine.actions import UseForceOption
+    from swu.web.session import IllegalStep, _action_params, _match_recorded
+
+    a, b = UseForceOption("exhaust_friendly", "human_1"), UseForceOption("exhaust_friendly", "human_2")
+    entry = {"kind": "UseForceOption", "desc": "ignored", "params": _action_params(b)}
+    assert _match_recorded([a, b], entry, 0) is b
+    # A recorded move that is no longer legal is a divergence, not a guess.
+    with pytest.raises(IllegalStep):
+        _match_recorded([a], entry, 0)
+    # Entries saved before fields were recorded still match by description.
+    assert _match_recorded([a, b], {"kind": "UseForceOption", "desc": b.describe()}, 0) is b
+
+
 def test_replay_steps_endpoint(client):
     """The per-step replay endpoint returns one board snapshot per action (+1 for
     the initial state), with the final winner matching the live game."""

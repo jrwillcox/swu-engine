@@ -17,7 +17,7 @@ import json
 import re
 import secrets
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 
 from swu.engine.actions import Action, apply, legal_actions
@@ -139,8 +139,11 @@ class GameSession:
     _action_cache: dict[str, Action] = field(default_factory=dict)
 
     def _record(self, action: Action) -> None:
-        self.action_history.append(
-            {"kind": type(action).__name__, "desc": action.describe()})
+        self.action_history.append({
+            "kind": type(action).__name__,
+            "desc": action.describe(),
+            "params": _action_params(action),
+        })
 
     # ── turn / actor introspection ─────────────────────────────────────────
 
@@ -476,6 +479,17 @@ class GameSession:
                 if isinstance(action, DiscardTopCard):
                     return f"Discard {name}"
                 return f"Leave {name} on top"
+        from swu.engine.actions import PilotPlay, UseForceOption
+        if isinstance(action, PilotPlay):
+            name = self._card_name(action.instance_id) or "pilot"
+            host = self._card_name(action.vehicle_target_id) or "a Vehicle"
+            return f"Pilot {name} onto {host}"
+        if isinstance(action, UseForceOption):
+            if action.option == "force":
+                return "Use the Force (spend your Force token)"
+            if action.option == "exhaust_friendly":
+                name = self._card_name(action.target_id) if action.target_id else None
+                return f"Exhaust {name or 'a friendly unit'} to use the Force"
         from swu.engine.actions import UseAbility
         if isinstance(action, UseAbility) and action.actor_id is not None:
             # An aura-granted Action (Satine Kryze TWI_47) is offered once per unit
@@ -656,11 +670,25 @@ class GameSession:
         return blob
 
 
+def _action_params(action: Action) -> dict:
+    """An action's fields as plain JSON values, as recorded in action_history."""
+    return json.loads(json.dumps(asdict(action), default=str)) if is_dataclass(action) else {}
+
+
 def _match_recorded(legal: list, entry: dict, step: int):
-    """Pick the legal action matching a recorded {kind, desc} entry."""
+    """Pick the legal action matching a recorded {kind, desc, params} entry.
+
+    Matches on the recorded fields.  Entries saved before fields were recorded
+    fall back to describe(), which can't tell apart actions it describes alike."""
     matches = [a for a in legal if type(a).__name__ == entry["kind"]]
     if not matches:
         raise IllegalStep(f"Replay diverged: no legal {entry['kind']} at step {step}")
+    if "params" in entry:
+        found = next((a for a in matches if _action_params(a) == entry["params"]), None)
+        if found is None:
+            raise IllegalStep(
+                f"Replay diverged: no legal {entry['kind']} with the recorded fields at step {step}")
+        return found
     if len(matches) == 1:
         return matches[0]
     return next((a for a in matches if a.describe() == entry.get("desc")), matches[0])
