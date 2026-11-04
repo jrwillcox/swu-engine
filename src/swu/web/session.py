@@ -14,13 +14,14 @@ smuggle an illegal or invented Action past the engine.
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from swu.engine.actions import Action, apply, legal_actions
-from swu.engine.state import GameState
+from swu.engine.state import GameState, Zone
 from swu.players.base import Player
 from swu.players.difficulty import Difficulty, make_opponent
 from swu.web.decks import resolve_deck
@@ -29,6 +30,11 @@ HUMAN_ID = "human"
 BOT_ID = "bot"
 
 SAVE_FORMAT = 1  # bump when the save/replay schema changes
+
+# An instance id in describe() text ("human_26", "ci_7").  Only tokens that
+# resolve to a card are replaced, so other underscored words are safe.
+_ID_TOKEN = re.compile(r"\b\w+_\w+\b")
+_HIDDEN_ZONES = frozenset({Zone.HAND, Zone.DECK, Zone.RESOURCES})
 
 _PROMPTS: dict[str, str] = {
     "ambush": "Ambush — attack now with the unit that just entered play, or decline.",
@@ -498,11 +504,26 @@ class GameSession:
                 if disposition == "bottom":
                     return f"Put {name} on the bottom"
                 return f"Discard {name}"
-        return action.describe()
+        # Any other action: swap the instance ids in describe() for card names.
+        return _ID_TOKEN.sub(
+            lambda m: self._visible_card_name(m.group()) or m.group(),
+            action.describe(),
+        )
 
     def _card_name(self, instance_id: str) -> str | None:
         found = self.state.find_instance(instance_id)
         return found[1].card_def.display_name if found is not None else None
+
+    def _visible_card_name(self, instance_id: str) -> str | None:
+        """The card's name, or None if the human can't see it (the opponent's
+        hand, deck or resources)."""
+        found = self.state.find_instance(instance_id)
+        if found is None:
+            return None
+        holder, ci = found
+        if holder.player_id != self.human_id and ci.zone in _HIDDEN_ZONES:
+            return None
+        return ci.card_def.display_name
 
     # ── stepping ───────────────────────────────────────────────────────────
 

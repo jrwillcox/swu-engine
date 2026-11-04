@@ -432,3 +432,46 @@ def test_choose_target_label_uses_card_name():
     assert any(lbl == "Target Fleet Lieutenant" for lbl in labels), labels
     # And never the raw instance id.
     assert not any(fleet_ci.instance_id in lbl for lbl in labels), labels
+
+
+def test_no_button_label_shows_a_raw_instance_id(client):
+    """Regression: actions without a label_for case fell back to describe(), so
+    buttons read "Attack unit bot_60 with human_0" and "Play human_26"."""
+    import re
+    raw_id = re.compile(r"\b(?:human|bot|ci)_\d+\b")
+    snap = _new_game(client, seed=8)
+    gid = snap["game_id"]
+    rng = random.Random(8)
+    seen = set()
+    for _ in range(400):
+        if snap["winner"] or snap["awaiting"] == "terminal":
+            break
+        if snap["awaiting"] == "bot":
+            snap = client.post(f"/api/games/{gid}/advance").json()
+            continue
+        for a in snap["actions"]:
+            assert not raw_id.search(a["label"]), a
+            seen.add(a["kind"])
+        snap = client.post(f"/api/games/{gid}/actions/{_pick(rng, snap['actions'])['action_id']}").json()
+    assert {"PlayCard", "AttackWithUnit", "ResourceCard"} <= seen, seen
+
+
+def test_label_does_not_name_an_opponents_hidden_card():
+    """The name lookup must not reveal a face-down enemy resource."""
+    from swu.web.session import GameSession
+    from swu.engine.actions import SacrificeResource
+    from swu.engine.state import CardInstance, Zone
+    from swu.cards.repository import CardRepository
+    from tests.test_golden_scenarios import _make_action_state, _get_card
+
+    cassian = _get_card(CardRepository(require_db()), "SHD", "148")
+    state = _make_action_state()
+    for pid in ("P0", "P1"):
+        state.player_by_id(pid).resources.append(CardInstance(
+            instance_id=f"{pid}_7", card_def=cassian, owner_id=pid,
+            zone=Zone.RESOURCES, face_down=True,
+        ))
+    sess = GameSession(game_id="t", state=state, bot=_NoopBot(),
+                       human_id="P0", bot_id="P1")
+    assert sess.label_for(SacrificeResource("P0_7")) == f"Defeat resource {cassian.display_name}"
+    assert sess.label_for(SacrificeResource("P1_7")) == "Defeat resource P1_7"
