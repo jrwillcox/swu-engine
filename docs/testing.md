@@ -8,7 +8,7 @@
 | Slow, also called "medium": soak tests and the Hypothesis state machine | `python -m pytest -m slow` | ~6 min |
 | Everything | `python -m pytest -m ""` | |
 | Front end (`web/`) | `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm test` | ~1 min |
-| End to end | `cd web && npx playwright test` | |
+| End to end: starts its own servers on ports 8090 and 5190 (`SWU_E2E_API_PORT`, `SWU_E2E_WEB_PORT`) | `cd web && npx playwright test` | ~15 s |
 | Soak campaign | `python scripts/soak.py --games 10000 --jobs 8` | overnight |
 
 CI runs ruff, mypy, the fast tier and the front-end checks on every pull request.

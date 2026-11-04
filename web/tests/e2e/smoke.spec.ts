@@ -8,6 +8,13 @@ test("play a few turns against the bot and stay coherent", async ({ page }) => {
   page.on("pageerror", (e) => errors.push(e.message));
 
   await page.goto("/");
+  // Sign in. The e2e backend's user store lives in test-results/, which
+  // Playwright empties each run, so this normally creates the account.
+  await page.getByLabel("Username").fill("player");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByPlaceholder(/password/i).fill("e2e-password");
+  await page.getByRole("button", { name: /create account|sign in/i }).click();
+
   await page.getByRole("button", { name: /start game/i }).click();
 
   // The table should appear (HUD + arenas).
