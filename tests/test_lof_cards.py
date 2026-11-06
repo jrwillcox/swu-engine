@@ -3352,6 +3352,8 @@ class TestMalakiliLOF108:
         assert _standing_play_discount(state, non_creature, ps0) == 0
 
     def test_lof_108_reprints_alias_to_canonical(self):
+        from tests.dbpath import require_reprint_aliases
+        require_reprint_aliases()
         from swu.abilities.registry import get_abilities
         assert get_abilities("LOFP", "7") is get_abilities("LOF", "108")
 

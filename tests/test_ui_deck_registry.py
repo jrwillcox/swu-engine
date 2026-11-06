@@ -76,6 +76,8 @@ def test_missing_fixture_is_dropped(registry):
 
 
 def test_resolve_deck_resolves_graduated_key(registry):
+    from tests.dbpath import require_db
+    require_db()
     name = _fixture_name()
     decks.register_ui_deck(
         key="grad-key", label="Grad", leader_name="L", base_name="B", filename=name,

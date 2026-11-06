@@ -25,7 +25,7 @@ import find_reprints  # noqa: E402
 from swu.abilities.registry import _ESCAPE_HATCH, _REGISTRY, get_abilities  # noqa: E402
 from swu.cards import reprints  # noqa: E402  (import applies the aliases as a side effect)
 
-from tests.dbpath import require_corpus_db  # noqa: E402
+from tests.dbpath import require_corpus_db, require_reprint_aliases  # noqa: E402
 
 
 def _db() -> str:
@@ -177,6 +177,7 @@ class TestPopulatedTable:
     @pytest.mark.parametrize("reprint, canonical", ALIASES,
                              ids=[f"{r[0]}_{r[1]}" for r, _ in ALIASES])
     def test_alias_resolves_to_canonical_spec(self, reprint, canonical):
+        require_reprint_aliases()
         # The aliases were applied at import; the reprint now shares the
         # canonical's exact spec list object.
         assert get_abilities(*reprint) is get_abilities(*canonical)

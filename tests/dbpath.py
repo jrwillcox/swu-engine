@@ -131,6 +131,17 @@ def require_corpus_db() -> str:
     return str(path)
 
 
+def require_reprint_aliases() -> None:
+    """Skip unless the reprint aliases were applied.
+
+    ``swu.cards.reprints`` applies them at import, but only when it finds a card
+    database (the corpus or the fixture).  With none, a reprint key has no
+    abilities, and an alias test would fail for a reason unrelated to the code.
+    """
+    if not db_path().exists():
+        pytest.skip("reprint aliases are applied only when a card database exists")
+
+
 def require_db() -> Path:
     """The database path, or ``pytest.skip`` if there is no database at all.
 

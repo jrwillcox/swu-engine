@@ -6,14 +6,15 @@ from pathlib import Path
 
 import pytest
 
+from tests.dbpath import require_corpus_db
+
 _ROOT = Path(__file__).resolve().parents[1]
-DB = str(_ROOT / "data" / "swu.db")
 
 
 @pytest.fixture(scope="module")
 def repo():
     from swu.cards.repository import CardRepository
-    return CardRepository(DB)
+    return CardRepository(require_corpus_db())
 
 
 def _load(name):
@@ -28,7 +29,7 @@ def _first_unimplemented_text_bearing_unit() -> str | None:
     from swu.abilities.registry import get_abilities
     from swu.cards.repository import CardRepository
     from scripts.audit_coverage import has_functional_text
-    repo = CardRepository(DB)
+    repo = CardRepository(require_corpus_db())
     cards = [cd for cd in repo.iter_all()
              if type(cd).__name__ == "Unit" and (cd.text or "").strip()]
     for cd in sorted(cards, key=lambda c: (c.set_code or "", c.card_number or "")):
@@ -107,6 +108,8 @@ def test_fetch_swudb_deck_injectable():
 
 
 def test_import_endpoint(tmp_path, monkeypatch):
+    from tests.dbpath import require_db
+    require_db()
     from tests.dbpath import skip_on_fixture
     skip_on_fixture("importing a real decklist needs every card it names")
     pytest.importorskip("fastapi")

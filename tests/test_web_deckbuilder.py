@@ -52,6 +52,7 @@ TEST_ALLOWED = {"alice": True, "bob": False}
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
+    require_db()  # deck validation looks every card up in the card database
     monkeypatch.setattr(authmod, "ALLOWED", dict(TEST_ALLOWED))
     monkeypatch.setattr(appmod, "AUTH", UserStore(tmp_path / "users.json"))
     # One store instance backs both the routes and resolve_deck.

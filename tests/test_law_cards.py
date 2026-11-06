@@ -23,7 +23,7 @@ from tests.test_shd_cards import _attach_upgrade_directly, _put_in_hand
 
 from swu.engine.actions import legal_actions  # noqa: E402
 from tests.test_shd_cards import _fire_when_deployed  # noqa: E402
-from tests.dbpath import require_db, require_row  # noqa: E402
+from tests.dbpath import require_db, require_reprint_aliases, require_row  # noqa: E402
 
 
 def _distinct_aspects(state, player_id):
@@ -3377,6 +3377,7 @@ class TestLawbringerLAW101:
         assert state.pending_decisions[-1].kind == "choose_two_modal"
 
     def test_law_101_reprint_faces_registered(self):
+        require_reprint_aliases()
         from swu.abilities.registry import get_abilities
         canon = get_abilities("LAW", "101")
         for s, n in [("P26", "83"), ("P26", "99")]:
@@ -3603,6 +3604,7 @@ class TestTheStrangerLAW86:
 
     def test_law_86_reprints_alias_to_canonical(self):
         """P26_110 aliases to the shipped LAW_86 registration."""
+        require_reprint_aliases()
         import swu.cards  # noqa: F401 — ensure aliases are applied
         from swu.abilities.registry import get_abilities
         canonical = get_abilities("LAW", "86")
@@ -3722,6 +3724,7 @@ class TestMaxReboLAW72:
 
     def test_law_72_reprints_alias_to_canonical(self):
         """P26_82 and P26_98 alias the shipped LAW_72 registration."""
+        require_reprint_aliases()
         import swu.cards  # noqa: F401 — ensure aliases are applied
         from swu.abilities.registry import get_abilities
         canonical = get_abilities("LAW", "72")
