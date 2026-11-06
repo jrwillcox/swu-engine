@@ -57,6 +57,7 @@ export function Table({ game, onToggleLog }: { game: Game; onToggleLog?: () => v
   const [inspected, setInspected] = useState<CardModel | null>(null);
   const [discardView, setDiscardView] = useState<null | "mine" | "opp">(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   // Two-stage resourcing: hand cards picked but not yet committed.
   const [staged, setStaged] = useState<string[]>([]);
@@ -64,6 +65,14 @@ export function Table({ game, onToggleLog }: { game: Game; onToggleLog?: () => v
   async function quickSave() {
     const slot = await save("quicksave");
     setToast(slot ? "Game saved — resume it from the start screen." : "Save failed.");
+  }
+
+  // Abandon the game: back to the start screen, and free it on the server
+  // (best-effort — a failed delete only leaves it in memory until a restart).
+  function leaveGame() {
+    setConfirmLeave(false);
+    if (gameId) api.deleteGame(gameId).catch(() => {});
+    reset();
   }
 
   async function exportReplay() {
@@ -588,7 +597,29 @@ export function Table({ game, onToggleLog }: { game: Game; onToggleLog?: () => v
           onClose={() => setDiscardView(null)}
         />
       )}
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          onLeaveGame={
+            awaiting === "terminal"
+              ? undefined
+              : () => {
+                  setShowSettings(false);
+                  setConfirmLeave(true);
+                }
+          }
+        />
+      )}
+
+      {confirmLeave && (
+        <ConfirmDialog
+          title="Leave this game?"
+          message="You'll go back to the start screen. Your progress is lost unless you save first (💾)."
+          confirmLabel="Leave game"
+          onConfirm={leaveGame}
+          onCancel={() => setConfirmLeave(false)}
+        />
+      )}
 
       {confirm && (
         <ConfirmDialog

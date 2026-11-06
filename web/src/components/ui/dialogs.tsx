@@ -57,7 +57,14 @@ const VARIANT_MODES: { value: VariantMode; label: string; hint: string }[] = [
     hint: "Mostly standard, with rare pulls of the fancy art — like opening packs.",
   },
 ];
-export function SettingsPanel({ onClose }: { onClose: () => void }) {
+// `onLeaveGame` is passed only during a game; it adds a "Leave game" button.
+export function SettingsPanel({
+  onClose,
+  onLeaveGame,
+}: {
+  onClose: () => void;
+  onLeaveGame?: () => void;
+}) {
   const s = useSettings();
   const speeds: Speed[] = ["fast", "normal", "slow"];
   return (
@@ -111,7 +118,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             onChange={(e) => s.setShowAvailability(e.target.checked)}
           />
         </div>
-        <div style={{ textAlign: "right" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+          {onLeaveGame ? (
+            <button className="btn btn-danger" onClick={onLeaveGame}>
+              Leave game
+            </button>
+          ) : (
+            <span />
+          )}
           <button className="btn btn-primary" onClick={onClose}>
             Done
           </button>

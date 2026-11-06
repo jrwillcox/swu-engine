@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Table } from "../src/components/Table";
 import type { Game } from "../src/game/useGame";
 import type { ActionModel } from "../src/api/types";
+import { api } from "../src/api/client";
 import { SettingsProvider } from "../src/game/settings";
 import { action, card, snapshot, view, zone } from "./fixtures";
 
@@ -49,6 +50,43 @@ function renderTable(game: Game) {
     </SettingsProvider>,
   );
 }
+
+describe("Leave game", () => {
+  function openLeave(game: Game) {
+    renderTable(game);
+    fireEvent.click(screen.getByTitle("Settings"));
+    fireEvent.click(screen.getByRole("button", { name: "Leave game" }));
+  }
+
+  it("asks first; confirming frees the game and returns to the start screen", () => {
+    const del = vi.spyOn(api, "deleteGame").mockResolvedValue();
+    const reset = vi.fn();
+    openLeave(fakeGame({ reset }));
+    const dialog = screen.getByText("Leave this game?").closest(".modal") as HTMLElement;
+    expect(reset).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Leave game" }));
+    expect(reset).toHaveBeenCalledOnce();
+    expect(del).toHaveBeenCalledWith("g-test");
+    del.mockRestore();
+  });
+
+  it("cancelling keeps the game", () => {
+    const del = vi.spyOn(api, "deleteGame").mockResolvedValue();
+    const reset = vi.fn();
+    openLeave(fakeGame({ reset }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText("Leave this game?")).not.toBeInTheDocument();
+    expect(reset).not.toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
+    del.mockRestore();
+  });
+
+  it("is not offered once the game is over", () => {
+    renderTable(fakeGame({ snapshot: snapshot({ awaiting: "terminal", winner: "human" }) }));
+    fireEvent.click(screen.getByTitle("Settings"));
+    expect(screen.queryByRole("button", { name: "Leave game" })).not.toBeInTheDocument();
+  });
+});
 
 describe("Table", () => {
   it("renders zone labels and a unit card", () => {

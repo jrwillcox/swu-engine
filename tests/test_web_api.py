@@ -94,6 +94,15 @@ def test_invalid_action_id_rejected(client):
     assert resp.status_code in (400, 409)
 
 
+def test_leaving_a_game_deletes_it(client):
+    """The in-game "Leave game" button frees the abandoned game on the server."""
+    gid = _new_game(client)["game_id"]
+    assert client.delete(f"/api/games/{gid}").json() == {"ok": True}
+    assert client.get(f"/api/games/{gid}/state").status_code == 404
+    # Deleting again (e.g. a retried request) is harmless.
+    assert client.delete(f"/api/games/{gid}").status_code == 200
+
+
 def test_card_image_served(client):
     from tests.dbpath import skip_on_fixture
     skip_on_fixture("serving card art needs a local image build")
