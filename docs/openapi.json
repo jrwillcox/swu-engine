@@ -3,7 +3,7 @@
   "info": {
     "title": "SWU Home Game \u2014 Web UI",
     "description": "Thin HTTP client surface over the frozen swu.engine contract.",
-    "version": "0.5.0"
+    "version": "0.1.0"
   },
   "paths": {
     "/api/auth/check": {

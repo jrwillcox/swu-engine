@@ -84,7 +84,7 @@ from swu.web.session import GameSession, IllegalStep, SessionStore
 
 app = FastAPI(
     title="SWU Home Game — Web UI",
-    version="0.5.0",
+    version="0.1.0",
     description="Thin HTTP client surface over the frozen swu.engine contract.",
 )
 
