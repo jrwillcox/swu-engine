@@ -678,6 +678,8 @@ class TestShatterpointP25153:
         assert _find_instance(state, tough.instance_id) is not None  # no Force → no defeat
 
     def test_p25_153_reprint_faces_registered(self):
+        from tests.dbpath import require_reprint_aliases
+        require_reprint_aliases()
         from swu.abilities.registry import get_abilities
         canon = get_abilities("P25", "153")
         for s, n in [("P25", "163"), ("P26", "74"), ("P26", "90")]:
@@ -1367,6 +1369,8 @@ class TestWrecker_J24_5:
     (differing only in letter case), so it is ALIASED, not re-registered."""
 
     def test_J24_5_shares_shd_154s_registration(self):
+        from tests.dbpath import require_reprint_aliases
+        require_reprint_aliases()
         from swu.abilities.registry import get_abilities
         assert get_abilities("J24", "5") is get_abilities("SHD", "154")
 
@@ -1399,6 +1403,8 @@ class TestAsajjVentress_C24_5:
     ALIASED, not re-registered."""
 
     def test_C24_5_shares_twi_134s_registration(self):
+        from tests.dbpath import require_reprint_aliases
+        require_reprint_aliases()
         from swu.abilities.registry import get_abilities
         assert get_abilities("C24", "5") is get_abilities("TWI", "134")
 
@@ -1427,6 +1433,8 @@ class TestC3PO_C25_5:
     Exhaust cost), so it is ALIASED, not re-registered."""
 
     def test_C25_5_shares_sec_93s_registration(self):
+        from tests.dbpath import require_reprint_aliases
+        require_reprint_aliases()
         from swu.abilities.registry import get_abilities
         assert get_abilities("C25", "5") is get_abilities("SEC", "93")
 

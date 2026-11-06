@@ -4246,6 +4246,8 @@ class TestMaulSHD90:
 
     def test_shd_90_reprints_alias_to_canonical(self):
         """J24_4 / P25_155 / P25_165 alias to the shipped SHD_90 registration."""
+        from tests.dbpath import require_reprint_aliases
+        require_reprint_aliases()
         import swu.cards  # noqa: F401 — ensure aliases are applied
         from swu.abilities.registry import get_abilities
         canonical = get_abilities("SHD", "90")

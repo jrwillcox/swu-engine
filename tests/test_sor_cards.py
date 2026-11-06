@@ -3705,6 +3705,8 @@ class TestMillenniumFalcon:
         assert kinds == {"ReturnRegroupUpkeepUnit"}
 
     def test_sor_193_reprint_p25_92_aliases_to_canonical(self):
+        from tests.dbpath import require_reprint_aliases
+        require_reprint_aliases()
         import swu.cards  # noqa: F401 — ensure registration + aliasing ran
         from swu.abilities.registry import get_abilities
         canon = get_abilities("SOR", "193")
@@ -3804,6 +3806,8 @@ class TestDarthVaderSOR87:
         assert not state.pending_decisions
 
     def test_sor_87_reprints_c24_2_and_p25_103_alias_to_sor_87(self):
+        from tests.dbpath import require_reprint_aliases
+        require_reprint_aliases()
         from swu.cards.reprints import REPRINT_ALIASES
         from swu.abilities.registry import get_abilities
         assert REPRINT_ALIASES[("C24", "2")] == ("SOR", "87")

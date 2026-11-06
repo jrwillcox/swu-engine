@@ -38,6 +38,7 @@ def client():
 
 
 def _new_game(client, seed=42, human="luke", bot="vader", difficulty=None):
+    require_db()  # building the decks looks every card up in the card database
     payload = {
         "human": {"kind": "human", "deck": human},
         "bot": {"kind": "weighted_bot", "deck": bot},
@@ -118,6 +119,7 @@ def test_card_image_served(client):
 
 def test_variant_image_served_and_falls_back(client):
     """A card's alternate art is served by ?variant=…, falling back to standard."""
+    require_db()  # the image indexes are read from the card database
     from swu.web.cards import _variant_index
 
     idx = _variant_index()
@@ -146,6 +148,7 @@ def test_variant_image_served_and_falls_back(client):
 
 def test_card_model_exposes_variants():
     """The serializer surfaces available variants with ?variant= image urls."""
+    require_db()  # the image indexes are read from the card database
     from swu.web.cards import _variant_index
     from swu.web.serializers import _card_variants
 
@@ -167,6 +170,7 @@ def test_card_model_exposes_variants():
 
 def test_image_url_has_cache_bust_version():
     """A real card's image url carries `&v=<mtime>` so corrected art isn't stale."""
+    require_db()  # the image indexes are read from the card database
     from swu.web.cards import _image_index, image_file_for_card
     from swu.web.serializers import _card_image_url
 

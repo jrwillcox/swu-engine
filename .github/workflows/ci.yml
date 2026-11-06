@@ -47,6 +47,14 @@ jobs:
       - name: Tests (fixture tier)
         run: pytest -q
 
+      # With no database at all, tests that need card data must skip, not fail.
+      # They guard with the require_* helpers in tests/dbpath.py; this run keeps
+      # a new test from forgetting to.
+      - name: Tests (no database)
+        env:
+          SWU_DB: /nonexistent/swu.db
+        run: pytest -q
+
       - name: Import check
         run: |
           python -c "import swu.engine.actions, swu.abilities.registry, swu.abilities.resolver"

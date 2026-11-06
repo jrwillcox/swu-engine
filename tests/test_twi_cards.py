@@ -2148,6 +2148,8 @@ class TestKiAdiMundiTWI64:
         assert any(isinstance(a, AcceptTrigger) for a in legal_actions(state))
 
     def test_twi_64_reprint_face_registered(self):
+        from tests.dbpath import require_reprint_aliases
+        require_reprint_aliases()
         from swu.abilities.registry import get_abilities
         assert get_abilities("J25", "2") is get_abilities("TWI", "64")
 

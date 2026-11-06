@@ -15,6 +15,13 @@ from fastapi.testclient import TestClient
 
 from swu.web.app import app
 from swu.web.explorer import build_catalog
+from tests.dbpath import require_db
+
+
+@pytest.fixture(autouse=True)
+def _card_db():
+    """Every test here reads the card database: skip cleanly without one."""
+    require_db()
 
 
 @pytest.fixture()
@@ -81,9 +88,7 @@ def test_no_two_cards_share_an_image_file():
     import sqlite3
     from collections import Counter
 
-    from swu.web.paths import db_path
-
-    con = sqlite3.connect(str(db_path()))
+    con = sqlite3.connect(str(require_db()))
     try:
         fronts = Counter(
             p for (p,) in con.execute(

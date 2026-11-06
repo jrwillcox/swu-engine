@@ -28,7 +28,7 @@ from swu.web.deckstore import (
     InvalidCard,
     _custom_decks_root,
 )
-from swu.web.paths import db_path
+from tests.dbpath import require_db
 
 LEADER = 5
 BASE = 55
@@ -44,7 +44,7 @@ UNITS = [15, 20, 25, 30, 35, 45, 70, 75, 105, 115,
 
 @pytest.fixture(scope="module")
 def repo() -> CardRepository:
-    return CardRepository(str(db_path()))
+    return CardRepository(str(require_db()))
 
 
 @pytest.fixture()
