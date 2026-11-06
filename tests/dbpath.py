@@ -1,6 +1,6 @@
 """Where the card database lives, for tests — the single source of truth.
 
-The repository deliberately ships no card data (see ``docs/pipeline.md``), so
+The repository deliberately ships no card corpus (see ``docs/pipeline.md``), so
 every DB-backed test has to answer two questions the same way: *where* is the
 database, and *what happens when it isn't there*.  Getting the second one wrong
 is what made a fresh clone unusable: a module-local

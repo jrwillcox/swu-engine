@@ -3,7 +3,7 @@ suite falls back to when the full corpus hasn't been built.
 
 Why this exists
 ---------------
-The repository ships no card data: the corpus is the publisher's IP and is
+The repository ships no card corpus: it is the publisher's IP and is
 rebuilt locally by the pipeline (``docs/pipeline.md``).  That is the right
 distribution model, but it meant ``git clone && pytest`` *skipped* most of the
 suite — a reviewer saw "4,094 skipped" and had no way to tell a healthy engine
