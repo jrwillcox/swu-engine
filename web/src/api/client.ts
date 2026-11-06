@@ -198,6 +198,11 @@ export const api = {
     return jsonOrThrow(await fetch(`/api/games/${gameId}/advance`, { method: "POST" }));
   },
 
+  /** Drop an abandoned game from the server's memory. */
+  async deleteGame(gameId: string): Promise<void> {
+    await jsonOrThrow(await fetch(`/api/games/${gameId}`, { method: "DELETE" }));
+  },
+
   // ── Part D: save / restore / replay / import ──────────────────────────────
 
   async saveGame(gameId: string, slot?: string): Promise<SaveResult> {
