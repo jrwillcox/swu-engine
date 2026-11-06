@@ -1,9 +1,9 @@
 # Building the card database
 
-The repository ships **no card data**. `data/` is gitignored: the card corpus and
-artwork are the publisher's intellectual property, and redistributing them is not
-something a fan project should do. Instead, the pipeline below rebuilds
-everything locally from the official API.
+The repository ships **no card database**, only a small test fixture. `data/` is
+gitignored: the card corpus and artwork are the publisher's intellectual
+property, and redistributing them is not something a fan project should do.
+Instead, the pipeline below rebuilds everything locally from the official API.
 
 Budget roughly **1.5 hours** for a playable engine, plus an optional ~3 hours for
 card art.
@@ -11,7 +11,7 @@ card art.
 > **You don't need any of this to run the tests.** A few hundred card definitions
 > ship as a test fixture (`tests/fixtures/swu_fixture.db`, built by
 > `scripts/make_fixture_db.py`), so `pytest` on a fresh clone runs the engine,
-> keyword, web and regression tiers for real — 2,260 tests in ~90 s. Build the
+> keyword, web and regression tiers for real — about 1,600 tests in ~1.5 min. Build the
 > database when you want to *play*, or to run the per-set card suites and the
 > corpus-wide audits.
 

@@ -12,17 +12,18 @@ cards playable. Play it in your browser against a heuristic or Claude-backed opp
 > **Unofficial fan project.** Not affiliated with, endorsed by, or sponsored by
 > Lucasfilm, Disney, Fantasy Flight Games or Asmodee. All card text, artwork,
 > rules and trademarks belong to their respective owners. **The repository ships
-> no card art, and no card database beyond a small test fixture**; the pipeline in
-> `scripts/` builds both locally from the publisher's public API. The screenshots
-> show the app running on a locally built database. The code is MIT licensed; see
-> [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+> no card art and no card database**, with two exceptions: a small text-only test
+> fixture, and the card images visible in this README's screenshots, which show
+> the app running on a locally built database. The pipeline in `scripts/` builds
+> the database and art locally from the publisher's public API. The code is MIT
+> licensed; see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
 
 ## What's here
 
 | | |
 |---|---|
 | **Card coverage** | **2,636 / 2,636 playable (100%)** — 2,176 registered in the ability framework, the rest fully handled by the keyword and vanilla layers. **0 escape hatches**, 0 keyword-deferred. Measured by `scripts/audit_coverage.py`, written to [`docs/coverage_report.md`](docs/coverage_report.md). |
-| **Tests** | 4,442 test functions across 75 files → **5,655 passing, 6 skipped** with parametrisation, plus 138 front-end tests and 2 Playwright e2e specs. |
+| **Tests** | **Over 5,600 Python tests** (counting parametrisation), plus about 140 front-end tests and 2 Playwright e2e specs. |
 | **Engine** | ~101k lines of Python across `src/swu/`, with a FastAPI backend; ~8k lines of React and TypeScript in `web/src/`. |
 | **Opponents** | A transparent weighted-heuristic bot, an LLM-backed bot (Claude) that degrades visibly to the heuristic, and random/aggro/chaos bots for soak testing. |
 
@@ -39,7 +40,8 @@ pip install -e ".[dev,web]"
 
 ### 1. Build the card database (~1.5 hours, once)
 
-The repository ships no card data. Rebuild it from the official API — the steps
+The repository ships no card database, only a small test fixture. Build the
+database from the official API — the steps
 are resumable, so an interrupted run picks up where it left off:
 
 ```bash
@@ -214,13 +216,13 @@ cd web && npx playwright test               # e2e (starts its own servers)
 `tests/fixtures/swu_fixture.db` is committed — a few hundred card definitions
 (text and stats only, no artwork), built by
 [`scripts/make_fixture_db.py`](scripts/make_fixture_db.py) from exactly the cards
-the engine, keyword, web and regression suites load. On a clone with no `data/`:
+the engine, keyword, web and regression suites load. How much runs depends on
+which database the tests find:
 
 | | tests run | wall clock |
 |---|---|---|
-| No database at all | 1,550 | ~50 s |
-| Committed fixture (the default) | **2,260** | ~90 s |
-| Full corpus, after the pipeline | **5,638** | ~7.5 min |
+| Committed fixture (a fresh clone, and CI) | **about 1,600** | ~1.5 min |
+| Full corpus, after the pipeline | **over 5,600** | ~8 min |
 
 What the fixture can't cover skips with a reason rather than failing: the per-set
 card suites (one test per printed card across 24 sets), the coverage audit, the

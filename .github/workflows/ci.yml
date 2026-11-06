@@ -39,11 +39,12 @@ jobs:
         run: mypy
 
       # NOTE ON SCOPE: data/swu.db is not in the repository — the card corpus is
-      # the publisher's IP and is rebuilt locally by scripts/ (see README). The
-      # DB-backed tests skip cleanly without it, so this job proves the package
-      # imports, the lint is clean and the DB-free suite passes. The full
-      # 5,600-test run happens locally after a pipeline build.
-      - name: Tests (DB-free tier)
+      # the publisher's IP and is rebuilt locally by scripts/ (see README). These
+      # tests run against the committed fixture (tests/fixtures/swu_fixture.db);
+      # those that need the whole corpus (per-set card suites, coverage audit,
+      # reprint sweep, deck gates) skip with a reason. The full run of over
+      # 5,600 tests happens locally after a pipeline build.
+      - name: Tests (fixture tier)
         run: pytest -q
 
       - name: Import check

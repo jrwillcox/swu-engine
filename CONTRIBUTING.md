@@ -13,9 +13,9 @@ pip install -e ".[dev,web]"
 ```
 
 That is enough to run the tests: `tests/fixtures/swu_fixture.db` is committed, so
-the engine, keyword, web and regression suites run on a fresh clone (2,260 tests,
-~90 s). Build the real card database — see [`docs/pipeline.md`](docs/pipeline.md) —
-to run the remaining 3,400, which are the per-set card suites, the coverage audit
+the engine, keyword, web and regression suites run on a fresh clone (about 1,600
+tests, ~1.5 min). Build the real card database — see [`docs/pipeline.md`](docs/pipeline.md) —
+to run the remaining 4,000 or so, which are the per-set card suites, the coverage audit
 and the reprint sweep; those need the whole corpus and skip with a reason without
 it.
 
@@ -63,8 +63,8 @@ cd web && npm run typecheck && npm test
 cd web && npx playwright test        # e2e; starts its own servers
 ```
 
-CI runs all of these on the DB-free tier, so anything that only passes with the
-full corpus present will still be caught here rather than there.
+CI runs all of these, but against the committed fixture rather than the full
+corpus, so the per-set card suites and corpus-wide audits only run here.
 
 A new card ability needs a focused test named for the card, asserting behaviour
 through the public engine interfaces (`legal_actions` / `apply`) rather than by

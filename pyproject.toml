@@ -3,15 +3,15 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "swu-game"
+name = "swu-engine"
 version = "0.1.0"
-description = "Star Wars Unlimited card game engine with LLM opponent"
+description = "Rules engine, bots and web client for the Star Wars: Unlimited card game"
 requires-python = ">=3.11"
 dependencies = [
     "requests>=2.31",
     "tenacity>=8.2",
     "rich>=13.7",
-    "anthropic>=0.40",   # LLM opponent (Phase 6B); only used by the Normal/Hard bots
+    "anthropic>=0.40",   # Claude opponent; only used by the Normal/Hard bots
 ]
 
 [project.optional-dependencies]
