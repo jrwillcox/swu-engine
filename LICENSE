@@ -19,19 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-NOTE ON SCOPE
-
-This licence covers the source code in this repository and nothing else.
-
-It does NOT grant any rights in Star Wars: Unlimited card text, card artwork,
-game rules, trademarks or other materials, which remain the property of their
-respective rights holders (Lucasfilm Ltd., The Walt Disney Company, Fantasy
-Flight Games / Asmodee and others). None of that material is distributed in
-this repository; see README.md for how the card database is built locally from
-the publisher's public API.
-
-This is an unofficial, non-commercial fan project. It is not affiliated with,
-endorsed by, or sponsored by any of the above.

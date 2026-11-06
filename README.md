@@ -1,5 +1,9 @@
 # SWU — a Star Wars: Unlimited rules engine
 
+[![CI](https://github.com/jrwillcox/swu-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jrwillcox/swu-engine/actions/workflows/ci.yml)
+[![Python 3.11 | 3.12](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](pyproject.toml)
+[![Licence: MIT](https://img.shields.io/github/license/jrwillcox/swu-engine)](LICENSE)
+
 A complete rules engine for the *Star Wars: Unlimited* card game, with all 2,636
 cards playable. Play it in your browser against a heuristic or Claude-backed opponent.
 
@@ -11,7 +15,7 @@ cards playable. Play it in your browser against a heuristic or Claude-backed opp
 > no card art, and no card database beyond a small test fixture**; the pipeline in
 > `scripts/` builds both locally from the publisher's public API. The screenshots
 > show the app running on a locally built database. The code is MIT licensed; see
-> [LICENSE](LICENSE).
+> [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
 
 ## What's here
 
@@ -244,4 +248,4 @@ coverage with green suites. See [`docs/methodology.md`](docs/methodology.md).
 ## Licence
 
 Code: MIT ([LICENSE](LICENSE)). Card text, artwork and trademarks are not covered
-by that licence.
+by that licence; see [NOTICE.md](NOTICE.md).
