@@ -26,7 +26,9 @@ if TYPE_CHECKING:
 # broke. ``keywords`` is still imported inside the function below, because the
 # actions package imports *it* at module scope.
 from swu.engine.actions.stats import compute_power, compute_hp
-from swu.engine.actions.costs import _aspect_penalty, _smuggle_cost_parts
+from swu.engine.actions.costs import (
+    _aspect_penalty, _piloting_cost, _smuggle_cost_parts,
+)
 
 
 @dataclass
@@ -71,6 +73,12 @@ class CardView:
     # "<base> +<penalty>" cost badge mirroring the hand-card pill.
     smuggle_base: Optional[int] = None
     smuggle_penalty: int = 0
+    # What it costs right now to play one of the viewer's OWN hand cards as a
+    # Pilot upgrade (its bracketed Piloting cost plus aspect penalty, less any
+    # pending Piloting discount).  None for every other card.  A Piloting unit is
+    # usually far cheaper this way (Chewbacca JTL_103: 5 as a unit, 3 as a
+    # Pilot), and a bot cannot weigh the two modes without knowing it.
+    piloting_cost: Optional[int] = None
     # Values of the NUMERIC keywords this card has right now (Raid / Restore /
     # Exploit), e.g. ``{"Raid": 2}``.  Only populated for cards in an arena, where
     # a granted or modified value can differ from the printed one.  Raid in
@@ -109,6 +117,7 @@ class CardView:
             "aspect_penalty": self.aspect_penalty,
             "smuggle_base": self.smuggle_base,
             "smuggle_penalty": self.smuggle_penalty,
+            "piloting_cost": self.piloting_cost,
             "keyword_values": self.keyword_values,
         }
         return d
@@ -295,7 +304,8 @@ def _card_view(ci: "CardInstance", reveal_identity: bool,
                smuggle_base: Optional[int] = None,
                smuggle_penalty: int = 0,
                gs: "GameState" = None,
-               grantable: Optional[set] = None) -> CardView:
+               grantable: Optional[set] = None,
+               piloting_cost: Optional[int] = None) -> CardView:
     if reveal_identity:
         if gs is not None:
             power, hp, keywords, kw_values = _effective_stats_and_keywords(
@@ -328,6 +338,7 @@ def _card_view(ci: "CardInstance", reveal_identity: bool,
             aspect_penalty=aspect_penalty,
             smuggle_base=smuggle_base,
             smuggle_penalty=smuggle_penalty,
+            piloting_cost=piloting_cost,
             keyword_values=kw_values,
         )
     else:
@@ -350,6 +361,19 @@ def _card_view(ci: "CardInstance", reveal_identity: bool,
         )
 
 
+def _safe_piloting_cost(gs: "GameState", ci: "CardInstance",
+                        ps: "PlayerState") -> Optional[int]:
+    """``_piloting_cost`` for a hand card, or None if it has no Piloting cost.
+    A view must always build, so a failure reads as "not a pilot"."""
+    from swu.cards.models import Unit
+    if not isinstance(ci.card_def, Unit):
+        return None
+    try:
+        return _piloting_cost(gs, ci, ps)
+    except Exception:
+        return None
+
+
 def _zone_view(gs: "GameState", ps: "PlayerState", viewer_id: str,
                grantable: Optional[set] = None) -> PlayerZoneView:
     is_self = ps.player_id == viewer_id
@@ -363,6 +387,7 @@ def _zone_view(gs: "GameState", ps: "PlayerState", viewer_id: str,
                     tuple(a.name for a in (getattr(c.card_def, "aspects", None) or ())),
                     ps, gs,
                 ),
+                piloting_cost=_safe_piloting_cost(gs, c, ps),
             )
             for c in ps.hand
         ]
