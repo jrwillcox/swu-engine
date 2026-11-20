@@ -217,19 +217,31 @@
 }
 
 .base-cluster {
+  --rail-card-h: 72px;
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  height: 72px;
+  height: var(--rail-card-h);
 }
 .base-slot {
   position: relative;
   height: 100%;
   display: flex;
   flex-direction: column;
+  flex: 0 0 auto;
 }
-.base-slot .card {
+/* Explicit widths, not aspect-ratio alone. A browser that doesn't apply
+   aspect-ratio here (an older iPad Safari) sizes the card from its image's
+   pixel width instead, then shrinks base and leader to fit the rail in
+   proportion — so a 1000px-wide leader image became a long thin strip. The
+   rail height is fixed, so the width can be computed from it directly. */
+.base-slot .card.landscape {
   height: 100%;
+  width: calc(var(--rail-card-h) * 418 / 300);
+}
+.base-slot .card:not(.landscape) {
+  height: 100%;
+  width: calc(var(--rail-card-h) * 300 / 418);
 }
 .base-readout {
   position: absolute;
