@@ -65,6 +65,22 @@ W_LETHAL = 1_000_000.0
 W_PLAY_UNIT = 50.0        # flat value of getting *a* unit onto the board
 W_PLAY_EVENT = 40.0       # events (often removal) — played, but units edge them early
 W_PLAY_UPGRADE = 18.0     # upgrades develop less board than a fresh body
+# Playing a Piloting unit as an upgrade on a friendly Vehicle (PilotPlay).  It is
+# scored on the same scale as playing the card as a unit, with the pilot's stat
+# boost standing in for the body, so the two modes of one card compete on what
+# each actually adds — see ``HeuristicBot._pilot_value``.  Before this, PilotPlay
+# fell through to a flat 0.0 (level with Pass), so the bot never piloted.
+#
+# Measured with scripts/bot_arena.py on the two Piloting precons (han_solo,
+# boba_fett) against the same bot with piloting switched off
+# (W_PLAY_PILOT=-1000): 30 → 51.6%, 40 → 52%, 50 → 58–64%, and a plateau of
+# 64.8% ±2.3 (1600 games) from 55 up to 100.  60 sits on the low edge of that
+# plateau.  In those decks it then always prefers a Pilot play to playing the
+# same card as a unit (it piloted at 73% of the decisions where it could; the
+# rest went to attacks and leader deploys), which is how these cards are meant
+# to be used.  The discount term only mattered below the plateau.
+W_PLAY_PILOT = 60.0
+W_PILOT_DISCOUNT = 2.0    # per resource the Pilot mode saves over the unit cost
 W_DEPLOY_LEADER = 130.0   # a deployed leader is a premium body + ability
 W_USE_ABILITY = 45.0      # activated abilities are usually worth it
 W_ATTACK_BASE = 8.0       # per point of damage to the enemy base (racing/chip)
@@ -115,6 +131,7 @@ TUNABLE_WEIGHTS = (
     "W_ATTACK_BASE", "BASE_RACE_URGENCY", "W_TRADE_BASELINE", "TRADE_SCALE",
     "W_PLAY_UNIT", "W_PLAY_EVENT", "W_PLAY_UPGRADE", "W_DEPLOY_LEADER",
     "W_USE_ABILITY", "W_LEADER_BASE_ATTACK", "W_CLAIM_INITIATIVE",
+    "W_PLAY_PILOT", "W_PILOT_DISCOUNT",
 )
 
 
@@ -359,11 +376,13 @@ class HeuristicBot:
         if {"MoveUpgradeSelect", "DeclineMoveUpgrade", "MoveUpgradeTo"} & kinds:
             return self._choose_move_upgrade(view, legal)
         if {"AttachSelfAsPilot", "DeclineAttachSelfAsPilot"} & kinds:
-            return self._first(legal, "DeclineAttachSelfAsPilot")
+            return self._choose_attach_self_as_pilot(view, legal)
+        if "PlayViaPiloting" in kinds:
+            return self._choose_play_via_piloting(view, legal)
         if {"PlayUpgradeFromHand", "DeclinePlayUpgradeFromHand"} & kinds:
             # Re-playing a returned upgrade for free has no reliable heuristic
             # value (host choice / enemy-attach ambiguity) — decline, consistent
-            # with the move_upgrade / pilot_self_attach conservative default.
+            # with the move_upgrade conservative default.
             return self._first(legal, "DeclinePlayUpgradeFromHand")
         if "PlotPlay" in kinds or "FinishPlot" in kinds:
             return self._choose_plot(view, legal)
@@ -515,7 +534,42 @@ class HeuristicBot:
             return self._score_attack(a, idx, base_remaining)
         if kind == "AttackTwoUnits":
             return self._score_two_unit_attack(a, idx)
+        if kind == "PilotPlay":
+            return self._score_pilot_play(a, idx)
         return 0.0
+
+    def _score_pilot_play(self, a: "Action", idx: dict) -> float:
+        """PilotPlay: a Piloting unit from hand, attached to a friendly Vehicle."""
+        cv = idx.get(getattr(a, "instance_id", None), (None, None))[0]
+        host, host_side = idx.get(getattr(a, "vehicle_target_id", None), (None, None))
+        if cv is None or host is None or host_side != "my":
+            # The engine only offers friendly hosts; if we can't read the play,
+            # hold the card rather than guess.
+            return W_PASS - 1.0
+        return self._pilot_value(cv, host)
+
+    def _pilot_value(self, cv: "CardView", host: "CardView") -> float:
+        """Score playing ``cv`` as a Pilot upgrade on the friendly Vehicle ``host``.
+
+        On the unit-play scale (``_score_play_card``): a flat ``W_PLAY_PILOT``,
+        the stat boost valued like a body, the resources spent, and the same
+        better-host bonus an upgrade gets.  Two things a unit play lacks:
+
+        * a ready host attacks THIS round with the boost, where a freshly played
+          unit enters exhausted — so a ready host counts the power boost twice;
+        * the Piloting cost is usually far below the unit cost (Mandalorian
+          JTL_210: 5 as a unit, 2 as a Pilot), and the change pays for another
+          card this round — ``W_PILOT_DISCOUNT`` per resource saved.
+        """
+        up = int(getattr(cv, "upgrade_power", 0) or 0)
+        uh = int(getattr(cv, "upgrade_hp", 0) or 0)
+        boost = V_POWER * up + V_HP * uh
+        ready = 0.0 if host.exhausted else V_POWER * max(0, up)
+        unit_cost = int(cv.cost or 0)
+        cost = cv.piloting_cost if cv.piloting_cost is not None else unit_cost
+        saved = max(0, unit_cost - cost)
+        return (self.w["W_PLAY_PILOT"] + boost + ready + cost * V_COST_CURVE
+                + _card_value(host) * 0.2 + self.w["W_PILOT_DISCOUNT"] * saved)
 
     def _score_play_card(self, a: "Action", idx: dict) -> float:
         cv = idx.get(getattr(a, "instance_id", None), (None, None))[0]
@@ -1545,6 +1599,70 @@ class HeuristicBot:
         if "DeclineMoveUpgrade" in kinds:
             return self._first(legal, "DeclineMoveUpgrade")
         return _safe_default(legal)
+
+    def _choose_attach_self_as_pilot(
+        self, view: "PlayerView", legal: list["Action"]
+    ) -> "Action":
+        """An in-play unit turning itself into a Pilot: "You may attach this unit
+        as an upgrade to a … Vehicle unit without a Pilot on it".
+
+        Both sides of the choice are board value, so they are compared directly:
+        keeping the unit is worth ``_card_value(unit)``; attaching it is worth
+        what the boost does to the chosen Vehicle.
+
+        * Friendly host (Poe Dameron JTLP_6): the stat boost, counting the power
+          twice when the host is ready to swing with it this round.
+        * Enemy host (Sidon Ithano JTL_213, -2/-2): only a net debuff is worth
+          it.  If the HP loss defeats the Vehicle it is worth the whole Vehicle,
+          otherwise what it shaves off.  An enemy host that the pilot would buff
+          is never chosen.
+        """
+        idx = _card_index(view)
+        src = idx.get(_top_context(view).get("source_id"), (None, None))[0]
+        decline = self._first(legal, "DeclineAttachSelfAsPilot")
+        if src is None:
+            return decline
+        up = int(getattr(src, "upgrade_power", 0) or 0)
+        uh = int(getattr(src, "upgrade_hp", 0) or 0)
+        best, best_score = decline, _card_value(src)
+        for a in legal:
+            if type(a).__name__ != "AttachSelfAsPilot":
+                continue
+            host, side = idx.get(getattr(a, "vehicle_id", None), (None, None))
+            if host is None:
+                continue
+            if side == "my":
+                score = V_POWER * up + V_HP * uh
+                if not host.exhausted:
+                    score += V_POWER * max(0, up)
+            else:
+                if up > 0 or uh > 0:
+                    continue  # never buff an enemy ship
+                if uh < 0 and _remaining_hp(host) <= -uh:
+                    score = _card_value(host)
+                else:
+                    score = (V_POWER * min(-up, host.effective_power)
+                             + V_HP * -uh)
+            if score > best_score:
+                best, best_score = a, score
+        return best
+
+    def _choose_play_via_piloting(
+        self, view: "PlayerView", legal: list["Action"]
+    ) -> "Action":
+        """Wedge Antilles JTL_8: a mandatory "play a card from your hand using
+        Piloting" — pick the (pilot, Vehicle) pair ``_pilot_value`` rates best."""
+        idx = _card_index(view)
+        best, best_score = legal[0], float("-inf")
+        for a in legal:
+            cv = idx.get(getattr(a, "instance_id", None), (None, None))[0]
+            host, side = idx.get(getattr(a, "vehicle_target_id", None), (None, None))
+            if cv is None or host is None or side != "my":
+                continue
+            score = self._pilot_value(cv, host)
+            if score > best_score:
+                best, best_score = a, score
+        return best
 
     def _choose_reveal_play_credit(
         self, view: "PlayerView", legal: list["Action"]

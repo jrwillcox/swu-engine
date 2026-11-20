@@ -30,6 +30,11 @@ file.
   sensible ones; forced choices (such as targeting) always use the best option.
 - **Weights are per instance**: `HeuristicBot(weights={...})`, with the names in
   `TUNABLE_WEIGHTS`. That lets two tunings play each other in one process.
+- **Pilots compete with units.** `PilotPlay` is scored on the same scale as
+  playing the card as a unit (`_pilot_value`), using the view's `piloting_cost`
+  for the viewer's own hand. A main-phase action with no scoring branch falls
+  through to 0.0, which is level with Pass, so a new kind of play is never chosen
+  until it gets one. `W_PLAY_PILOT=-1000` turns piloting off for an A/B run.
 
 ## LLM bot
 

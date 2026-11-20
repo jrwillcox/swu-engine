@@ -206,6 +206,10 @@ Combat deals simultaneous damage equal to attacker/defender power.
 Ambush, Restore, Shielded, Grit, Sentinel, Saboteur, Exploit, …) modify combat — the \
 card glossary explains the relevant ones.
 - Deploy your leader once its resource threshold is met to get a premium body + ability.
+- PILOTS: a hand unit with `piloting_cost` may instead be played (PilotPlay) as an \
+upgrade on a friendly Vehicle for that cost — often far below its unit cost. It \
+adds `pilot_bonus` (power/hp) to the Vehicle, which can attack with it this turn \
+if ready, whereas a newly played unit enters exhausted. Weigh both modes.
 - Pass when you have nothing worthwhile to do; the round ends when both players pass.
 
 HOW TO READ THE STATE (JSON in the user message):
@@ -609,6 +613,11 @@ def _card_brief(c: dict) -> dict:
         out["damage"] = c.get("damage", 0)
     if c.get("cost"):
         out["cost"] = c["cost"]
+    if c.get("piloting_cost") is not None:
+        # Only set for own hand cards that can be played as a Pilot (PilotPlay).
+        out["piloting_cost"] = c["piloting_cost"]
+        up, uh = int(c.get("upgrade_power") or 0), int(c.get("upgrade_hp") or 0)
+        out["pilot_bonus"] = f"{up:+d}/{uh:+d}"
     if c.get("exhausted"):
         out["exhausted"] = True
     if c.get("keywords"):
