@@ -69,6 +69,45 @@
   }
 }
 
+/* "A new version is ready" banner (UpdateBanner), top-centre on the start screen. */
+.update-banner {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--panel-solid);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+}
+/* Narrower screens: drop below the start screen's sign-in row instead of covering it. */
+@media (max-width: 900px) {
+  .update-banner {
+    top: calc(64px + env(safe-area-inset-top, 0px));
+  }
+}
+.update-banner-btn {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 14px;
+  background: var(--accent);
+  color: #04121c;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 /* Modal */
 .bug-modal {
   width: min(520px, 94vw);

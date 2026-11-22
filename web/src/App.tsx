@@ -10,6 +10,8 @@ import { ReplayViewer } from "./components/ReplayViewer";
 import { LoginScreen } from "./components/LoginScreen";
 import { BugHud, type ScreenId } from "./components/ReportBug";
 import { BugInbox } from "./components/BugInbox";
+import { UpdateBanner } from "./components/UpdateBanner";
+import { useUpdateCheck } from "./game/useUpdateCheck";
 import { api } from "./api/client";
 import { useUser } from "./game/auth";
 import type { ReplayResponse } from "./api/types";
@@ -33,6 +35,8 @@ export default function App() {
   const [unread, setUnread] = useState(0);
 
   const signedIn = auth.ready && !!auth.user;
+  // A newer build has been deployed since this copy of the app loaded.
+  const updateReady = useUpdateCheck();
 
   // Drive the HUD badge: poll the unread count on mount + every 20s while signed
   // in, and refresh on demand (after the inbox marks things read / a new report).
@@ -114,6 +118,9 @@ export default function App() {
   return (
     <>
       {content}
+      {/* Offer the reload only on the start screen: a reload ends a game in
+          progress and would drop unsaved work in the explorer or deck builder. */}
+      {updateReady && screen === "start" && !tutorial && <UpdateBanner />}
       {!tutorial && (
         <BugHud
           screen={screen}
