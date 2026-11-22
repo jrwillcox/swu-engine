@@ -552,7 +552,21 @@ def write_group_spec(group: Group, out_dir: Path) -> Path:
                  f"— see escalation rule; do NOT jam a core-resolution change into a card batch.")
     L.append("")
 
-    if group.kind == "keyword":
+    if group.kind == "keyword" and group.keyword in audit.PHASE2_KEYWORDS:
+        # The keyword has already landed engine-side (the planner keeps a keyword
+        # group's id once it is planned, so the group outlives the engine work).
+        # Telling the next session to implement the keyword again would send it
+        # back into finished engine work.
+        L.append(f"## Keyword group: **{group.keyword}** (residual text)")
+        L.append("")
+        L.append(f"The **{group.keyword}** keyword is already implemented engine-side; "
+                 f"do NOT implement it again.  Its design notes are in "
+                 f"`docs/dev/engine_seams.md` (search for `{group.keyword}`).  Encode "
+                 f"only each card's *residual* ability text below, as an ordinary "
+                 f"ability batch.  A card whose only text is the keyword is already "
+                 f"playable and needs nothing.")
+        L.append("")
+    elif group.kind == "keyword":
         L.append(f"## Keyword group: **{group.keyword}**")
         L.append("")
         L.append(f"Implement the **{group.keyword}** keyword engine-side once "
