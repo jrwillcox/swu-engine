@@ -826,6 +826,16 @@ Group 07 was LAW's four leaders and two bases, scouted as the heaviest group lef
 - **`resolver._fortify_upgrade_triggers`**: a base upgrade's granted triggers resolve from the base, and its own printed triggers resolve from the upgrade.
 - Bookkeeping: `"Fortify"` moved from PHASE3 to PHASE2 in `audit_coverage.py` (**`PHASE3_KEYWORDS` is empty again**) and `web/swudb_import.py`. All 17 Fortify cards carry residual text, so they classify `text-bearing` and `hmw-set:01` is now a residual-ability group.
 
+## hmw-set:01 — the Fortify cards' residual text
+
+- **Base-hosted `via_host` auras**: `keywords._aura_source_pairs` (arena units as sources of their own specs and their upgrades' `via_host` specs, plus the base's attached upgrades ONLY) and `stats._via_host_stat_bonus` now walk the base as a host. Military Academy HMW_112, Verdant Fortress HMW_126, Landing Pad HMW_271.
+- **`BaseDamageShieldUpgrade(min_amount, draw)`**: a marker on a base upgrade read at `damage.base_damage_after_prevention` after the ASH_70 cap (`_base_shield_upgrade_absorbs`): prevent the whole instance, `_defeat_attached_upgrade`, `_draw_cards`. The existing prevention seam, not a replacement system. Alliance Shield Generator HMW_81.
+- **`IgnoreAspectPenaltyForPlays.keyword` / `.leader_only`**: Grand Moff Tarkin HMW_4 ("upgrades with Fortify you play"); `leader_only` is the token-collision guard for the HMW_4 Beast token row. His regroup "defeat a base with ≤10 remaining HP" is a `deployed_only` optional trigger that marks the enemy base lethally damaged (the Final Showdown SHD_208 shape).
+- **`WhenYouPlayOrCreateUnit(any_player=, filter=)`** (Trap Field HMW_171) and **`WhenYouPlayCard(power_max=)`** (effective power; Insurgent Camp HMW_216).
+- **`push_bottom_from_discard(disposition="top")`** (Bacta Tank HMW_37). Carbonite Chamber HMW_95 reuses `cannot_ready_this_round` (slightly over-blocks effect readies for the rest of the round).
+- **Beast token**: the DB `TokenUnit` row (resolves to HMW_3) makes `_create_token_units("Beast")` work as-is; `plan_encoding._CAPABILITIES` `beast-token` flipped to `existing`. Beast Lair HMW_147.
+- Reuse: Intelligence Agency HMW_205's When Played = Remnant Lookouts ASH_220's adapter (the "look at your top card at any time" clause is unmodelled: no rules effect). Heavy Ion Cannon HMW_172's "once each phase" Action = `once_per_round`.
+
 ## Earlier primitives (from the deck-encoding phase)
 
 - **`CreateTokenUnit(name, count, enters_ready)`**: Battle Droid TWI_1, Clone Trooper TWI_2. Tokens don't count for conservation and cease to exist when they leave play. (ahsoka:05)

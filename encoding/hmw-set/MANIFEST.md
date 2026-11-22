@@ -1,6 +1,6 @@
 # Encoding manifest — `hmw-set`
 
-Deck readiness: **61/272** cards playable. Encoding groups: **0/31** complete.
+Deck readiness: **77/272** cards playable. Encoding groups: **1/31** complete.
 
 Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py hmw-set --group NN`.
 
@@ -8,7 +8,7 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 
 | # | group id | kind | theme | cards | progress | new primitives | depends on |
 |--:|----------|------|-------|------:|----------|----------------|------------|
-| 1 | `hmw-set:01` | keyword | Fortify keyword | 16 | 0/16 | beast-token | — |
+| 1 | `hmw-set:01` | keyword | Fortify keyword | 16 | 16/16 ✅ | beast-token | — |
 | 2 | `hmw-set:02` | ability | Direct damage & removal | 7 | 0/7 | — | — |
 | 3 | `hmw-set:03` | ability | Direct damage & removal | 7 | 0/7 | — | — |
 | 4 | `hmw-set:04` | ability | Direct damage & removal | 7 | 0/7 | — | — |
@@ -44,7 +44,7 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 
 Paste the **id** line into the standing prompt. The card names are shown only so you know what you're submitting.
 
-### `hmw-set:01` — Fortify keyword (0/16)
+### `hmw-set:01` — Fortify keyword (✅ done)
 ```
 hmw-set:01
 # Grand Moff Tarkin (HMW_4), Bacta Tank (HMW_37), Dark Sanctum (HMW_70), Alliance Shield Generator (HMW_81), Carbonite Chamber (HMW_95), Military Academy (HMW_112), Sinister War Memorial (HMW_113), Verdant Fortress (HMW_126), Beast Lair (HMW_147), Noxious Refinery (HMW_160), Trap Field (HMW_171), Heavy Ion Cannon (HMW_172), Intelligence Agency (HMW_205), The Tarkin Doctrine (HMW_206), Insurgent Camp (HMW_216), Landing Pad (HMW_271)

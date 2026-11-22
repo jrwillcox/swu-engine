@@ -438,12 +438,18 @@ def _finish_bottom_from_discard(s: GameState) -> GameState:
     rng.shuffle(chosen)
     s.rng_state = rng.getstate()
 
+    on_top = ctx.get("disposition") == "top"
     for ci in chosen:
         ci.zone = Zone.DECK
         ci.face_down = True
         ci.exhausted = False
         ci.damage = 0
-        s.player_by_id(ci.owner_id).deck.append(ci)  # bottom
+        if on_top:
+            # "Put a non-Vehicle unit from your discard pile on top of your deck"
+            # (Bacta Tank HMW_37).
+            s.player_by_id(ci.owner_id).deck.insert(0, ci)
+        else:
+            s.player_by_id(ci.owner_id).deck.append(ci)  # bottom
 
     names = ", ".join(ci.card_def.display_name for ci in chosen) or "nothing"
     s.event_log.append(DecisionResolved(

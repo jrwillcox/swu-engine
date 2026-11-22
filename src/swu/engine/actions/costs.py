@@ -733,6 +733,17 @@ def _controller_waives_aspect_penalty(state: GameState, ci: CardInstance,
         if not specs or ability_suppressed(state, src):
             continue
         for spec in specs:
+            if getattr(spec, "leader_only", False):
+                from swu.cards.models import Leader
+                if not isinstance(src.card_def, Leader):
+                    continue  # token-collision guard (Grand Moff Tarkin HMW_4)
+            kw = getattr(spec, "keyword", None)
+            if kw:
+                # "upgrades WITH FORTIFY you play" (HMW_4) — the played card's own
+                # keyword, read through the keyword layer.
+                from swu.engine.keywords import Keyword, has_keyword
+                if not has_keyword(state, ci, Keyword(kw)):
+                    continue
             if spec.card_type == "non_unit":
                 # "the first NON-UNIT card you play each phase" (Peli Motto ASH_212)
                 # — the complement filter, the push_name_and_discard LOF_226 shape.

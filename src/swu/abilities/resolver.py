@@ -511,9 +511,19 @@ def _trigger_matches(
             return False
         if not trigger.include_self and entered_id == source_ci.instance_id:
             return False
-        res = state.find_instance(source_ci.instance_id)
-        controller = res[0].player_id if res is not None else source_ci.owner_id
-        return event_ctx.get("entered_unit_player") == controller
+        if not getattr(trigger, "any_player", False):
+            res = state.find_instance(source_ci.instance_id)
+            controller = res[0].player_id if res is not None else source_ci.owner_id
+            if event_ctx.get("entered_unit_player") != controller:
+                return False
+        flt = getattr(trigger, "filter", None)
+        if flt is not None:
+            # "When a non-leader ground unit enters play" (Trap Field HMW_171).
+            ent = state.find_instance(entered_id)
+            if ent is None or not _spec_matches_ci(flt, ent[1], source_ci, state,
+                                                   event_ctx):
+                return False
+        return True
 
     if isinstance(trigger, WhenAttackEnds):
         # Fires for the attacker at the end of its attack, flagged in event_ctx;
@@ -705,11 +715,19 @@ def _trigger_matches(
             if host is None or host.instance_id != source_ci.instance_id:
                 return False
         if (trigger.aspect or trigger.card_type or trigger.trait or trigger.unique
-                or trigger.cost_min is not None or getattr(trigger, "non_unit", False)):
+                or trigger.cost_min is not None or getattr(trigger, "non_unit", False)
+                or getattr(trigger, "power_max", None) is not None):
             result = state.find_instance(event.instance_id)
             if result is None:
                 return False
             _, played_ci = result
+            pmax = getattr(trigger, "power_max", None)
+            if pmax is not None:
+                # "When you play a unit with 3 or less power" (Insurgent Camp
+                # HMW_216) — the unit's EFFECTIVE power as it stands in play.
+                from swu.engine.actions import compute_power
+                if compute_power(state, played_ci) > pmax:
+                    return False
             if getattr(trigger, "non_unit", False):
                 # "When you play a non-unit card" (Tobias Beckett SHD_217): the
                 # played card must NOT be a Unit (events + upgrades qualify).

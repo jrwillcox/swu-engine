@@ -29,9 +29,7 @@
 
 **Mechanical analysis:** trigger archetype `event`; effect families ['—'].
 
-**Existing primitives that should suffice:** create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -46,7 +44,7 @@
 
 **Mechanical analysis:** trigger archetype `when_played`; effect families ['—'].
 
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -60,9 +58,7 @@
 
 **Mechanical analysis:** trigger archetype `when_played`; effect families ['damage', 'defeat'].
 
-**Existing primitives that should suffice:** DealDamage, create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** DealDamage, create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -76,9 +72,7 @@
 
 **Mechanical analysis:** trigger archetype `static`; effect families ['damage'].
 
-**Existing primitives that should suffice:** DealDamage, create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** DealDamage, create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -93,9 +87,7 @@
 
 **Mechanical analysis:** trigger archetype `event`; effect families ['damage'].
 
-**Existing primitives that should suffice:** DealDamage, create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** DealDamage, create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -109,9 +101,7 @@
 
 **Mechanical analysis:** trigger archetype `event`; effect families ['ready_exhaust'].
 
-**Existing primitives that should suffice:** create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -126,9 +116,7 @@
 
 **Mechanical analysis:** trigger archetype `event`; effect families ['return_hand'].
 
-**Existing primitives that should suffice:** ReturnToHand, create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** ReturnToHand, create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 

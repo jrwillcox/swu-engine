@@ -32,9 +32,7 @@
 
 **Mechanical analysis:** trigger archetype `on_attack`; effect families ['ramp'].
 
-**Existing primitives that should suffice:** create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -51,9 +49,7 @@
 
 **Mechanical analysis:** trigger archetype `on_attack`; effect families ['damage', 'ready_exhaust'].
 
-**Existing primitives that should suffice:** DealDamage, ExhaustCard/ReadyCard, create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** DealDamage, ExhaustCard/ReadyCard, create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -67,9 +63,7 @@
 
 **Mechanical analysis:** trigger archetype `when_played`; effect families ['—'].
 
-**Existing primitives that should suffice:** create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -83,9 +77,7 @@
 
 **Mechanical analysis:** trigger archetype `on_attack`; effect families ['ready_exhaust'].
 
-**Existing primitives that should suffice:** create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -99,7 +91,7 @@
 
 **Mechanical analysis:** trigger archetype `event`; effect families ['defeat'].
 
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -113,9 +105,7 @@
 
 **Mechanical analysis:** trigger archetype `when_played`; effect families ['defeat', 'token'].
 
-**Existing primitives that should suffice:** DefeatUnit/Upgrade, GiveToken, create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** DefeatUnit/Upgrade, GiveToken, create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -129,9 +119,7 @@
 
 **Mechanical analysis:** trigger archetype `when_played`; effect families ['—'].
 
-**Existing primitives that should suffice:** create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 

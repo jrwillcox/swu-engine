@@ -305,9 +305,10 @@ _CAPABILITIES: list[tuple[str, re.Pattern, str]] = [
     # Weakness: a -1/-1 token UPGRADE with no text (HMW_2 token) — a third
     # GiveToken kind beside Shield/Experience.
     ("weakness-token",    re.compile(r"\bWeakness\b"), "new"),
-    # Beast: a vanilla 3/3 token UNIT (HMW_3..5 tokens) — a new
-    # create-token-unit definition beside Battle Droid / Clone Trooper / Spy.
-    ("beast-token",       re.compile(r"\bBeast token", re.I), "new"),
+    # Beast: a vanilla 3/3 token UNIT (HMW_3..5 tokens).  LANDED with Beast Lair
+    # HMW_147 (hmw-set:01): the DB TokenUnit row makes CreateTokenUnit("Beast") /
+    # _create_token_units work with no new machinery.
+    ("beast-token",       re.compile(r"\bBeast token", re.I), "existing"),
 ]
 
 _CAPABILITIES_BY_LABEL = {label: pat for label, pat, _ in _CAPABILITIES}
