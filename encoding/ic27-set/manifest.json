@@ -1,0 +1,352 @@
+{
+  "deck_slug": "ic27-set",
+  "source": {
+    "deck": null,
+    "set_code": "IC27"
+  },
+  "total_deck_cards": 194,
+  "playable_deck_cards": 91,
+  "groups": [
+    {
+      "gid": "ic27-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_5",
+        "IC27_14",
+        "IC27_26",
+        "IC27_31",
+        "IC27_39",
+        "IC27_66",
+        "IC27_102"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_107",
+        "IC27_109",
+        "IC27_110",
+        "IC27_117",
+        "IC27_119",
+        "IC27_124",
+        "IC27_127"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_03_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_147",
+        "IC27_151",
+        "IC27_185"
+      ],
+      "done": 0,
+      "total": 3
+    },
+    {
+      "gid": "ic27-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_04_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_3",
+        "IC27_6",
+        "IC27_8",
+        "IC27_38",
+        "IC27_42",
+        "IC27_63",
+        "IC27_70"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_05_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_78",
+        "IC27_84",
+        "IC27_87",
+        "IC27_116",
+        "IC27_122",
+        "IC27_144",
+        "IC27_145"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_06_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_155",
+        "IC27_158",
+        "IC27_166",
+        "IC27_167",
+        "IC27_168",
+        "IC27_179",
+        "IC27_187"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_07_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_194"
+      ],
+      "done": 0,
+      "total": 1
+    },
+    {
+      "gid": "ic27-set:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_08_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_1",
+        "IC27_2",
+        "IC27_4",
+        "IC27_7",
+        "IC27_13",
+        "IC27_21",
+        "IC27_23"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:09",
+      "seq": 9,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_09_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_24",
+        "IC27_29",
+        "IC27_34",
+        "IC27_37",
+        "IC27_40",
+        "IC27_45",
+        "IC27_46"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:10",
+      "seq": 10,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_10_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_49",
+        "IC27_56",
+        "IC27_60",
+        "IC27_62",
+        "IC27_67",
+        "IC27_71",
+        "IC27_76"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:11",
+      "seq": 11,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_11_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_77",
+        "IC27_79",
+        "IC27_81",
+        "IC27_83",
+        "IC27_85",
+        "IC27_86",
+        "IC27_89"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:12",
+      "seq": 12,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_12_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_92",
+        "IC27_99",
+        "IC27_101",
+        "IC27_103",
+        "IC27_106",
+        "IC27_115",
+        "IC27_120"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:13",
+      "seq": 13,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_13_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_123",
+        "IC27_131",
+        "IC27_137",
+        "IC27_139",
+        "IC27_143",
+        "IC27_146",
+        "IC27_148"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:14",
+      "seq": 14,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_14_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_150",
+        "IC27_159",
+        "IC27_160",
+        "IC27_162",
+        "IC27_175"
+      ],
+      "done": 0,
+      "total": 5
+    },
+    {
+      "gid": "ic27-set:15",
+      "seq": 15,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_15_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_19",
+        "IC27_22",
+        "IC27_35",
+        "IC27_43",
+        "IC27_57",
+        "IC27_68",
+        "IC27_104"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:16",
+      "seq": 16,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_16_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_113",
+        "IC27_126",
+        "IC27_138",
+        "IC27_142",
+        "IC27_149",
+        "IC27_157",
+        "IC27_161"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "ic27-set:17",
+      "seq": 17,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_17_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "IC27_163",
+        "IC27_165",
+        "IC27_172"
+      ],
+      "done": 0,
+      "total": 3
+    }
+  ]
+}

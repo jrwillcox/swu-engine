@@ -152,8 +152,47 @@ The golden files in `tests/fixtures/` (`actions_decision_kinds.json`,
 
 Every printed keyword is modelled. Tier 1: Sentinel, Overwhelm, Raid, Ambush,
 Restore, Saboteur, Shielded, Grit. Later: Exploit, Coordinate, Plot, Hidden, Bounty,
-Smuggle, Piloting, Support. Design notes for each are in
-[`history/encoding_history.md`](history/encoding_history.md) (Part 2).
+Smuggle, Piloting, Support, Fortify. Design notes for each are in
+[`history/encoding_history.md`](history/encoding_history.md) (Part 2), except
+Fortify, whose notes are below.
+
+### Fortify (HMW): an upgrade on a base
+
+"Attach this to your base, not a unit."  A Fortify upgrade's only legal host is
+its controller's own base, so it is playable with no units in play.  Once
+attached it is an ordinary upgrade that happens to sit on a base.
+
+- **Where it attaches.** `zones._is_fortify` (an `Upgrade` with
+  `has_keyword(…, FORTIFY)`) makes `_eligible_upgrade_targets` return
+  `[controller's base]` and makes `_attach_upgrade` accept only that base.  Every
+  play route (hand, Smuggle, Plot, discard, deck, `play_upgrade_from_hand`)
+  goes through those two functions, so they all inherit the rule.  A Fortify
+  upgrade in an *opponent's* discard is not offered to a play-from-any-discard
+  effect, because its base would be read from the wrong player.
+- **Zone tag.** The upgrade carries its host's zone, so it is tagged
+  `BASE_ZONE`.  That is how `on_unit` and `arena=` filters tell it apart.
+- **Finding the host.** `PlayerState.upgrade_hosts()` (both arenas, then the
+  base) is the scan for "which card holds this upgrade?".  It is used by
+  `_find_upgrade_host`, `_apply_defeat_unit`, `_apply_return_to_hand`,
+  `kind="upgrade"` target gathering, granted-Action enumeration, the Unique
+  Rule sweep and the `defeat_at_regroup` sweep.  Keep the arena-only scan where
+  the question is about units.
+- **Targeting.** `kind="upgrade"` reaches base upgrades ("defeat an upgrade").
+  A card that says "an upgrade **on a unit**" / "attached to a unit" adds the
+  `on_unit` predicate (System Shock JTL_175, Finn SHD_3, Evidence of the Crime
+  SHD_77).  `on_friendly_host` and `arena=` already exclude base upgrades.
+- **Abilities.** `GrantedAbility(ActivatedAbility)` ("Attached base gains:
+  'Action …'") is offered with the base as host.
+  `resolver._fortify_upgrade_triggers` collects a base upgrade's
+  `GrantedAbility(TriggerAbility)`, which resolves from the BASE, and its own
+  printed triggers, which resolve from the UPGRADE.  WhenPlayed comes from the
+  usual UpgradePlayed path.
+- **Not built yet** (lands with the residual card text, `hmw-set:01`): a
+  `ConstantAbility` granted to the base ("Friendly units gain Raid 1", "Friendly
+  space units get +1/+0") and "ignore the aspect penalty on Fortify upgrades"
+  (Grand Moff Tarkin HMW_4).  Grand Moff Tarkin is tagged Fortify upstream only
+  because his text mentions it; `_is_fortify` reads the keyword on Upgrade cards
+  only.
 
 ## The escalation rule
 

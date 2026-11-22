@@ -298,6 +298,16 @@ _CAPABILITIES: list[tuple[str, re.Pattern, str]] = [
     # (Desperate Attack SHD_179).
     ("granted-attack-restricted-attacker",
      re.compile(r"attack with a (damaged|exhausted|ready) ", re.I), "existing"),
+    # ── HMW (2026-11) new tokens. NOT YET IMPLEMENTED → escalation groups, ordered
+    #    last. Both are small and self-contained (the escalation rule lets them land
+    #    with the group's first card). Once one lands, flip its status to
+    #    "existing" so its remaining cards re-plan into ordinary ability groups.
+    # Weakness: a -1/-1 token UPGRADE with no text (HMW_2 token) — a third
+    # GiveToken kind beside Shield/Experience.
+    ("weakness-token",    re.compile(r"\bWeakness\b"), "new"),
+    # Beast: a vanilla 3/3 token UNIT (HMW_3..5 tokens) — a new
+    # create-token-unit definition beside Battle Droid / Clone Trooper / Spy.
+    ("beast-token",       re.compile(r"\bBeast token", re.I), "new"),
 ]
 
 _CAPABILITIES_BY_LABEL = {label: pat for label, pat, _ in _CAPABILITIES}

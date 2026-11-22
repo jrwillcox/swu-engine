@@ -44,18 +44,18 @@ if hasattr(sys.stdout, "reconfigure"):
 import audit_coverage as audit  # noqa: E402
 import plan_encoding as P       # noqa: E402
 
-# Campaign order: the eight main expansions in release order, then the boxed/index
-# set, the 2026 two-player starter, promo years, per-set promos, judge/convention
+# Campaign order: the nine main expansions in release order, then the boxed/index
+# sets, the 2026 two-player starter, promo years, per-set promos, judge/convention
 # promos, and finally the tiny weekly/misc sets. Set-by-set: an earlier set is
 # fully exhausted before the walker offers a group from a later one.
 SET_ORDER = [
-    "SOR", "SHD", "TWI", "JTL", "LOF", "SEC", "LAW", "ASH",
-    "IBH", "TS26",
+    "SOR", "SHD", "TWI", "JTL", "LOF", "SEC", "LAW", "ASH", "HMW",
+    "IBH", "TS26", "IC27",
     "P25", "P26",
-    "JTLP", "SECP", "LOFP", "LAWP",
+    "JTLP", "SECP", "LOFP", "LAWP", "ASHP", "HMWP",
     "J24", "J25",
     "C24", "C25", "C26",
-    "GG", "G25", "MV26",
+    "GG", "G25", "MV26", "CST",
 ]
 
 

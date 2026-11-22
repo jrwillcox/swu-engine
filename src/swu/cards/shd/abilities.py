@@ -2494,7 +2494,9 @@ def _finn():
     shield the host.  The undeployed side is an ExhaustSelf activated ability; the
     deployed side is an optional On Attack trigger (auto-declines with no friendly
     upgrade to defeat).  Epic Action deploy at 5+ resources = standard machinery."""
-    upgrade_spec = TargetSpec(controller="friendly", kind="upgrade")
+    # "on a unit" — not a Fortify upgrade on a base (HMW).
+    upgrade_spec = TargetSpec(controller="friendly", kind="upgrade",
+                              predicates=("on_unit",))
     return [
         ActivatedAbility(
             costs=[ExhaustSelf()],
@@ -6129,10 +6131,14 @@ def _evidence_of_the_crime():
     and records it; the second picks a legal "Attach to …" host for THAT upgrade
     (the ``eligible_host_for_event_upgrade`` predicate) and relocates it there via
     ``_relocate_upgrade`` — control follows the new host, so "take control" needs no
-    explicit step (Pre Vizsla SHD_142)."""
+    explicit step (Pre Vizsla SHD_142).
+
+    ``on_unit`` keeps a Fortify upgrade (HMW) out of the first pick: it can attach
+    only to its controller's base, so it has no "eligible unit" to move to."""
     return EventAbility(effects=[
         CustomEffect(fn=_evidence_choose_upgrade,
-                     target=TargetSpec(controller="any", kind="upgrade", cost_max=3)),
+                     target=TargetSpec(controller="any", kind="upgrade", cost_max=3,
+                                       predicates=("on_unit",))),
         CustomEffect(fn=_evidence_attach,
                      target=TargetSpec(controller="any", kind="unit",
                                        predicates=("eligible_host_for_event_upgrade",))),

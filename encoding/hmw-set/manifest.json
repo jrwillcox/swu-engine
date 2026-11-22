@@ -1,0 +1,674 @@
+{
+  "deck_slug": "hmw-set",
+  "source": {
+    "deck": null,
+    "set_code": "HMW"
+  },
+  "total_deck_cards": 272,
+  "playable_deck_cards": 61,
+  "groups": [
+    {
+      "gid": "hmw-set:01",
+      "seq": 1,
+      "kind": "keyword",
+      "theme": "Fortify keyword",
+      "keyword": "Fortify",
+      "file": "group_01_fortify_keyword.md",
+      "depends_on": [],
+      "new_primitives": [
+        "beast-token"
+      ],
+      "cards": [
+        "HMW_4",
+        "HMW_37",
+        "HMW_70",
+        "HMW_81",
+        "HMW_95",
+        "HMW_112",
+        "HMW_113",
+        "HMW_126",
+        "HMW_147",
+        "HMW_160",
+        "HMW_171",
+        "HMW_172",
+        "HMW_205",
+        "HMW_206",
+        "HMW_216",
+        "HMW_271"
+      ],
+      "done": 0,
+      "total": 16
+    },
+    {
+      "gid": "hmw-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_02_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_5",
+        "HMW_11",
+        "HMW_13",
+        "HMW_36",
+        "HMW_43",
+        "HMW_45",
+        "HMW_46"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_03_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_49",
+        "HMW_51",
+        "HMW_54",
+        "HMW_60",
+        "HMW_64",
+        "HMW_68",
+        "HMW_78"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_04_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_79",
+        "HMW_86",
+        "HMW_94",
+        "HMW_99",
+        "HMW_102",
+        "HMW_114",
+        "HMW_125"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_05_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_130",
+        "HMW_156",
+        "HMW_158",
+        "HMW_159",
+        "HMW_169",
+        "HMW_177",
+        "HMW_182"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:06",
+      "seq": 6,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_06_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_185",
+        "HMW_186",
+        "HMW_188",
+        "HMW_193",
+        "HMW_207",
+        "HMW_217",
+        "HMW_244"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:07",
+      "seq": 7,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_07_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_249",
+        "HMW_252",
+        "HMW_253",
+        "HMW_263",
+        "HMW_270"
+      ],
+      "done": 0,
+      "total": 5
+    },
+    {
+      "gid": "hmw-set:08",
+      "seq": 8,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_08_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_14",
+        "HMW_16",
+        "HMW_41",
+        "HMW_48",
+        "HMW_61",
+        "HMW_85",
+        "HMW_101"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:09",
+      "seq": 9,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_09_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_103",
+        "HMW_122",
+        "HMW_148",
+        "HMW_166",
+        "HMW_173",
+        "HMW_180",
+        "HMW_189"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:10",
+      "seq": 10,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_10_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_204",
+        "HMW_215",
+        "HMW_222",
+        "HMW_232",
+        "HMW_236",
+        "HMW_238",
+        "HMW_247"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:11",
+      "seq": 11,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_11_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_1",
+        "HMW_6",
+        "HMW_7",
+        "HMW_8",
+        "HMW_9",
+        "HMW_17",
+        "HMW_35"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:12",
+      "seq": 12,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_12_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_39",
+        "HMW_42",
+        "HMW_44",
+        "HMW_50",
+        "HMW_52",
+        "HMW_56",
+        "HMW_63"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:13",
+      "seq": 13,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_13_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_66",
+        "HMW_72",
+        "HMW_73",
+        "HMW_74",
+        "HMW_80",
+        "HMW_83",
+        "HMW_84"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:14",
+      "seq": 14,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_14_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_90",
+        "HMW_91",
+        "HMW_92",
+        "HMW_98",
+        "HMW_104",
+        "HMW_107",
+        "HMW_111"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:15",
+      "seq": 15,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_15_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_115",
+        "HMW_117",
+        "HMW_118",
+        "HMW_119",
+        "HMW_121",
+        "HMW_123",
+        "HMW_124"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:16",
+      "seq": 16,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_16_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_127",
+        "HMW_129",
+        "HMW_131",
+        "HMW_133",
+        "HMW_136",
+        "HMW_137",
+        "HMW_138"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:17",
+      "seq": 17,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_17_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_141",
+        "HMW_142",
+        "HMW_145",
+        "HMW_149",
+        "HMW_151",
+        "HMW_164",
+        "HMW_165"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:18",
+      "seq": 18,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_18_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_170",
+        "HMW_176",
+        "HMW_184",
+        "HMW_190",
+        "HMW_191",
+        "HMW_203",
+        "HMW_208"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:19",
+      "seq": 19,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_19_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_209",
+        "HMW_210",
+        "HMW_211",
+        "HMW_212",
+        "HMW_214",
+        "HMW_228",
+        "HMW_230"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:20",
+      "seq": 20,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_20_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_234",
+        "HMW_255",
+        "HMW_256",
+        "HMW_257",
+        "HMW_259",
+        "HMW_261",
+        "HMW_264"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:21",
+      "seq": 21,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_21_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_266",
+        "HMW_267"
+      ],
+      "done": 0,
+      "total": 2
+    },
+    {
+      "gid": "hmw-set:22",
+      "seq": 22,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_22_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_18",
+        "HMW_53",
+        "HMW_57",
+        "HMW_88",
+        "HMW_105",
+        "HMW_108",
+        "HMW_134"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:23",
+      "seq": 23,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_23_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_154",
+        "HMW_161",
+        "HMW_162",
+        "HMW_192",
+        "HMW_218",
+        "HMW_221",
+        "HMW_223"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:24",
+      "seq": 24,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_24_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "HMW_225",
+        "HMW_233",
+        "HMW_243",
+        "HMW_246",
+        "HMW_251",
+        "HMW_260",
+        "HMW_265"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:25",
+      "seq": 25,
+      "kind": "ability",
+      "theme": "New primitive: weakness-token",
+      "keyword": "",
+      "file": "group_25_new_primitive_weakness_token.md",
+      "depends_on": [],
+      "new_primitives": [
+        "weakness-token"
+      ],
+      "cards": [
+        "HMW_2",
+        "HMW_3",
+        "HMW_15",
+        "HMW_40",
+        "HMW_59",
+        "HMW_62",
+        "HMW_65"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:26",
+      "seq": 26,
+      "kind": "ability",
+      "theme": "New primitive: weakness-token",
+      "keyword": "",
+      "file": "group_26_new_primitive_weakness_token.md",
+      "depends_on": [],
+      "new_primitives": [
+        "weakness-token",
+        "beast-token"
+      ],
+      "cards": [
+        "HMW_67",
+        "HMW_71",
+        "HMW_87",
+        "HMW_97",
+        "HMW_100",
+        "HMW_109",
+        "HMW_110"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:27",
+      "seq": 27,
+      "kind": "ability",
+      "theme": "New primitive: weakness-token",
+      "keyword": "",
+      "file": "group_27_new_primitive_weakness_token.md",
+      "depends_on": [],
+      "new_primitives": [
+        "weakness-token",
+        "beast-token"
+      ],
+      "cards": [
+        "HMW_196",
+        "HMW_197",
+        "HMW_199",
+        "HMW_200",
+        "HMW_202",
+        "HMW_231",
+        "HMW_237"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:28",
+      "seq": 28,
+      "kind": "ability",
+      "theme": "New primitive: weakness-token",
+      "keyword": "",
+      "file": "group_28_new_primitive_weakness_token.md",
+      "depends_on": [],
+      "new_primitives": [
+        "weakness-token"
+      ],
+      "cards": [
+        "HMW_240",
+        "HMW_242",
+        "HMW_248"
+      ],
+      "done": 0,
+      "total": 3
+    },
+    {
+      "gid": "hmw-set:29",
+      "seq": 29,
+      "kind": "ability",
+      "theme": "New primitive: beast-token",
+      "keyword": "",
+      "file": "group_29_new_primitive_beast_token.md",
+      "depends_on": [],
+      "new_primitives": [
+        "beast-token"
+      ],
+      "cards": [
+        "HMW_10",
+        "HMW_12",
+        "HMW_38",
+        "HMW_47",
+        "HMW_58",
+        "HMW_77",
+        "HMW_144"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:30",
+      "seq": 30,
+      "kind": "ability",
+      "theme": "New primitive: beast-token",
+      "keyword": "",
+      "file": "group_30_new_primitive_beast_token.md",
+      "depends_on": [],
+      "new_primitives": [
+        "beast-token"
+      ],
+      "cards": [
+        "HMW_150",
+        "HMW_152",
+        "HMW_153",
+        "HMW_168",
+        "HMW_194",
+        "HMW_195",
+        "HMW_241"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "hmw-set:31",
+      "seq": 31,
+      "kind": "ability",
+      "theme": "New primitive: beast-token",
+      "keyword": "",
+      "file": "group_31_new_primitive_beast_token.md",
+      "depends_on": [],
+      "new_primitives": [
+        "beast-token"
+      ],
+      "cards": [
+        "HMW_250",
+        "HMW_262",
+        "HMW_272"
+      ],
+      "done": 0,
+      "total": 3
+    }
+  ]
+}

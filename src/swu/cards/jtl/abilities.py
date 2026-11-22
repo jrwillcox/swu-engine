@@ -2726,15 +2726,15 @@ def _system_shock_jtl_175():
     """JTL_175 — System Shock (Event, Tactic, 1): "Defeat a non-leader upgrade
     attached to a unit.  If you do, deal 1 damage to that unit."
 
-    ``kind="upgrade"`` already enumerates only real (non-token) upgrades attached to
-    a unit, so "attached to a unit" needs no predicate; ``non_leader`` excludes a
-    leader deployed as a Pilot upgrade (``_is_leader_unit`` matches a Leader
-    card_def).  "If you do" is intrinsic — with no legal upgrade the event fizzles
-    and no damage is dealt."""
+    ``kind="upgrade"`` enumerates real (non-token) upgrades on units AND on bases
+    (Fortify, HMW), so "attached to a unit" is the ``on_unit`` predicate;
+    ``non_leader`` excludes a leader deployed as a Pilot upgrade
+    (``_is_leader_unit`` matches a Leader card_def).  "If you do" is intrinsic —
+    with no legal upgrade the event fizzles and no damage is dealt."""
     return EventAbility(effects=[
         CustomEffect(fn=_system_shock_fn,
                      target=TargetSpec(controller="any", kind="upgrade",
-                                       predicates=("non_leader",))),
+                                       predicates=("non_leader", "on_unit"))),
     ])
 
 

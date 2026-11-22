@@ -250,11 +250,11 @@ def test_set_code_input(tmp_path, monkeypatch):
     gslug, ggroups, _gmeta = P.plan(None, set_with_gaps, _db())
     assert gslug == f"{set_with_gaps.lower()}-set"
     assert ggroups, f"expected the {set_with_gaps} set to yield gap groups"
-    # Every printed keyword is now modelled engine-side (Support, the last one, landed
-    # with ash-set:01), so PHASE3_KEYWORDS is empty and NO set plans a keyword group
-    # any more — every remaining gap group is an ability group.
-    assert all(g.kind == "ability" for g in ggroups)
-    assert not A.PHASE3_KEYWORDS
+    # Only the two campaign kinds, and a keyword group only ever for a keyword that
+    # is still deferred (in PHASE3_KEYWORDS, which is empty since hmw-set:01 landed
+    # Fortify, so no keyword group is planned at all).
+    assert {g.kind for g in ggroups} <= {"ability", "keyword"}
+    assert all(g.keyword in A.PHASE3_KEYWORDS for g in ggroups if g.kind == "keyword")
 
     # ASH used to be the one set that planned a keyword group; it is now COMPLETE
     # (264/264, finished in ash-set:29), so it resolves and reports its size while

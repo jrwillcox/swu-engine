@@ -14,6 +14,8 @@ import swu.cards.lof  # noqa: F401 — side-effect: registers LOF abilities
 import swu.cards.ash  # noqa: F401 — side-effect: registers ASH abilities
 import swu.cards.ibh  # noqa: F401 — side-effect: registers IBH abilities
 import swu.cards.ts26  # noqa: F401 — side-effect: registers TS26 abilities
+import swu.cards.hmw  # noqa: F401 — side-effect: registers HMW abilities
+import swu.cards.ic27  # noqa: F401 — side-effect: registers IC27 abilities
 import swu.cards.promo  # noqa: F401 — side-effect: registers promo/anthology abilities
 
 # LAST: after every set module has registered its abilities, alias reprint

@@ -1116,6 +1116,21 @@ class PlayerState:
                 return ci
         return None
 
+    def upgrade_hosts(self) -> list[CardInstance]:
+        """Every card this player controls that can carry upgrades: the units in
+        both arenas, then the base.
+
+        A base carries upgrades only through the Fortify keyword ("Attach this to
+        your base, not a unit", HMW).  An upgrade carries its host's zone tag, so
+        a Fortify upgrade is tagged BASE_ZONE.  Use this wherever the question is
+        "which card holds this upgrade?".  Keep the arena-only scan where the
+        question is about units (combat, stats, "an upgrade on a unit")."""
+        hosts = self.ground_arena + self.space_arena
+        base = self.base_instance
+        if base is not None:
+            hosts.append(base)
+        return hosts
+
     @property
     def available_resources(self) -> int:
         return sum(1 for r in self.resources if not r.exhausted)

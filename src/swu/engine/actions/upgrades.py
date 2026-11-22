@@ -48,7 +48,7 @@ from swu.engine.actions.costs import (
     _exhaust_resources, _pay_play_cost, _play_upgrade_affordable, _play_upgrade_cost, _vehicle_has_pilot,
 )
 from swu.engine.actions.zones import (
-    _attach_upgrade, _eligible_upgrade_targets, _upgrade_target_spec, note_upgrade_attached,
+    _attach_upgrade, _eligible_upgrade_targets, _is_fortify, _upgrade_target_spec, note_upgrade_attached,
 )
 from swu.engine.actions.shared import (
     _resource_top_of_deck,
@@ -778,6 +778,10 @@ def _affordable_hand_upgrades(state: GameState, ctx: dict) -> list[str]:
             if c.owner_id != ctx["controller_id"]:
                 spec = _upgrade_target_spec(c.card_def)
                 if spec is not None and getattr(spec, "controller", "any") != "any":
+                    continue
+                # The same narrowing for Fortify ("attach this to YOUR base"):
+                # its host is read from the owner, who is not the player here.
+                if _is_fortify(state, c):
                     continue
             if not _play_upgrade_hosts_for(state, ctx, c):
                 continue

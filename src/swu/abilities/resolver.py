@@ -170,6 +170,51 @@ def _cards_in_play(state: "GameState"):
         yield from ps.space_arena
 
 
+def _fortify_upgrade_triggers(
+    state: "GameState",
+    base_ci: "CardInstance",
+    event: "GameEvent",
+    event_ctx: dict,
+) -> list[tuple["CardInstance", "CardInstance", int, TriggerAbility]]:
+    """Triggers carried by the upgrades attached to a BASE, which only Fortify
+    (HMW) puts there.  Bases sit in base_zone, so the arena scan in
+    ``_collect_triggers`` never reaches these upgrades.  Two shapes:
+
+    * ``GrantedAbility(TriggerAbility)``, "Attached base gains: 'When …'"
+      (Dark Sanctum HMW_70).  It resolves from the BASE, which is the
+      unit-upgrade source/spec split with the base as host.
+    * The upgrade's OWN printed trigger, "When a non-leader ground unit enters
+      play: You may defeat this upgrade …" (Trap Field HMW_171).  It resolves
+      from the UPGRADE, so "this upgrade" is the source and "friendly" reads its
+      owner.  Fortify makes the owner the base's controller.  WhenPlayed and
+      WhenPlayedViaSmuggle are skipped because the UpgradePlayed path below
+      already collects them for every freshly attached upgrade.
+    """
+    from swu.engine.state import ability_suppressed
+    out: list = []
+    for upg in base_ci.attached_upgrades:
+        ucd = getattr(upg, "card_def", None)
+        if ucd is None or not hasattr(ucd, "set_code") or not hasattr(ucd, "card_number"):
+            continue
+        if ability_suppressed(state, upg):
+            continue
+        for idx, spec in enumerate(get_abilities(ucd.set_code or "", ucd.card_number or "")):
+            if isinstance(spec, GrantedAbility):
+                inner = spec.ability
+                if not isinstance(inner, TriggerAbility):
+                    continue
+                if _trigger_matches(inner.trigger, event, base_ci, state, event_ctx):
+                    if inner.condition is None or inner.condition.evaluate(state, base_ci):
+                        out.append((base_ci, upg, idx, inner))
+            elif isinstance(spec, TriggerAbility):
+                if isinstance(spec.trigger, (WhenPlayed, WhenPlayedViaSmuggle)):
+                    continue
+                if _trigger_matches(spec.trigger, event, upg, state, event_ctx):
+                    if spec.condition is None or spec.condition.evaluate(state, upg):
+                        out.append((upg, upg, idx, spec))
+    return out
+
+
 def _trigger_matches(
     trigger: object,
     event: "GameEvent",
@@ -977,6 +1022,7 @@ def _collect_triggers(
                     if _trigger_matches(spec.trigger, event, ci, state, event_ctx):
                         if spec.condition is None or spec.condition.evaluate(state, ci):
                             results.append((ci, ci, idx, spec))
+                results.extend(_fortify_upgrade_triggers(state, ci, event, event_ctx))
                 continue
             if not isinstance(ci.card_def, Leader) or ci.deployed:
                 continue
@@ -1771,6 +1817,13 @@ def _spec_matches_ci(
             if not any(isinstance(c.card_def, _Unit)
                        and getattr(c.card_def, "cost", None) == cost for c in hand):
                 return False
+        if pred == "on_unit":
+            # An UPGRADE candidate attached to a UNIT, not to a base: "an upgrade
+            # attached to a unit" / "an upgrade on a unit" (System Shock JTL_175,
+            # Finn SHD_3).  Only a Fortify upgrade (HMW) sits on a base.  An
+            # attached card carries its host's zone tag, so the zone answers it.
+            if candidate.zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
+                return False
         if pred == "on_friendly_host":
             # An UPGRADE candidate whose HOST is controlled by the source's
             # controller — "Defeat an upgrade on a friendly unit" (Reforge ASH_90).
@@ -2431,8 +2484,11 @@ def _gather_legal_targets(
             if ps.base_instance is not None:
                 candidates.append(ps.base_instance)
         if spec.kind in ("upgrade", "unit_upgrade", "unit_or_unit_upgrade"):
-            # Real upgrades live in their host unit's attached_upgrades list.
-            for host in ps.ground_arena + ps.space_arena:
+            # Real upgrades live in their host's attached_upgrades list.  The host
+            # is usually a unit; a base holds Fortify upgrades (HMW), and "defeat
+            # an upgrade" reaches those too.  "An upgrade on a unit" adds the
+            # ``on_unit`` predicate.
+            for host in ps.upgrade_hosts():
                 candidates.extend(host.attached_upgrades)
 
     for ci in candidates:
@@ -3373,7 +3429,7 @@ def _target_protected(state, target_id: str, source_ci, kind: str) -> bool:
         return any(
             any(u.instance_id == target_id for u in host.attached_upgrades)
             for hps in state.players
-            for host in hps.ground_arena + hps.space_arena)
+            for host in hps.upgrade_hosts())
 
     if _card_grants_self_protection(ci.card_def, kind, state, ci,
                                     is_attached=_attached):
@@ -3402,7 +3458,7 @@ def _apply_defeat_unit(state: "GameState", target_id: str) -> "GameState":
     # double-homing the instance and tripping the "Duplicate instance_id"
     # invariant.
     for host_ps in state.players:
-        for host in host_ps.ground_arena + host_ps.space_arena:
+        for host in host_ps.upgrade_hosts():      # incl. a base's Fortify upgrades
             if any(u.instance_id == target_id for u in host.attached_upgrades):
                 host.attached_upgrades = [
                     u for u in host.attached_upgrades if u.instance_id != target_id]
@@ -3443,7 +3499,7 @@ def _apply_return_to_hand(state: "GameState", target_id: str) -> "GameState":
     # host holds it and route it to its OWNER's hand as a clean card.  A token
     # upgrade ceases to exist rather than going to a hand.
     for holder_ps in state.players:
-        for host_ci in holder_ps.ground_arena + holder_ps.space_arena:
+        for host_ci in holder_ps.upgrade_hosts():  # incl. a base's Fortify upgrades
             if ci in host_ci.attached_upgrades:
                 host_ci.attached_upgrades.remove(ci)
                 ci.attached_upgrades.clear()  # an upgrade holds no sub-upgrades, defensive
