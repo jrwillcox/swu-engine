@@ -5,7 +5,7 @@
     "set_code": "HMW"
   },
   "total_deck_cards": 272,
-  "playable_deck_cards": 77,
+  "playable_deck_cards": 117,
   "groups": [
     {
       "gid": "hmw-set:01",
@@ -57,7 +57,7 @@
         "HMW_45",
         "HMW_46"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -78,7 +78,7 @@
         "HMW_68",
         "HMW_78"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -99,7 +99,7 @@
         "HMW_114",
         "HMW_125"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -120,7 +120,7 @@
         "HMW_177",
         "HMW_182"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -141,7 +141,7 @@
         "HMW_217",
         "HMW_244"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -202,7 +202,7 @@
         "HMW_180",
         "HMW_189"
       ],
-      "done": 0,
+      "done": 1,
       "total": 7
     },
     {
@@ -223,7 +223,7 @@
         "HMW_238",
         "HMW_247"
       ],
-      "done": 0,
+      "done": 1,
       "total": 7
     },
     {
@@ -286,7 +286,7 @@
         "HMW_83",
         "HMW_84"
       ],
-      "done": 0,
+      "done": 1,
       "total": 7
     },
     {
@@ -307,7 +307,7 @@
         "HMW_107",
         "HMW_111"
       ],
-      "done": 0,
+      "done": 1,
       "total": 7
     },
     {
@@ -412,7 +412,7 @@
         "HMW_228",
         "HMW_230"
       ],
-      "done": 0,
+      "done": 1,
       "total": 7
     },
     {

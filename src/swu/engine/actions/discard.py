@@ -44,7 +44,7 @@ from swu.engine.actions.dispatch import (
     register_decisions,
 )
 from swu.engine.actions.damage import (
-    base_damage_after_prevention,
+    _ability_damage_bonus, base_damage_after_prevention,
 )
 from swu.engine.actions.zones import (
     _create_token_units, _draw_cards,
@@ -508,10 +508,12 @@ def _finish_bottom_from_discard(s: GameState) -> GameState:
         for p in s.players:
             if p.player_id == ctx["controller_id"] or p.base_instance is None:
                 continue
-            amt = base_damage_after_prevention(s, p.base_instance, base_dmg)
+            amt = base_damage_after_prevention(
+                s, p.base_instance,
+                base_dmg + _ability_damage_bonus(s, p.player_id, ctx["controller_id"]))
             if amt > 0:
                 p.base_instance.damage += amt
-                record_base_damage(s, p.player_id, amt)
+                record_base_damage(s, p.player_id, amt, dealer=ctx["controller_id"])
     if not s.is_terminal() and not s.pending_decisions:
         s.active_player_index = top.after_resolve_player_index
     return s

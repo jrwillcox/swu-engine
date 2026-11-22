@@ -505,6 +505,13 @@ class Condition(Enum):
     # param=<Trait>: the controller has a LEADER card with that trait, deployed or
     # still in the base zone ("While you control a Force leader" — Elzar Mann ASH_224).
     CONTROLLER_HAS_TRAIT_LEADER = "controller_has_trait_leader"
+    # param=<planet> or a tuple of planets: "If you control a Naboo base" (Sando
+    # Aqua Monster HMW_94).  The planet is printed only on the base ART, so it is
+    # read from the hand-maintained ``swu.cards.base_planets`` table.
+    CONTROLLER_HAS_PLANET_BASE = "controller_has_planet_base"
+    # Same, for an OPPONENT's base: "If an opponent controls an Endor, Kashyyyk,
+    # Naboo, or Tatooine base" (Surveillance Cruiser HMW_247).
+    OPPONENT_HAS_PLANET_BASE = "opponent_has_planet_base"
     CONTROLLER_HAS_LEADER_UNIT = "controller_has_leader_unit"  # the controller has a
                                       # deployed leader *unit* (a Leader in an arena),
                                       # any trait — gates "If you control a leader
@@ -765,6 +772,11 @@ class Condition(Enum):
                                       # "defeat a friendly token" (Alliance Outpost
                                       # LAW_19, whose Epic Action must not be spent
                                       # on an unpayable cost)
+    CONTROLLER_GAVE_TOKEN_UPGRADE_THIS_PHASE = "controller_gave_token_upgrade_this_phase"
+                                      # the SOURCE CONTROLLER gave a token UPGRADE
+                                      # to a unit this phase (game_memory.
+                                      # token_upgrades_given_this_phase, fed at
+                                      # tokens.attach_token) — Jar Jar Binks HMW_5
     CONTROLLER_CREATED_TOKEN_THIS_PHASE = "controller_created_token_this_phase"
                                       # the SOURCE CONTROLLER created ≥1 token this
                                       # phase (game_memory.tokens_created_this_phase,
@@ -1362,6 +1374,13 @@ class ConditionCheck:
             ldr = ps.leader_instance
             return (ldr is not None and not getattr(ldr, "deployed", False)
                     and bool(getattr(ldr, "exhausted", False)))
+        if c in (Condition.CONTROLLER_HAS_PLANET_BASE,
+                 Condition.OPPONENT_HAS_PLANET_BASE):
+            from swu.cards.base_planets import controls_planet_base
+            if c == Condition.CONTROLLER_HAS_PLANET_BASE:
+                return controls_planet_base(ps, self.param)
+            return any(controls_planet_base(p, self.param)
+                       for p in state.players if p.player_id != ps.player_id)
         if c == Condition.CONTROLLER_HAS_LEADER_UNIT:
             # A deployed leader unit = a Leader card in an arena (base_zone leaders
             # don't count).  Any trait (Jedha Agitator SOR_158).
@@ -1771,6 +1790,8 @@ class ConditionCheck:
             return False
         if c == Condition.CONTROLLER_CREATED_TOKEN_THIS_PHASE:
             return ps.player_id in state.game_memory.tokens_created_this_phase
+        if c == Condition.CONTROLLER_GAVE_TOKEN_UPGRADE_THIS_PHASE:
+            return ps.player_id in state.game_memory.token_upgrades_given_this_phase
         if c == Condition.CONTROLLER_HAS_CARD_IN_HAND:
             return len(ps.hand) > 0
         if c == Condition.SOURCE_HAS_TRAIT:
@@ -2689,6 +2710,43 @@ class WhenDamageDealtToYourBase:
     settle-point drains (``actions._fire_base_damage_observers``) — the
     WhenUnitHealed / WhenDealNonCombatDamage shape, so it needs no new event class
     and cannot fire mid-pipeline."""
+
+
+@dataclass(frozen=True)
+class WhenDamageDealt:
+    """The general "when damage is dealt" observer — fires once per damage
+    instance that actually LANDED on a unit or base (after every prevention), from
+    combat, abilities or indirect damage.
+
+    Fed by ``actions.note_damage_dealt`` into ``game_memory.damage_events`` and
+    drained at the action settle-point (``actions._fire_damage_observers``), which
+    puts the entry in ``event_ctx["damage_event"]``.  Resolves after the attack or
+    ability that dealt the damage has finished, like every settle-point observer.
+
+    Filters (all must hold):
+
+    * ``dealer="you"`` — the source's controller dealt it ("When you deal 4 or more
+      damage to a unit or base", Darth Sidious HMW_11).
+    * ``target`` — ``"self"`` (this card), ``"friendly"``, ``"other_friendly"``
+      (a friendly unit other than this one), ``"enemy"``, or ``None`` (any).
+    * ``kind`` — ``"unit_or_base"`` or ``"unit"``.
+    * ``min_amount`` — the instance's size ("4 or more").
+    * ``combat`` — ``False`` = non-combat only (Cham Syndulla HMW_13), ``True`` =
+      combat only, ``None`` = either.
+    * ``survived`` — the damaged unit is still in play at the drain ("is dealt
+      damage and survives", Arena Acklay HMW_156).
+    * ``target_cost_max`` — the damaged unit's printed cost cap (Logray HMW_45,
+      "another friendly unit that costs 3 or less").
+
+    The drain also sets ``event_ctx["excluded_target_id"]`` to the damaged card, so
+    the stock ``excludes_event_target`` predicate reads "a DIFFERENT unit or base"."""
+    dealer: Optional[str] = None
+    target: Optional[str] = None
+    kind: str = "unit_or_base"
+    min_amount: int = 1
+    combat: Optional[bool] = None
+    survived: bool = False
+    target_cost_max: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -3813,6 +3871,55 @@ class IgnoreAspectPenaltyForUpgrades:
     A pure read there — no trigger, no decision (the CannotAttackBases marker
     pattern)."""
     traits: tuple = ()
+
+
+@dataclass(frozen=True)
+class AbilityDamageBonus:
+    """Passive marker on a unit: "If a friendly ability would deal damage, you may
+    have that ability deal that much damage plus ``amount`` instead" (Ty Yorrick
+    HMW_185).
+
+    The DEALER-side twin of ``DamageAmplification`` (which sits on the damaged
+    card).  Read by ``actions._ability_damage_bonus`` at the non-combat landing
+    points — ``_deal_damage_with_shield`` (``is_combat`` False) and the ability
+    base sinks — before prevention, like the target-side marker.  The "may" is
+    taken exactly when it helps: only damage to an OPPONENT's unit or base is
+    increased, never self-damage.  Indirect damage is not increased (its receiver
+    splits it, so there is no single instance to grow)."""
+    amount: int = 1
+
+
+@dataclass(frozen=True)
+class BaseUpgradeDefeatReplacement:
+    """Passive marker on a unit: "If an upgrade on your base would be defeated, you
+    may defeat this unit instead" (Vice Admiral Rampart HMW_60).
+
+    Applied automatically (the user's 2026-11-22 call; the ASH_62
+    ``_consume_shield_aura_prevention`` precedent for an un-prompted "may … instead")
+    at the upgrade branch of ``resolver._apply_defeat_unit``, and only when the
+    defeating effect is controlled by an OPPONENT of the base's controller — a
+    Fortify upgrade defeating ITSELF as a cost (Alliance Shield Generator HMW_81) is
+    never replaced."""
+
+
+@dataclass(frozen=True)
+class CostRoute:
+    """Passive marker on a unit card: "While playing this unit, you may <pay X> any
+    number of times.  For each, this unit costs ``discount`` resources less."
+
+    ``kind``:
+
+    * ``"defeat_ready_resource"`` — defeat a ready resource you control (Greater
+      Sarlacc HMW_49, ``discount=3``);
+    * ``"damage_friendly_unit"`` — deal 1 damage to a friendly unit, each unit at
+      most once (The Marauder HMW_125, ``discount=1``).
+
+    Read at ``PlayCard`` (the card goes to ``PLAY_BUFFER`` and a ``cost_route``
+    decision opens — the Exploit skeleton) and by ``legal_actions``' best-case
+    affordability check.  Only the play-from-hand path reads it; other play paths
+    pay the full price."""
+    kind: str
+    discount: int
 
 
 @dataclass(frozen=True)

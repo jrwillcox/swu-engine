@@ -501,14 +501,34 @@ def _combined_power_choices(state: GameState, ctx: dict) -> list[str]:
     unit may be chosen at most once).
 
     ``max_units`` caps the pool ("defeat up to 1 unit you control" — the Exploit
-    variant, Count Dooku TWI_5); TWI_89's own "any number" leaves it unset."""
-    ps = state.player_by_id(ctx["controller_id"])
+    variant, Count Dooku TWI_5); TWI_89's own "any number" leaves it unset.
+
+    ``pool="ground_any"`` (Sando Aqua Monster HMW_94) widens the pool to every
+    GROUND unit of either player except the source, and ``power_cap`` keeps the
+    running combined power at or under the cap: a unit is offered only while its
+    power still fits."""
     already = set(ctx.get("chosen", []))
     cap = ctx.get("max_units")
     if cap is not None and len(already) >= int(cap):
         return []
-    return [ci.instance_id for ci in ps.ground_arena + ps.space_arena
-            if ci.instance_id not in already]
+    if ctx.get("pool") == "ground_any":
+        units = [u for p in state.players for u in p.ground_arena
+                 if u.instance_id != ctx["source_id"]]
+    else:
+        ps = state.player_by_id(ctx["controller_id"])
+        units = ps.ground_arena + ps.space_arena
+    power_cap = ctx.get("power_cap")
+    room = None
+    if power_cap is not None:
+        spent = 0
+        for cid in already:
+            res = state.find_instance(cid)
+            if res is not None:
+                spent += max(0, compute_power(state, res[1]))
+        room = int(power_cap) - spent
+    return [ci.instance_id for ci in units
+            if ci.instance_id not in already
+            and (room is None or max(0, compute_power(state, ci)) <= room)]
 
 
 def push_combined_power_play(
@@ -516,6 +536,9 @@ def push_combined_power_play(
     trait: Optional[str] = None,
     max_units: Optional[int] = None,
     cost_reduction_per_unit: Optional[int] = None,
+    pool: str = "friendly",
+    power_cap: Optional[int] = None,
+    payoff: str = "play",
 ) -> None:
     """Push a 'combined_power_play' decision (Consolidation of Power TWI_89):
     "Choose any number of friendly units.  You may play a unit from your hand if
@@ -532,14 +555,24 @@ def push_combined_power_play(
     (paid) play of a matching card.  Under that variant the chosen units are
     defeated only if the play happens — exploiting is part of playing the card, so
     a fizzled play costs nothing, the opposite of TWI_89's unconditional "Then,
-    defeat the chosen units"."""
+    defeat the chosen units".
+
+    ``payoff="defeat_self_damage"`` (Sando Aqua Monster HMW_94, with
+    ``pool="ground_any"`` and ``power_cap`` = its power): "defeat any number of
+    ground units with combined power equal to or less than this unit's power.
+    Deal damage to this unit equal to the combined power of the defeated units."
+    No play happens; the chosen units are defeated and the source takes damage
+    equal to their combined power (read while they were still in play)."""
     controller_id = source_ci.owner_id
     ctx = {"source_id": source_ci.instance_id,
            "controller_id": controller_id,
            "chosen": [],
            "trait": trait,
            "max_units": max_units,
-           "cost_reduction_per_unit": cost_reduction_per_unit}
+           "cost_reduction_per_unit": cost_reduction_per_unit,
+           "pool": pool,
+           "power_cap": power_cap,
+           "payoff": payoff}
     if not _combined_power_choices(s, ctx):
         return
     owner_idx = s.player_index(controller_id)
@@ -575,6 +608,22 @@ def _resolve_combined_power_play(s: GameState, top) -> GameState:
         choice=f"combined power {total} from {len(chosen)} unit(s)",
     ))
     res = s.find_instance(ctx["source_id"])
+    if ctx.get("payoff") == "defeat_self_damage":
+        # Sando Aqua Monster HMW_94: defeat the chosen units, then the source takes
+        # their combined power as damage (an ability's damage to itself).
+        for cid in chosen:
+            if s.find_instance(cid) is not None:
+                _apply_defeat_unit_by_id(s, cid)
+        res = s.find_instance(ctx["source_id"])
+        if res is not None and total > 0 and not s.is_terminal():
+            from swu.abilities.resolver import _apply_deal_damage
+            _apply_deal_damage(s, ctx["source_id"], total,
+                               source_name=res[1].card_def.display_name,
+                               dealer_id=ctx["controller_id"],
+                               source_id=ctx["source_id"])
+        if not s.is_terminal() and not s.pending_decisions:
+            s.active_player_index = top.after_resolve_player_index
+        return s
     before = len(s.pending_decisions)
     per_unit = ctx.get("cost_reduction_per_unit")
     if res is not None and per_unit is not None:

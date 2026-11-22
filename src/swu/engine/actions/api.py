@@ -75,7 +75,10 @@ from swu.engine.actions.combat import (
     _enumerate_attacks, _enumerate_two_unit_attacks, _filter_granted_attacks, _forced_attack_actions, note_hand_or_deck_discard, record_hand_discard,
 )
 from swu.engine.actions.observers import (
-    _fire_base_damage_observers, _fire_bounty_observers, _fire_deck_discard_observers, _fire_draw_observers, _fire_force_observers, _fire_hand_discard_observers, _fire_heal_observers, _fire_noncombat_damage_observers, _fire_ready_observers, _fire_reveal_discard_observers, _fire_self_discard_observers, _fire_token_creation_observers, _fire_unit_entry_observers, _fire_upgrade_attach_observers, _fire_upgrade_defeat_observers,
+    _fire_base_damage_observers, _fire_damage_observers, _fire_bounty_observers, _fire_deck_discard_observers, _fire_draw_observers, _fire_force_observers, _fire_hand_discard_observers, _fire_heal_observers, _fire_noncombat_damage_observers, _fire_ready_observers, _fire_reveal_discard_observers, _fire_self_discard_observers, _fire_token_creation_observers, _fire_unit_entry_observers, _fire_upgrade_attach_observers, _fire_upgrade_defeat_observers,
+)
+from swu.engine.actions.sacrifice import (
+    _cost_route_affordable, _cost_route_of, push_cost_route,
 )
 from swu.engine.actions.turn import (
     _advance_mulligan, _advance_setup_resources, _check_regroup_complete, _enter_regroup, _starting_hand_modifier, _starting_hand_size,
@@ -274,6 +277,15 @@ class PlayCard(Action):
         if _play_only_as_first_action_blocked(s, ci, ps):
             raise IllegalActionError(
                 "This card may only be played as your first action")
+
+        # ── "While playing this unit" cost route (Greater Sarlacc HMW_49, The
+        # Marauder HMW_125): park the card and settle its price first — the
+        # Exploit skeleton, as its own ``cost_route`` decision.
+        if isinstance(ci.card_def, Unit):
+            route = _cost_route_of(ci.card_def)
+            if route is not None:
+                push_cost_route(s, ps, ci, route)
+                return s
 
         # ── Exploit: push sacrifice decision before paying cost ────────────
         # A pending "the next <trait> card you play this phase gains Exploit N"
@@ -1104,8 +1116,13 @@ def legal_actions(state: GameState) -> list[Action]:
             continue
         if isinstance(card, (Unit, Event)):
             cost = _play_cost(state, ci, ps)
+            route = _cost_route_of(card) if isinstance(card, Unit) else None
+            if route is not None:
+                # "While playing this unit" cost route: best-case affordability.
+                if _cost_route_affordable(state, ci, ps, cost, route):
+                    acts.append(PlayCard(ci.instance_id))
             # For Exploit cards: check affordability at best-case (max sacrifices)
-            if has_keyword(state, ci, Keyword.EXPLOIT):
+            elif has_keyword(state, ci, Keyword.EXPLOIT):
                 exploit_n = keyword_value(state, ci, Keyword.EXPLOIT)
                 max_units = len(ps.ground_arena) + len(ps.space_arena)
                 max_sacrifices = min(exploit_n, max_units)
@@ -1497,6 +1514,9 @@ def apply(state: GameState, action: Action) -> GameState:
         gm.actions_taken_this_phase[counting_actor] = (
             gm.actions_taken_this_phase.get(counting_actor, 0) + 1)
     _sweep_defeated_units(new_state)
+    # FIRST, so what a WhenDamageDealt observer does (a draw, base damage, a heal)
+    # is drained by the observers below in this same settle pass (Crosshair HMW_169).
+    new_state = _fire_damage_observers(new_state)
     new_state = _fire_noncombat_damage_observers(new_state)
     new_state = _fire_draw_observers(new_state)
     new_state = _fire_force_observers(new_state)

@@ -116,6 +116,12 @@ def attach_token(
     # token-creation chokepoints.  ``owner_ps`` is the host's controller, which is
     # the creator for every shipped card (see the ledger's docstring in state.py).
     state.game_memory.tokens_created_this_phase.add(owner_ps.player_id)
+    # "If you gave a token upgrade to a unit this phase" (Jar Jar Binks HMW_5): the
+    # GIVER is the controller of the effect being resolved (the resolver's dealer
+    # stack, pushed for every ``execute_effect``), else the host's controller.
+    from swu.abilities.resolver import _noncombat_dealer_stack
+    giver = _noncombat_dealer_stack[-1] if _noncombat_dealer_stack else owner_ps.player_id
+    state.game_memory.token_upgrades_given_this_phase.add(giver)
     if note_token_creation:
         _note_token_creation(state, owner_ps.player_id, "upgrade", token_name, 1,
                              host_id=host_ci.instance_id)

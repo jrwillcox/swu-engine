@@ -336,6 +336,68 @@ def _fire_unit_entry_observers(s: GameState) -> GameState:
     return s
 
 
+_DAMAGE_OBSERVER_KEYS: list = []
+
+
+def _damage_observer_keys() -> frozenset:
+    """Cached (set_code, card_number) index of the cards carrying a
+    ``WhenDamageDealt`` trigger — the ``_unit_entry_observer_keys`` trick.  Damage
+    is dealt constantly, so a board with none of these cards must never reach
+    ``fire_triggered_abilities`` from this drain."""
+    if not _DAMAGE_OBSERVER_KEYS:
+        from swu.abilities.registry import _REGISTRY, TriggerAbility, WhenDamageDealt
+        keys: set = set()
+        for key, specs in _REGISTRY.items():
+            if any(isinstance(spec, TriggerAbility)
+                   and isinstance(spec.trigger, WhenDamageDealt) for spec in specs):
+                keys.add(key)
+        _DAMAGE_OBSERVER_KEYS.append(frozenset(keys))
+    return _DAMAGE_OBSERVER_KEYS[0]
+
+
+def _board_has_damage_observer(s: GameState) -> bool:
+    """True when a ``WhenDamageDealt`` card is in an arena or a base zone (an
+    undeployed leader observes from there)."""
+    keys = _damage_observer_keys()
+    if not keys:
+        return False
+    for ps in s.players:
+        for ci in ps.ground_arena + ps.space_arena + ps.base_zone:
+            cd = ci.card_def
+            if (getattr(cd, "set_code", None) or "",
+                    getattr(cd, "card_number", None)) in keys:
+                return True
+    return False
+
+
+def _fire_damage_observers(s: GameState) -> GameState:
+    """Drain the damage ledger, firing the general ``WhenDamageDealt`` observer once
+    per damage instance that landed (Darth Sidious HMW_11, Cham Syndulla HMW_13,
+    Logray HMW_45, Arena Acklay HMW_156, …).
+
+    The ``_fire_unit_entry_observers`` shape: runs at the action settle-point with a
+    clear stack, after the defeat sweep — so "and survives" is simply "still in an
+    arena now".  With no observer card on the board the queue is cleared without
+    firing anything, so every other game is unchanged."""
+    queue = s.game_memory.damage_events
+    if not queue:
+        return s
+    if not _board_has_damage_observer(s):
+        queue.clear()
+        return s
+    from swu.abilities.resolver import fire_triggered_abilities
+    while queue and not s.pending_decisions and not s.is_terminal():
+        entry = queue.pop(0)
+        s = fire_triggered_abilities(
+            s, None, after_all_player_idx=s.active_player_index,
+            # ``excluded_target_id`` lets the stock ``excludes_event_target``
+            # predicate read "a DIFFERENT unit or base" (Darth Sidious HMW_11).
+            event_ctx={"damage_event": entry,
+                       "excluded_target_id": entry.get("target_id")})
+        _sweep_defeated_units(s)
+    return s
+
+
 def _fire_upgrade_attach_observers(s: GameState) -> GameState:
     """Drain the upgrade-attach queue, firing WhenUpgradeAttached ONCE per host
     (Sabine Wren ASH_208).

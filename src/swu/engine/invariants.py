@@ -49,7 +49,7 @@ from swu.engine.actions.stats import compute_hp
 from swu.engine.actions.api import legal_actions
 
 _KNOWN_DECISION_KINDS = frozenset({
-    "ambush", "exploit", "test",
+    "ambush", "exploit", "cost_route", "test",
     "trigger_option", "resolve_effects", "use_ability", "pre_attack",
     "granted_attack", "play_from_hand", "play_event_from_hand", "play_via_smuggle",
     "play_via_piloting",

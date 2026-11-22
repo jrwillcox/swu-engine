@@ -1,6 +1,6 @@
 {
  "_comment": "web/serializers.py sends type(action).__name__ as the action 'kind' and asdict(action) as 'params', so every name below is part of the HTTP API the React frontend is written against. Moving a class between modules is safe; RENAMING a class or a field breaks the frontend.",
- "count": 167,
+ "count": 169,
  "actions": {
   "AcceptExhaust": [
    "unit_id"
@@ -109,6 +109,7 @@
    "unit_id"
   ],
   "ClaimInitiative": [],
+  "CommitCostRoute": [],
   "ConfirmOpponentDamage": [],
   "ContinueAttack": [
    "attacker_id",
@@ -221,6 +222,9 @@
    "name"
   ],
   "Pass": [],
+  "PayCostRoute": [
+   "target_id"
+  ],
   "PayRegroupUpkeep": [
    "source_id"
   ],

@@ -146,6 +146,12 @@ class GameMemory:
     # when a card gives a token to an ENEMY unit, which no shipped card does.
     # Phase-scoped, cleared at the phase rollover (the card says "this phase").
     tokens_created_this_phase: set = field(default_factory=set)   # player_ids
+    # Players who GAVE a token UPGRADE to a unit this phase ("If you gave a token
+    # upgrade to a unit this phase" — Jar Jar Binks HMW_5).  Fed only at
+    # ``tokens.attach_token``; the giver is the controller of the effect being
+    # resolved when there is one (so a token given to an ENEMY unit counts for the
+    # giver), else the host's controller (Shielded, decision resolvers).
+    token_upgrades_given_this_phase: set = field(default_factory=set)  # player_ids
     # Per-player count of cards played this phase, keyed player_id -> int, for the
     # "an opponent plays their Nth card each phase" observer (Ki-Adi-Mundi TWI_64).
     # Incremented at the CardPlayed firing chokepoint (resolver.fire_triggered_
@@ -278,6 +284,10 @@ class GameMemory:
     # ``actions._enter_regroup``; the win is delivered the ``lose_at_regroup`` way,
     # by marking every OTHER player's base defeated.
     win_at_regroup_sole_arena: list = field(default_factory=list)
+    # "At the start of the next regroup phase, deal 3 damage to each enemy unit in
+    # that arena" entries (Seismic Detonation HMW_54), each {"player_id", "arena",
+    # "amount"}.  Swept and cleared in ``actions._enter_regroup``.
+    damage_at_regroup: list = field(default_factory=list)
     # instance_ids of captured cards whose owner rescues them at the start of the
     # next regroup phase (Arrest SEC_195).  Swept and cleared in
     # ``actions._enter_regroup`` through the shared ``_rescue_captured_card`` seam;
@@ -614,6 +624,15 @@ class GameMemory:
     # ``_bases_cannot_heal`` is read at); a heal that removes nothing records nothing.
     # Gates "If a base was healed this phase" (Dooku's Solar Sailer TS26_38).
     bases_healed_this_phase: set = field(default_factory=set)
+    # Queue of damage instances that actually LANDED (after prevention), one dict
+    # each: {"target_id", "target_player", "is_base", "amount", "dealer_player",
+    # "combat"}.  Fed by ``actions.note_damage_dealt`` at the unit chokepoint
+    # (``_deal_damage_with_shield``), the base sink (``record_base_damage``) and
+    # indirect damage; drained at the action settle-point by
+    # ``actions._fire_damage_observers`` for the general ``WhenDamageDealt``
+    # observer (Darth Sidious HMW_11, Arena Acklay HMW_156, …).  Always empty
+    # between actions, so no phase clear is needed.
+    damage_events: list = field(default_factory=list)
 
     def clear_phase(self) -> None:
         self.units_played_this_phase.clear()
@@ -624,6 +643,7 @@ class GameMemory:
         self.units_healed_this_phase.clear()
         self.units_damaged_this_phase.clear()
         self.tokens_created_this_phase.clear()
+        self.token_upgrades_given_this_phase.clear()
         self.cards_played_this_phase.clear()
         self.traits_played_this_phase.clear()
         self.non_unit_traits_played_this_phase.clear()
@@ -686,6 +706,7 @@ class GameMemory:
             "units_healed_this_phase": sorted(self.units_healed_this_phase),
             "units_damaged_this_phase": sorted(self.units_damaged_this_phase),
             "tokens_created_this_phase": sorted(self.tokens_created_this_phase),
+            "token_upgrades_given_this_phase": sorted(self.token_upgrades_given_this_phase),
             "cards_played_this_phase": {k: int(v) for k, v in self.cards_played_this_phase.items()},
             "traits_played_this_phase": {
                 k: sorted(v) for k, v in self.traits_played_this_phase.items()},
@@ -713,6 +734,7 @@ class GameMemory:
             "cannot_play_events_this_phase": sorted(self.cannot_play_events_this_phase),
             "actions_taken_this_phase": {k: int(v) for k, v in self.actions_taken_this_phase.items()},
             "win_at_regroup_sole_arena": [dict(e) for e in self.win_at_regroup_sole_arena],
+            "damage_at_regroup": [dict(e) for e in self.damage_at_regroup],
             "rescue_at_regroup": list(self.rescue_at_regroup),
             "defeat_resources_at_regroup": {
                 k: int(v) for k, v in self.defeat_resources_at_regroup.items()},
@@ -761,6 +783,7 @@ class GameMemory:
             "non_units_played_this_phase": dict(self.non_units_played_this_phase),
             "unit_entries": list(self.unit_entries),
             "bases_healed_this_phase": sorted(self.bases_healed_this_phase),
+            "damage_events": [dict(e) for e in self.damage_events],
         }
 
     @staticmethod
@@ -780,6 +803,8 @@ class GameMemory:
             units_healed_this_phase=set(d.get("units_healed_this_phase", [])),
             units_damaged_this_phase=set(d.get("units_damaged_this_phase", [])),
             tokens_created_this_phase=set(d.get("tokens_created_this_phase", [])),
+            token_upgrades_given_this_phase=set(
+                d.get("token_upgrades_given_this_phase", [])),
             cards_played_this_phase={k: int(v) for k, v in d.get("cards_played_this_phase", {}).items()},
             traits_played_this_phase={
                 k: set(v) for k, v in d.get("traits_played_this_phase", {}).items()},
@@ -810,6 +835,7 @@ class GameMemory:
             cannot_play_events_this_phase=set(d.get("cannot_play_events_this_phase", [])),
             actions_taken_this_phase={k: int(v) for k, v in d.get("actions_taken_this_phase", {}).items()},
             win_at_regroup_sole_arena=[dict(e) for e in d.get("win_at_regroup_sole_arena", [])],
+            damage_at_regroup=[dict(e) for e in d.get("damage_at_regroup", [])],
             rescue_at_regroup=list(d.get("rescue_at_regroup", [])),
             defeat_resources_at_regroup={
                 k: int(v) for k, v in
@@ -863,6 +889,7 @@ class GameMemory:
                 d.get("non_units_played_this_phase", {}).items()},
             unit_entries=list(d.get("unit_entries", [])),
             bases_healed_this_phase=set(d.get("bases_healed_this_phase", [])),
+            damage_events=[dict(e) for e in d.get("damage_events", [])],
         )
 
 
