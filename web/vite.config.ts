@@ -1,6 +1,25 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+
+// Stamp every build with an id, baked into the bundle as __APP_BUILD__ and also
+// emitted as dist/version.json. A running client polls version.json and offers a
+// reload when the id there no longer matches its own (useUpdateCheck), so a tablet
+// that keeps the app open for days still picks up a deploy.
+function buildVersion(): Plugin {
+  const build = process.env.SWU_BUILD_ID || new Date().toISOString();
+  return {
+    name: "swu-build-version",
+    config: () => ({ define: { __APP_BUILD__: JSON.stringify(build) } }),
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "version.json",
+        source: JSON.stringify({ build }) + "\n",
+      });
+    },
+  };
+}
 
 // The frontend talks to the FastAPI backend only over HTTP. In dev, Vite
 // proxies /api to the backend so there's no CORS and no shared filesystem
@@ -31,7 +50,7 @@ const proxy = {
 };
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), buildVersion()],
   server: {
     port,
     // Listen on all interfaces so another device on the LAN (e.g. an iPad on the
