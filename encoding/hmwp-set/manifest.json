@@ -5,7 +5,7 @@
     "set_code": "HMWP"
   },
   "total_deck_cards": 20,
-  "playable_deck_cards": 4,
+  "playable_deck_cards": 11,
   "groups": [
     {
       "gid": "hmwp-set:01",
@@ -24,7 +24,7 @@
         "HMWP_14",
         "HMWP_17"
       ],
-      "done": 0,
+      "done": 6,
       "total": 6
     },
     {
@@ -57,7 +57,7 @@
         "HMWP_7",
         "HMWP_13"
       ],
-      "done": 0,
+      "done": 1,
       "total": 4
     },
     {

@@ -55,6 +55,7 @@ from swu.engine.actions.stats import (
 )
 from swu.engine.actions.damage import (
     _bases_cannot_heal, _deal_damage_with_shield, _hp_lethal, base_damage_after_prevention, note_base_healed,
+    note_damage_dealt,
 )
 from swu.engine.actions.zones import (
     _defeat_unit, _draw_cards, _find_in_arenas,
@@ -526,15 +527,24 @@ def note_token_unit_attacked(s: GameState, attacker: "CardInstance") -> None:
     s.game_memory.token_unit_attackers_this_round.add(pid)
 
 
-def record_base_damage(s: GameState, base_owner_id: str, amount: int) -> None:
+def record_base_damage(s: GameState, base_owner_id: str, amount: int, *,
+                       combat: bool = False, dealer: str | None = None) -> None:
     """Record that ``base_owner_id``'s base was dealt ``amount`` damage, for the
     settle-point WhenDamageDealtToYourBase observer (The Daughter LOF_252).
 
     Called from the base-damage sinks (the base-attack pipeline and the ability
     damage sink); indirect damage a player assigns to their own base routes through
     the latter, so both paths are covered.  Zero-damage instances are not recorded —
-    "when damage is dealt" needs damage."""
+    "when damage is dealt" needs damage.
+
+    Also queues the instance for the general ``WhenDamageDealt`` observer
+    (``note_damage_dealt``): ``combat`` marks the base-attack and Overwhelm sites,
+    ``dealer`` names the dealing player or card for ability damage."""
     if amount > 0:
+        base_ci = s.player_by_id(base_owner_id).base_instance
+        if base_ci is not None:
+            note_damage_dealt(s, base_ci, base_owner_id, amount,
+                              combat=combat, dealer=dealer)
         s.game_memory.base_damage_events.append(base_owner_id)
         # The standing, board-readable sibling of that drained queue: "If an enemy
         # base was damaged this phase" (Baylan Skoll ASH_39).
@@ -1479,6 +1489,7 @@ def push_select_damage(
     then_attack_with: Optional[str] = None,
     exclude_source: bool = False,
     then_self_base_damage_if_no_friendly_hit: int = 0,
+    then_escalate: tuple = (),
 ) -> None:
     """Push a 'select_damage' decision: "Deal ``amount_each`` damage to each of
     up to ``max_targets`` units" (IG-2000 JTL_140).
@@ -1502,6 +1513,10 @@ def push_select_damage(
     the named unit's ``granted_attack`` is pushed at RESOLVE, so the damage lands
     first and the attack decision arrives on a clean stack (pushing both up front
     would resolve them in the wrong, LIFO, order).
+    ``then_escalate`` is a hand-off chain (Third Sister HMW_51: "You may deal 2
+    damage to a unit.  If you do, that unit's controller may deal 3 damage to a
+    unit.  If they do, …4"): once a unit is chosen, the NEXT amount is pushed as a
+    fresh one-target select_damage decided by that unit's controller.
     """
     ctx: dict = {
         "source_id": source_ci.instance_id,
@@ -1509,6 +1524,8 @@ def push_select_damage(
         "remaining": int(max_targets),
         "chosen": [],
     }
+    if then_escalate:
+        ctx["then_escalate"] = [int(n) for n in then_escalate]
     if arena is not None:
         ctx["arena"] = arena
     if enemy_only:
@@ -1640,7 +1657,7 @@ def _resolve_base_attack_step2(
         amount=power,
         is_base=True,
     ))
-    record_base_damage(s, inactive_ps.player_id, power)
+    record_base_damage(s, inactive_ps.player_id, power, combat=True)
 
     # Step 5: Win check
     _check_game_over(s)
@@ -1933,7 +1950,7 @@ def _resolve_unit_combat_step2(
             if def_base is not None and excess > 0:
                 def_base.damage += excess
                 spill_to_base = excess
-                record_base_damage(s, inactive_ps.player_id, excess)
+                record_base_damage(s, inactive_ps.player_id, excess, combat=True)
                 s.event_log.append(OverwhelmDamage(
                     defending_player_id=inactive_ps.player_id,
                     amount=excess,
@@ -2838,7 +2855,7 @@ def _resolve_two_unit_combat_step2(
             if def_base is not None and excess > 0:
                 def_base.damage += excess
                 spill_to_base = excess
-                record_base_damage(s, inactive_ps.player_id, excess)
+                record_base_damage(s, inactive_ps.player_id, excess, combat=True)
                 s.event_log.append(OverwhelmDamage(
                     defending_player_id=inactive_ps.player_id,
                     amount=excess,

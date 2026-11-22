@@ -49,7 +49,8 @@ from swu.engine.actions.stats import (
     compute_hp, compute_power,
 )
 from swu.engine.actions.costs import (
-    _exhaust_resources, _play_cost,
+    _affordable_with_credits, _consume_play_discount, _consume_standing_discount,
+    _exhaust_resources, _pay_play_cost, _play_cost,
 )
 from swu.engine.actions.zones import (
     _apply_capture, _attach_upgrade, _create_token_units, _defeat_unit, _find_in_arenas, _put_unit_in_play, _resolve_event_ability,
@@ -637,6 +638,18 @@ def _resolve_exploit_commit(s: GameState) -> GameState:
         )
     _exhaust_resources(deciding_ps, actual_cost)
 
+    return _play_buffered_card(s, top_d, deciding_ps, ci, actual_cost,
+                               choice=f"sacrificed {sacrificed_count}",
+                               exploited_powers=exploited_powers)
+
+
+def _play_buffered_card(s: GameState, top_d: PendingDecision, deciding_ps,
+                        ci: CardInstance, actual_cost: int, *, choice: str,
+                        exploited_powers: Optional[list] = None) -> GameState:
+    """The shared tail of a play parked in ``PLAY_BUFFER`` while its price was
+    being settled (Exploit; the ``cost_route`` decision): log ``CardPlayed``, pop
+    the decision, put the card into play, fire the bus.  The cost is already
+    paid."""
     card_played_evt = CardPlayed(
         player_id=deciding_ps.player_id,
         instance_id=ci.instance_id,
@@ -648,28 +661,28 @@ def _resolve_exploit_commit(s: GameState) -> GameState:
     upgrade_target_id = top_d.context.get("upgrade_target_id")
     after_idx = top_d.after_resolve_player_index
 
-    # Pop the exploit decision FIRST, before the card enters play — otherwise the
-    # played card's WhenPlayed / Ambush triggers push their own decisions onto the
-    # stack and the pop below would remove one of *those*, leaving the (already
-    # resolved) exploit decision on top with an empty play buffer (a second
-    # ExploitCommit then raises "no card in play buffer").  This is the same
-    # "pop, then act" gotcha as push_distribute_damage / each_player_defeats: the
-    # play's triggers must land on a clean stack.
+    # Pop the decision FIRST, before the card enters play — otherwise the played
+    # card's WhenPlayed / Ambush triggers push their own decisions onto the stack
+    # and the pop below would remove one of *those*, leaving the (already resolved)
+    # decision on top with an empty play buffer (a second commit then raises "no
+    # card in play buffer").  This is the same "pop, then act" gotcha as
+    # push_distribute_damage / each_player_defeats: the play's triggers must land
+    # on a clean stack.
     s.event_log.append(DecisionResolved(
         deciding_player_id=top_d.deciding_player_id,
-        kind="exploit",
-        choice=f"sacrificed {sacrificed_count}",
+        kind=top_d.kind,
+        choice=choice,
     ))
     s.pending_decisions.pop()
     s.active_player_index = after_idx
 
     if isinstance(ci.card_def, (Unit, Leader)):
-        # ``cost_paid`` is the POST-Exploit amount actually exhausted, which is what
-        # "the number of resources paid to play this unit" means (Osi Sobeck
+        # ``cost_paid`` is the POST-discount amount actually exhausted, which is
+        # what "the number of resources paid to play this unit" means (Osi Sobeck
         # TWI_115) — every other play path already threads it into the When Played
-        # event context; this one had not.
+        # event context.
         _put_unit_in_play(s, deciding_ps, ci, cost_paid=actual_cost,
-                          exploited_powers=exploited_powers)
+                          exploited_powers=list(exploited_powers or []))
     elif isinstance(ci.card_def, Upgrade):
         _attach_upgrade(s, deciding_ps, ci, upgrade_target_id)
     elif isinstance(ci.card_def, Event):
@@ -685,6 +698,153 @@ def _resolve_exploit_commit(s: GameState) -> GameState:
     get_bus().fire(s, card_played_evt)
 
     return s
+
+
+# ── "While playing this unit" cost routes (Greater Sarlacc HMW_49, The Marauder
+#    HMW_125) — the Exploit skeleton: park in PLAY_BUFFER, settle the price, commit.
+
+def _cost_route_of(card_def):
+    """The card's ``CostRoute`` marker, or None."""
+    from swu.abilities.registry import get_abilities, CostRoute
+    for spec in get_abilities(getattr(card_def, "set_code", None) or "",
+                              getattr(card_def, "card_number", None) or ""):
+        if isinstance(spec, CostRoute):
+            return spec
+    return None
+
+
+def _cost_route_affordable(state: GameState, ci: CardInstance, ps, cost: int,
+                           route) -> bool:
+    """Best-case affordability of a card with a ``CostRoute`` (the Exploit gate in
+    ``legal_actions``).  Defeating a READY resource also removes one resource to
+    pay with, so every count of resources defeated is tried."""
+    ready = ps.available_resources
+    if route.kind == "defeat_ready_resource":
+        return any(max(0, cost - route.discount * k) <= ready - k
+                   for k in range(ready + 1))
+    if route.kind == "damage_friendly_unit":
+        units = len(ps.ground_arena) + len(ps.space_arena)
+        return max(0, cost - route.discount * units) <= ready
+    return ready >= cost
+
+
+def _cost_route_price(state: GameState, ps, ctx: dict) -> int:
+    """The buffered card's price after the picks made so far."""
+    if not ps.play_buffer:
+        return 0
+    base = _play_cost(state, ps.play_buffer[0], ps)
+    return max(0, base - int(ctx["discount"]) * len(ctx["picks"]))
+
+
+def push_cost_route(s: GameState, ps, ci: CardInstance, route) -> None:
+    """Park ``ci`` (just taken from hand) in ``PLAY_BUFFER`` and open the
+    ``cost_route`` decision for its controller."""
+    ci.zone = Zone.PLAY_BUFFER
+    ps.play_buffer.append(ci)
+    s.pending_decisions.append(PendingDecision(
+        deciding_player_id=ps.player_id,
+        kind="cost_route",
+        context={"route_kind": route.kind,
+                 "discount": int(route.discount),
+                 "picks": [],
+                 "source_id": ci.instance_id},
+        after_resolve_player_index=1 - s.player_index(ps.player_id),
+    ))
+    s.event_log.append(DecisionPushed(deciding_player_id=ps.player_id,
+                                      kind="cost_route"))
+
+
+def _cost_route_targets(state: GameState, top: PendingDecision) -> list[Optional[str]]:
+    """What may be paid next.  Resources are fungible face-down cards (the K-2SO
+    SOR_145 convention), so a resource pick has no target (``None``) and is offered
+    only while it still lowers the price; a friendly unit may be chosen once."""
+    ps = state.player_by_id(top.deciding_player_id)
+    ctx = top.context
+    if ctx["route_kind"] == "defeat_ready_resource":
+        if ps.available_resources > 0 and _cost_route_price(state, ps, ctx) > 0:
+            return [None]
+        return []
+    picked = set(ctx["picks"])
+    return [u.instance_id for u in ps.ground_arena + ps.space_arena
+            if u.instance_id not in picked]
+
+
+@dataclass
+class PayCostRoute(Action):
+    """Pay one step of a "while playing this unit" cost: defeat a ready resource
+    (Greater Sarlacc HMW_49; ``target_id`` is None) or deal 1 damage to the chosen
+    friendly unit (The Marauder HMW_125)."""
+    target_id: Optional[str] = None
+
+    def apply(self, state: GameState) -> GameState:
+        if not state.pending_decisions or state.pending_decisions[-1].kind != "cost_route":
+            raise IllegalActionError("No cost_route decision pending")
+        if self.target_id not in _cost_route_targets(state, state.pending_decisions[-1]):
+            raise IllegalActionError(f"{self.target_id} is not a legal payment")
+        s = copy.deepcopy(state)
+        top = s.pending_decisions[-1]
+        ps = s.player_by_id(top.deciding_player_id)
+        if top.context["route_kind"] == "defeat_ready_resource":
+            res = next(r for r in ps.resources if not r.exhausted)
+            ps.resources.remove(res)
+            res.zone = Zone.DISCARD
+            res.face_down = False
+            ps.discard.append(res)
+            s.event_log.append(UnitDefeated(player_id=ps.player_id,
+                                            instance_id=res.instance_id,
+                                            card_name=res.card_def.display_name))
+            top.context["picks"].append(res.instance_id)
+        else:
+            from swu.abilities.resolver import _apply_deal_damage
+            buffered = ps.play_buffer[0] if ps.play_buffer else None
+            top.context["picks"].append(self.target_id)
+            _apply_deal_damage(
+                s, self.target_id, 1,
+                source_name=buffered.card_def.display_name if buffered else None,
+                dealer_id=ps.player_id)
+        return s
+
+    def describe(self) -> str:
+        if self.target_id is None:
+            return "Defeat a ready resource to lower the cost"
+        return f"Deal 1 damage to {self.target_id} to lower the cost"
+
+
+@dataclass
+class CommitCostRoute(Action):
+    """Stop paying the "while playing" cost: pay the reduced price and play it."""
+
+    def apply(self, state: GameState) -> GameState:
+        if not state.pending_decisions or state.pending_decisions[-1].kind != "cost_route":
+            raise IllegalActionError("No cost_route decision pending")
+        s = copy.deepcopy(state)
+        top = s.pending_decisions[-1]
+        ps = s.player_by_id(top.deciding_player_id)
+        if not ps.play_buffer:
+            raise IllegalActionError("cost_route commit: no card in play buffer")
+        price = _cost_route_price(s, ps, top.context)
+        if not _affordable_with_credits(ps, price, s):
+            raise IllegalActionError(f"Cannot afford {price} yet")
+        ci = ps.play_buffer.pop(0)
+        ci.zone = Zone.HAND  # temporary; put-in-play sets the real zone
+        _pay_play_cost(s, ps, price)
+        _consume_play_discount(s, ci, ps)
+        _consume_standing_discount(s, ci, ps, None)
+        return _play_buffered_card(s, top, ps, ci, price,
+                                   choice=f"paid {len(top.context['picks'])} step(s)")
+
+    def describe(self) -> str:
+        return "Play it at the reduced cost"
+
+
+def _cost_route_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    acts: list[Action] = [PayCostRoute(t) for t in _cost_route_targets(state, top)]
+    ps = state.player_by_id(top.deciding_player_id)
+    # Commit only once the reduced price is payable (Exploit's rule); the
+    # legal_actions gate guarantees some sequence of payments gets there.
+    if _affordable_with_credits(ps, _cost_route_price(state, ps, top.context), state):
+        acts.append(CommitCostRoute())
+    return acts
 
 
 # ── Sacrifice-a-resource push helper (Wrecker SHD_154) ────────────────────────
@@ -1450,6 +1610,7 @@ def _resolve_capture_combined(s: GameState, top) -> GameState:
 # ── Decision-kind registration ─────────────────────────────────────────────
 register_decisions({
     "exploit":                       _exploit_actions,
+    "cost_route":                    _cost_route_actions,
     "sacrifice_resource":            _sacrifice_resource_actions,
     "reveal_resource_ramp":          _reveal_resource_ramp_actions,
     "cull_for_damage":               _cull_for_damage_actions,

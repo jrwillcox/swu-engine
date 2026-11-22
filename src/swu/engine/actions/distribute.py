@@ -345,9 +345,22 @@ def _resolve_select_damage(s: GameState, top) -> GameState:
         _own = s.player_by_id(source_result[1].owner_id)
         friendly_ids = {u.instance_id
                         for u in _own.ground_arena + _own.space_arena}
+    # "…that unit's controller may deal N damage to a unit" (Third Sister HMW_51) —
+    # read the controller BEFORE the damage can defeat the unit.
+    escalate = list(ctx.get("then_escalate") or [])
+    next_decider = None
+    if escalate and chosen:
+        _res = s.find_instance(chosen[0])
+        next_decider = _res[0].player_id if _res is not None else None
     for tid in chosen:
         _apply_deal_damage(s, tid, amount_each, source_name=source_name,
                            dealer_id=top.deciding_player_id)
+    if next_decider is not None and source_result is not None and not s.is_terminal():
+        from swu.engine.actions.combat import push_select_damage
+        push_select_damage(s, source_result[1], amount_each=escalate[0], max_targets=1,
+                           decider_id=next_decider,
+                           after_resolve_idx=top.after_resolve_player_index,
+                           then_escalate=tuple(escalate[1:]))
     # "Then, attack with the chosen unit" (Hotshot Maneuver JTL_174) — pushed
     # after the damage so the attack decision lands on a clean stack.  A unit that
     # died to its own card's damage (or has otherwise left play) simply cannot

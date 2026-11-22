@@ -204,6 +204,17 @@ REPRINT_ALIASES: dict[tuple[str, str], tuple[str, str]] = {
     ("TWI", "77"): ("SOR", "78"),
     # Verdant Fortress  ->  HMW_126
     ("P26", "267"): ("HMW", "126"),
+    # hmw-set:02–06 mirrors (2026-11-22)
+    ("HMWP", "6"): ("HMW", "99"),     # Always a Bigger Fish
+    ("HMWP", "17"): ("HMW", "217"),   # Don't Touch Anything
+    ("HMWP", "11"): ("HMW", "159"),   # General Grievous
+    ("P26", "34"): ("HMW", "78"),     # Qui-Gon Jinn
+    ("HMWP", "2"): ("HMW", "64"),     # Scorch
+    # hmw-set blocker mirrors (2026-11-22)
+    ("HMWP", "14"): ("HMW", "177"),   # Adamant Ewoks
+    ("P26", "249"): ("HMW", "177"),   # Adamant Ewoks
+    ("HMWP", "10"): ("HMW", "156"),   # Arena Acklay
+    ("HMWP", "5"): ("HMW", "84"),     # Gunga City Guard
     # Victor Leader  ->  JTL_85
     ("P25", "154"): ("JTL", "85"),
     ("P25", "164"): ("JTL", "85"),

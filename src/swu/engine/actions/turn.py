@@ -290,6 +290,23 @@ def _enter_regroup(s: GameState) -> None:
             for _ in range(int(n)):
                 _fire_defeat_own_resource(s, pid)
         s.game_memory.defeat_resources_at_regroup.clear()
+    # "At the start of the next regroup phase, deal 3 damage to each enemy unit in
+    # that arena" (Seismic Detonation HMW_54).  A one-shot; each entry hits the units
+    # in play NOW (not the ones present when the event was played).
+    if s.game_memory.damage_at_regroup:
+        from swu.abilities.resolver import _apply_deal_damage
+        for entry in list(s.game_memory.damage_at_regroup):
+            caster = entry.get("player_id")
+            amount = int(entry.get("amount", 0) or 0)
+            for ps in s.players:
+                if ps.player_id == caster:
+                    continue
+                row = ps.ground_arena if entry.get("arena") == "ground" else ps.space_arena
+                for ci in list(row):
+                    _apply_deal_damage(s, ci.instance_id, amount,
+                                       source_name=entry.get("source_name"),
+                                       dealer_id=caster)
+        s.game_memory.damage_at_regroup.clear()
     # Count this regroup phase (reset to 0 at the round rollover).  Normally reaches
     # 1; a second entry (Max Rebo LAW_72's additional regroup) reaches 2 — the cap
     # _end_regroup checks so the extra regroup happens exactly once per round.

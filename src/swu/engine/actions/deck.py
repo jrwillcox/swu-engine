@@ -286,8 +286,13 @@ def _finish_deck_search(s: GameState) -> GameState:
             card_aspects = {a.name for a in (getattr(ci.card_def, "aspects", None) or ())}
             if "Villainy" in card_aspects:
                 s.game_memory.villainy_players_this_phase.add(ps.player_id)
+            # ``then_damage``: "play them for free, and deal 2 damage to each of
+            # them" (Darth Vader HMW_43) — the Han Solo ``_put_unit_in_play`` seam
+            # (after the enter-play keyword bus, before When Played).
             _put_unit_in_play(s, ps, ci, play_source="deck", cost_paid=cost,
-                              enters_ready=enters_ready)
+                              enters_ready=enters_ready,
+                              then_damage=int(ctx.get("then_damage", 0) or 0),
+                              then_damage_source=ctx.get("then_damage_source"))
             if return_at_regroup:
                 ci.return_to_owner_hand_at_regroup = True
             if bottom_at_regroup:
@@ -1165,6 +1170,7 @@ def push_search_and_play_multiple(
     budget: int,
     eligible: Callable[[object], bool],
     max_units: Optional[int] = None,
+    then_damage: int = 0,
 ) -> None:
     """Push a 'deck_search' decision that PLAYS ANY NUMBER of chosen units FOR FREE
     under a combined-cost budget (Darth Vader SOR_87: "Search the top ``window``
@@ -1184,7 +1190,8 @@ def push_search_and_play_multiple(
     auto-finish fires once the cap (or everything) has been taken.
     ``_finish_deck_search``'s play branch pays 0 for each, puts it into play (firing
     its own keyword / When Played triggers), and bottoms the un-taken searched cards
-    in a seeded-random order.  An empty deck is a no-op.
+    in a seeded-random order.  An empty deck is a no-op.  ``then_damage`` deals that
+    much damage to each played unit as it enters (Darth Vader HMW_43).
     """
     ps = s.player_by_id(source_ci.owner_id)
     searched = ps.deck[:window]
@@ -1209,6 +1216,9 @@ def push_search_and_play_multiple(
             "disposition": "play",
             "free": True,
             "budget": int(budget),
+            **({"then_damage": int(then_damage),
+                "then_damage_source": source_ci.card_def.display_name}
+               if then_damage else {}),
         },
         after_resolve_player_index=1 - owner_idx,
     )

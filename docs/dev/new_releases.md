@@ -168,6 +168,11 @@ Three things that bite here:
   the repair held. **The true unique key is the DB `id`.** Run both after every
   rebuild, and after any new set (a new set adds new Leaders ⇒ new collisions).
 - Both image scripts are idempotent and resumable — interrupt freely.
+- **New bases need their planet added by hand.** The API has no planet field for
+  bases; the planet is printed only in the italic band under the art. Read it from
+  each new base's image and add it to `src/swu/cards/base_planets.py` ("If you
+  control a Naboo base" reads that table). `tests/test_base_planets.py` fails
+  until every base in the DB is covered.
 
 ### 2.3 Re-audit coverage
 

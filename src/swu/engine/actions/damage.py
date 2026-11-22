@@ -251,6 +251,96 @@ def base_damage_after_prevention(s: GameState, base_ci: CardInstance,
     return 0
 
 
+def _dealer_player(s: GameState, target_player_id: str, combat: bool,
+                   dealer: str | None) -> str | None:
+    """The PLAYER dealing a damage instance (see ``note_damage_dealt``)."""
+    if combat:
+        return next((p.player_id for p in s.players
+                     if p.player_id != target_player_id), None)
+    if dealer:
+        if any(p.player_id == dealer for p in s.players):
+            return dealer
+        res = s.find_instance(dealer)
+        if res is not None:
+            return res[0].player_id
+    from swu.abilities.resolver import _noncombat_dealer_stack
+    return _noncombat_dealer_stack[-1] if _noncombat_dealer_stack else None
+
+
+_ABILITY_DAMAGE_BONUS_KEYS: list = []
+
+
+def _ability_damage_bonus(s: GameState, target_player_id: str,
+                          dealer: str | None) -> int:
+    """Extra damage for one NON-COMBAT instance from ``AbilityDamageBonus``
+    markers (Ty Yorrick HMW_185) on units the dealing player controls — counted
+    only when the target belongs to an opponent of that player (the "may" taken
+    when it helps).  A cached registry index keeps every other board at one empty
+    check."""
+    if not _ABILITY_DAMAGE_BONUS_KEYS:
+        from swu.abilities.registry import _REGISTRY, AbilityDamageBonus
+        _ABILITY_DAMAGE_BONUS_KEYS.append(frozenset(
+            key for key, specs in _REGISTRY.items()
+            if any(isinstance(sp, AbilityDamageBonus) for sp in specs)))
+    keys = _ABILITY_DAMAGE_BONUS_KEYS[0]
+    if not keys:
+        return 0
+    dealer_player = _dealer_player(s, target_player_id, False, dealer)
+    if dealer_player is None or dealer_player == target_player_id:
+        return 0
+    from swu.abilities.registry import get_abilities, AbilityDamageBonus
+    total = 0
+    ps = s.player_by_id(dealer_player)
+    for ci in ps.ground_arena + ps.space_arena:
+        cd = ci.card_def
+        key = (getattr(cd, "set_code", None) or "", getattr(cd, "card_number", None))
+        if key not in keys or getattr(ci, "abilities_suppressed", False):
+            continue
+        total += sum(sp.amount for sp in get_abilities(*key)
+                     if isinstance(sp, AbilityDamageBonus))
+    return total
+
+
+def note_damage_dealt(
+    s: GameState,
+    target_ci: CardInstance,
+    target_player_id: str,
+    amount: int,
+    *,
+    combat: bool = False,
+    dealer: str | None = None,
+) -> None:
+    """Queue one damage instance that actually LANDED on a unit or base, for the
+    settle-point ``WhenDamageDealt`` observer drain (``_fire_damage_observers``).
+
+    ``amount`` is what landed after every prevention, so a Shield or a fully
+    prevented hit records nothing.  The DEALING PLAYER is resolved here:
+
+    * combat damage is always dealt by the target controller's opponent (the
+      attacker hits the defender, the defender hits back; a Maul SHD_90 redirect
+      still takes the defender's damage);
+    * otherwise ``dealer`` names a player, or a card whose controller dealt it
+      (callers pass either today);
+    * failing both, the resolver's current effect controller
+      (``_noncombat_dealer_stack``), the WhenDealNonCombatDamage fallback.
+
+    Unknown → ``None`` (an observer reading "when YOU deal" then never matches).
+    A bare list append, so a board with no such observer pays almost nothing; the
+    drain clears the queue without firing when no observer card is on the board."""
+    if amount <= 0:
+        return
+    dealer_player = _dealer_player(s, target_player_id, combat, dealer)
+    from swu.cards.models import Base
+    s.game_memory.damage_events.append({
+        "target_id": target_ci.instance_id,
+        "target_player": target_player_id,
+        "is_base": isinstance(target_ci.card_def, Base),
+        "amount": int(amount),
+        "dealer_player": dealer_player,
+        "combat": bool(combat),
+    })
+
+
 def _deal_damage_with_shield(
     s: GameState,
     owner_ps: PlayerState,
@@ -284,7 +374,12 @@ def _deal_damage_with_shield(
     # instance rather than preventing it).
     if _damage_is_unpreventable(s, dealer_source_id):
         amount += _damage_amplification_on(s, unit_ci, dealer_id, amount)
+        if not is_combat:
+            amount += _ability_damage_bonus(s, owner_ps.player_id,
+                                            dealer_id or dealer_source_id)
         unit_ci.damage += amount
+        note_damage_dealt(s, unit_ci, owner_ps.player_id, amount, combat=is_combat,
+                          dealer=dealer_id or dealer_source_id)
         s.event_log.append(DamageDealt(
             target_instance_id=unit_ci.instance_id,
             target_name=unit_ci.card_def.display_name,
@@ -316,6 +411,10 @@ def _deal_damage_with_shield(
     # is increased BEFORE prevention/shields, so "that much damage plus 1" is what
     # the rest of the pipeline sees.
     amount += _damage_amplification_on(s, unit_ci, dealer_id, amount)
+    # Ty Yorrick HMW_185's dealer-side "+1" on friendly ABILITY damage.
+    if not is_combat:
+        amount += _ability_damage_bonus(s, owner_ps.player_id,
+                                        dealer_id or dealer_source_id)
     # "The first time this unit would take damage each phase, prevent that damage"
     # (Umbaran Mobile Cannon SEC_67) — a whole-instance, once-per-phase prevention,
     # so it is consumed here rather than summed into the per-instance reduction.
@@ -365,6 +464,8 @@ def _deal_damage_with_shield(
         # the exact mirror of ``note_unit_healed``'s ledger, recorded only for
         # damage really dealt (everything above this line prevented it).
         s.game_memory.units_damaged_this_phase.add(unit_ci.instance_id)
+        note_damage_dealt(s, unit_ci, owner_ps.player_id, amount, combat=is_combat,
+                          dealer=dealer_id or dealer_source_id)
     s.event_log.append(DamageDealt(
         target_instance_id=unit_ci.instance_id,
         target_name=unit_ci.card_def.display_name,

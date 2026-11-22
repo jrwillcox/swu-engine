@@ -99,6 +99,7 @@ _PROMPTS: dict[str, str] = {
     "capture_combined_hp": "Capture any number of enemy non-leader units with combined remaining HP 7 or less — pick one at a time, or finish.",
     "rescue_guarded": "You may rescue one of your cards guarded by the attacking unit — but if you do, its controller draws cards.",
     "multi_capture_pairing": "Choose any number of your units — each captures an enemy non-leader unit in the same arena. Pick a captor and its prey, one pair at a time, or finish.",
+    "cost_route": "While playing this unit you may pay part of its cost another way — pay one step at a time, then play it at the reduced cost.",
     "combined_power_play": "Choose any number of your units. Their combined power is the most a unit you then play from hand for free may cost — and the chosen units are defeated afterwards.",
     "play_captured_card": "Choose a captured card guarded by one of your units — you may play it for free under your control, or decline.",
     "play_resource_units": "Reveal any number of your resources — play each revealed unit for free, one at a time, or stop.",
@@ -186,6 +187,21 @@ class GameSession:
                 base = (f"Defeat any number of non-leader units with combined "
                         f"remaining HP {budget} or less — pick one at a time, or "
                         f"finish.")
+        elif top.kind == "cost_route":
+            ctx = top.context
+            n = int(ctx.get("discount", 0))
+            if ctx.get("route_kind") == "defeat_ready_resource":
+                base = (f"You may defeat ready resources you control — each makes this "
+                        f"unit cost {n} less. Defeat one at a time, then play it.")
+            else:
+                base = (f"You may choose friendly units to deal 1 damage to — each makes "
+                        f"this unit cost {n} less. Choose one at a time, then play it.")
+        elif top.kind == "combined_power_play":
+            if top.context.get("payoff") == "defeat_self_damage":
+                cap = top.context.get("power_cap")
+                base = (f"Defeat any number of ground units with combined power {cap} "
+                        f"or less — pick one at a time, or finish. This unit is then "
+                        f"dealt damage equal to their combined power.")
         elif top.kind == "exploit":
             n = top.context.get("max_remaining")
             if n is not None:

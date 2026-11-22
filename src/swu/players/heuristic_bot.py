@@ -243,6 +243,8 @@ class HeuristicBot:
             return self._choose_ambush(view, legal)
         if "ExploitCommit" in kinds or "ExploitSacrifice" in kinds:
             return self._choose_exploit(view, legal)
+        if "CommitCostRoute" in kinds or "PayCostRoute" in kinds:
+            return self._choose_cost_route(view, legal)
         if "AcceptTrigger" in kinds:
             # Optional triggers usually help — accept, *unless* the trigger could
             # only be aimed at our own cards (e.g. Darth Vader's "deal 2 to a unit"
@@ -252,6 +254,8 @@ class HeuristicBot:
                 ctx.get("set_code", "") or "", ctx.get("card_number", "") or "",
                 int(ctx.get("ability_idx", 0) or 0), ctx.get("source_id"), view,
             ):
+                return self._first(legal, "DeclineTrigger")
+            if _cham_mirror_loop(ctx, view):
                 return self._first(legal, "DeclineTrigger")
             return self._first(legal, "AcceptTrigger")
         if {"ChooseTarget", "DeclineTarget", "AutoResolveEffects"} & kinds:
@@ -715,6 +719,26 @@ class HeuristicBot:
             sac, key=lambda a: _card_value(idx.get(a.unit_id, (None, None))[0])
         )
 
+    def _choose_cost_route(self, view: "PlayerView", legal: list["Action"]) -> "Action":
+        """Greater Sarlacc HMW_49 / The Marauder HMW_125: pay only as many steps as
+        it takes to afford the card — commit the moment the engine offers it (it
+        only offers a commit we can pay).  A unit to damage is the one with the
+        most remaining HP, so the 1 damage kills nothing if it can help it."""
+        commit = next((a for a in legal if type(a).__name__ == "CommitCostRoute"), None)
+        if commit is not None:
+            return commit
+        pays = [a for a in legal if type(a).__name__ == "PayCostRoute"]
+        if not pays:
+            return legal[0]
+        idx = _card_index(view)
+
+        def remaining(a: "Action") -> float:
+            cv = idx.get(a.target_id, (None, None))[0] if a.target_id else None
+            if cv is None:
+                return 0
+            return (cv.effective_hp or 0) - (cv.damage or 0)
+        return max(pays, key=remaining)
+
     def _choose_resolve_effects(
         self, view: "PlayerView", legal: list["Action"]
     ) -> "Action":
@@ -1107,7 +1131,20 @@ class HeuristicBot:
         """Consolidation of Power TWI_89: every unit added to the pool is a unit
         that will be DEFEATED, so the heuristic path never feeds it — finish
         immediately (the conservative "don't self-harm" stance the bot takes with
-        every other sacrifice decision)."""
+        every other sacrifice decision).
+
+        Sando Aqua Monster HMW_94's variant offers ENEMY ground units too (the
+        engine caps the running power, so every offer still fits): defeating those
+        is removal, so take the strongest enemy unit on offer, one at a time."""
+        idx = _card_index(view)
+        enemy = [a for a in legal if type(a).__name__ == "SelectCombinedPowerUnit"
+                 and idx.get(a.unit_id, (None, None))[1] == "opp"]
+        if enemy:
+            def power(a: "Action") -> float:
+                cv = idx[a.unit_id][0]
+                return cv.effective_power or 0
+            enemy.sort(key=power, reverse=True)
+            return enemy[0]
         return self._first(legal, "FinishCombinedPowerPlay")
 
     def _choose_play_captured(
@@ -2299,6 +2336,19 @@ def _trade_outcome(attacker: "CardView", defender: "CardView") -> tuple[float, f
     return gain, loss
 
 
+def _cham_mirror_loop(ctx: dict, view: "PlayerView") -> bool:
+    """Cham Syndulla HMW_13's ping against an opponent who also has a DEPLOYED Cham.
+
+    Each ping is non-combat damage to the other side's friendly card, and a deployed
+    Cham's ping has no cost, so two of them accepting forever never end the game.
+    The engine stays rules-faithful (a player may always decline); the bot declines
+    its own ping in exactly that board state."""
+    if (ctx.get("set_code"), str(ctx.get("card_number", ""))) != ("HMW", "13"):
+        return False
+    return any(cv.set_code == "HMW" and cv.card_number == "13" and cv.deployed
+               for cv in view.opponent.ground_arena + view.opponent.space_arena)
+
+
 def _card_index(view: "PlayerView") -> dict:
     """Map every visible instance_id → (CardView, "my" | "opp").
 
@@ -2348,7 +2398,7 @@ def _top_context(view: "PlayerView") -> dict:
 _SAFE_DEFAULT_ORDER = (
     "Pass", "ContinueAttack", "AutoResolveEffects", "DeclineTarget",
     "DeclineTrigger", "DeclineAmbush", "DeclineReadyUnit", "DeclineGrantedAttack",
-    "ExploitCommit", "KeepTopCard", "FinishSearch", "AllowEffect", "KeepHand",
+    "ExploitCommit", "CommitCostRoute", "KeepTopCard", "FinishSearch", "AllowEffect", "KeepHand",
     "DeclineSacrifice", "DeclineRevealResource",
     "FinishReturnFromDiscard", "FinishBottomFromDiscard",
     "DeclineMoveUpgrade",

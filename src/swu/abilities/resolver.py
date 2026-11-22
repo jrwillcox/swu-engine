@@ -32,7 +32,7 @@ from swu.abilities.registry import (
     WhenYouPlayCard, WhenOpponentPlaysNthCard, WhenOpponentPlaysCard, WhenUnitAttacks, WhenDealsCombatDamageToBase, WhenDealtCombatDamage,
     WhenDealsCombatDamageToUnit, WhenFriendlyUnitDealtCombatDamage,
     WhenFriendlyUnitDealsCombatDamageToEnemyUnit,
-    WhenDealNonCombatDamage, WhenYouDraw, WhenYouUseForce, WhenYouRevealOrDiscard, WhenPlayerDiscardsFromHand, WhenThisIsDiscarded, WhenYouDiscardFromDeck, WhenUnitHealed, WhenUnitReadies, WhenFriendlyUpgradeDefeated, WhenUpgradeAttached, WhenYouWouldCreateTokens, WhenBountyCollected, WhenAttackEnds, WhenFriendlyUnitAttackEnds, WhenYouPlayOrCreateUnit, WhenDamageDealtToYourBase, RoundStartTrigger, PhaseStartTrigger,
+    WhenDealNonCombatDamage, WhenYouDraw, WhenYouUseForce, WhenYouRevealOrDiscard, WhenPlayerDiscardsFromHand, WhenThisIsDiscarded, WhenYouDiscardFromDeck, WhenUnitHealed, WhenUnitReadies, WhenFriendlyUpgradeDefeated, WhenUpgradeAttached, WhenYouWouldCreateTokens, WhenBountyCollected, WhenAttackEnds, WhenFriendlyUnitAttackEnds, WhenYouPlayOrCreateUnit, WhenDamageDealtToYourBase, WhenDamageDealt, RoundStartTrigger, PhaseStartTrigger,
     DealDamage, DealDamageEqualTo, Heal, DefeatUnit, DefeatAllUnits, GiveToken,
     CreateCreditToken, CreateForceToken, CreateTokenUnit, NextPlayDiscount,
     DrawCards, DiscardFromHand, ReturnToHand, ExhaustCard, ReadyCard,
@@ -159,6 +159,49 @@ def _record_noncombat_damage(state: "GameState", dealer_id=None) -> None:
     queue = state.game_memory.noncombat_damage_dealers
     if dealer_id not in queue:
         queue.append(dealer_id)
+
+
+def _damage_event_matches(trigger, state: "GameState", source_ci: "CardInstance",
+                          entry) -> bool:
+    """Whether one ``game_memory.damage_events`` entry satisfies a
+    ``WhenDamageDealt`` trigger's filters (see the trigger's docstring)."""
+    if not entry:
+        return False
+    if int(entry.get("amount", 0)) < int(trigger.min_amount or 1):
+        return False
+    is_base = bool(entry.get("is_base"))
+    if trigger.kind == "unit" and is_base:
+        return False
+    if trigger.combat is not None and bool(entry.get("combat")) != trigger.combat:
+        return False
+    me = source_ci.owner_id
+    if trigger.dealer == "you" and entry.get("dealer_player") != me:
+        return False
+    tid = entry.get("target_id")
+    friendly = entry.get("target_player") == me
+    t = trigger.target
+    if t == "self" and tid != source_ci.instance_id:
+        return False
+    if t in ("friendly", "other_friendly") and not friendly:
+        return False
+    if t == "other_friendly" and tid == source_ci.instance_id:
+        return False
+    if t == "enemy" and friendly:
+        return False
+    if trigger.survived or trigger.target_cost_max is not None:
+        from swu.engine.state import Zone
+        res = state.find_instance(tid) if tid else None
+        in_play = res is not None and res[1].zone in (Zone.GROUND_ARENA,
+                                                      Zone.SPACE_ARENA)
+        if trigger.survived and (is_base or not in_play):
+            return False
+        if trigger.target_cost_max is not None:
+            if res is None or is_base:
+                return False
+            cost = int(getattr(res[1].card_def, "cost", 0) or 0)
+            if cost > int(trigger.target_cost_max):
+                return False
+    return True
 
 
 # ── Trigger collection ────────────────────────────────────────────────────────
@@ -635,6 +678,10 @@ def _trigger_matches(
         # (event is None; The Daughter LOF_252).  "YOUR base" — the damaged base's
         # owner must be the source's controller.
         return event_ctx.get("base_damaged_player_id") == source_ci.owner_id
+
+    if isinstance(trigger, WhenDamageDealt):
+        return _damage_event_matches(trigger, state, source_ci,
+                                     event_ctx.get("damage_event"))
 
     if isinstance(trigger, WhenUnitReadies):
         # Observer trigger fired at the settle-point from the ready ledger (event is
@@ -2683,7 +2730,7 @@ def execute_effect(
         for tid in target_ids:
             if _target_protected(state, tid, source_ci, "defeat"):
                 continue
-            state = _apply_defeat_unit(state, tid)
+            state = _apply_defeat_unit(state, tid, actor_id=source_ci.owner_id)
         return state
 
     if isinstance(effect, CaptureUnit):
@@ -2703,7 +2750,7 @@ def execute_effect(
                 continue
             if _target_protected(state, tid, source_ci, "defeat"):
                 continue
-            state = _apply_defeat_unit(state, tid)
+            state = _apply_defeat_unit(state, tid, actor_id=source_ci.owner_id)
         return state
 
     if isinstance(effect, GiveToken):
@@ -3214,7 +3261,9 @@ def _apply_deal_damage(
     if isinstance(ci.card_def, Base):
         # A one-shot "prevent the next damage to this base this phase" (Close the
         # Shield Gate JTL_74) eats the whole instance.
-        from swu.engine.actions import base_damage_after_prevention
+        from swu.engine.actions import base_damage_after_prevention, _ability_damage_bonus
+        if amount > 0:  # Ty Yorrick HMW_185 — before prevention, like the unit path
+            amount += _ability_damage_bonus(state, ps.player_id, dealer_id or source_id)
         amount = base_damage_after_prevention(state, ci, amount)
         ci.damage += amount
         state.event_log.append(DamageDealt(
@@ -3226,7 +3275,7 @@ def _apply_deal_damage(
             source_name=source_name,
         ))
         from swu.engine.actions import _check_game_over, record_base_damage
-        record_base_damage(state, ps.player_id, amount)
+        record_base_damage(state, ps.player_id, amount, dealer=dealer_id or source_id)
         _check_game_over(state)
     else:
         from swu.engine.state import Zone
@@ -3275,6 +3324,10 @@ def _apply_indirect_damage(
         from swu.engine.actions import base_damage_after_prevention
         amount = base_damage_after_prevention(state, ci, amount)
     ci.damage += amount
+    # The general "when damage is dealt" observer — indirect damage bypasses both
+    # _deal_damage_with_shield and record_base_damage, so it is queued here.
+    from swu.engine.actions import note_damage_dealt
+    note_damage_dealt(state, ci, ps.player_id, amount, dealer=dealer_id)
     state.event_log.append(DamageDealt(
         target_instance_id=ci.instance_id,
         target_name=ci.card_def.display_name,
@@ -3459,7 +3512,36 @@ def _target_protected(state, target_id: str, source_ci, kind: str) -> bool:
     return _aura_protection(state, ci, kind)
 
 
-def _apply_defeat_unit(state: "GameState", target_id: str) -> "GameState":
+def _base_upgrade_stand_in(state: "GameState", host_ps, host,
+                           actor_id: str | None = None) -> "CardInstance | None":
+    """The unit that is defeated INSTEAD of an upgrade on ``host_ps``'s base
+    (Vice Admiral Rampart HMW_60's ``BaseUpgradeDefeatReplacement``), or None.
+
+    Only when ``host`` is a base and the defeating effect is controlled by an
+    opponent of the base's controller — ``actor_id`` (passed by the resolver's
+    DefeatUnit / DefeatAllUnits arms), else the ``CustomEffect`` dealer stack.  A
+    Fortify upgrade defeating itself as a cost (HMW_81), or any friendly defeat, is
+    never replaced; an unknown actor replaces nothing."""
+    from swu.cards.models import Base
+    if not isinstance(host.card_def, Base):
+        return None
+    actor = actor_id or (_noncombat_dealer_stack[-1] if _noncombat_dealer_stack else None)
+    if actor is None or actor == host_ps.player_id:
+        return None
+    from swu.abilities.registry import BaseUpgradeDefeatReplacement
+    for ci in host_ps.ground_arena + host_ps.space_arena:
+        if getattr(ci, "abilities_suppressed", False):
+            continue
+        cd = ci.card_def
+        if any(isinstance(sp, BaseUpgradeDefeatReplacement)
+               for sp in get_abilities(getattr(cd, "set_code", None) or "",
+                                       getattr(cd, "card_number", None) or "")):
+            return ci
+    return None
+
+
+def _apply_defeat_unit(state: "GameState", target_id: str,
+                       actor_id: str | None = None) -> "GameState":
     result = state.find_instance(target_id)
     if result is None:
         return state
@@ -3478,6 +3560,14 @@ def _apply_defeat_unit(state: "GameState", target_id: str) -> "GameState":
     for host_ps in state.players:
         for host in host_ps.upgrade_hosts():      # incl. a base's Fortify upgrades
             if any(u.instance_id == target_id for u in host.attached_upgrades):
+                # "If an upgrade on your base would be defeated, you may defeat this
+                # unit instead" (Vice Admiral Rampart HMW_60) — automatic, and only
+                # against an OPPONENT's effect (never a Fortify upgrade's own cost).
+                stand_in = _base_upgrade_stand_in(state, host_ps, host, actor_id)
+                if stand_in is not None:
+                    from swu.engine.actions import _defeat_unit
+                    _defeat_unit(state, host_ps, stand_in)
+                    return state
                 host.attached_upgrades = [
                     u for u in host.attached_upgrades if u.instance_id != target_id]
                 # "When a friendly upgrade is defeated" (Zeb Orrelios ASH_161) —

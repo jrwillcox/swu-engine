@@ -501,6 +501,7 @@ def _analyse_ability_coverage(agg_abilities: dict[str, int], reachable_keys: set
         IgnoreAspectPenaltyForUpgrades, StartingHandModifier, HalvePaidCosts,
         WhenDefeatedRedo, OnAttackRedo,
         CrossArenaAttack, CannotBeAttacked, CannotBeAttackedWhileExhausted,
+        CostRoute, AbilityDamageBonus, BaseUpgradeDefeatReplacement,
     )
 
     registry = get_all_registered()
@@ -541,7 +542,13 @@ def _analyse_ability_coverage(agg_abilities: dict[str, int], reachable_keys: set
                            # read at legal_actions, never routed through the
                            # resolver, so a 0 is expected.
                            CrossArenaAttack, CannotBeAttacked,
-                           CannotBeAttackedWhileExhausted))
+                           CannotBeAttackedWhileExhausted,
+                           # Read at PlayCard / legal_actions (Greater Sarlacc
+                           # HMW_49), never routed through the resolver.
+                           CostRoute,
+                           # Read at the damage / upgrade-defeat chokepoints (Ty
+                           # Yorrick HMW_185, Vice Admiral Rampart HMW_60).
+                           AbilityDamageBonus, BaseUpgradeDefeatReplacement))
             for s in specs)
         if count > 0:
             fired[key] = count
