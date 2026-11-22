@@ -433,17 +433,43 @@ function TriageThread({
   );
 }
 
+// Copy text to the clipboard; true on success. `navigator.clipboard` exists only in
+// a secure context (HTTPS or localhost), so on a plain-HTTP LAN host it is undefined.
+// There, fall back to selecting a hidden textarea and running the legacy copy command.
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the legacy path */
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  try {
+    ta.focus();
+    ta.select();
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    ta.remove();
+  }
+}
+
 // The bug's folder id, shown so the admin can copy it and paste it to a triage tool out of
 // band (it's the name of the on-disk report folder). Click to copy.
 function BugIdChip({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(id);
+    if (await copyText(id)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard may be unavailable — the id is still visible to select by hand */
     }
   }
   return (

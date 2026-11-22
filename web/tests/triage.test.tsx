@@ -156,6 +156,29 @@ describe("Admin bug triage", () => {
     expect(await screen.findByText(/copied/i)).toBeInTheDocument();
   });
 
+  it("still copies the bug id over plain HTTP, where navigator.clipboard is missing", async () => {
+    // A plain-HTTP LAN host is not a secure context: no navigator.clipboard.
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+    let copiedText: string | null = null;
+    const execCommand = vi.fn((cmd: string) => {
+      const el = document.activeElement as HTMLTextAreaElement | null;
+      if (cmd === "copy") copiedText = el?.value ?? null;
+      return true;
+    });
+    Object.assign(document, { execCommand });
+    adminList.mockResolvedValue(triage({ needs_you: [summary({ id: "id1" })] }));
+    get.mockResolvedValue(thread({ id: "id1" }));
+    render(<BugTriage />);
+
+    fireEvent.click(await screen.findByText("Boba attack did nothing"));
+    fireEvent.click(await screen.findByRole("button", { name: /copy bug id/i }));
+
+    await waitFor(() => expect(execCommand).toHaveBeenCalledWith("copy"));
+    expect(copiedText).toBe("id1");
+    expect(await screen.findByText(/copied/i)).toBeInTheDocument();
+    expect(document.querySelector("textarea[readonly]")).toBeNull();
+  });
+
   it("shows an empty state when there are no reports", async () => {
     adminList.mockResolvedValue(triage());
     render(<BugTriage />);
