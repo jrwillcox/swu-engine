@@ -409,7 +409,12 @@ def _via_host_stat_bonus(state: GameState, unit_ci: CardInstance, which: str) ->
     from swu.abilities.resolver import _spec_matches_ci
     total = 0
     for ps in state.players:
-        for host in ps.ground_arena + ps.space_arena:
+        # A Fortify upgrade's host is the BASE ("Attached base gains: 'Friendly
+        # space units get +1/+0'" — Landing Pad HMW_271).
+        hosts = ps.ground_arena + ps.space_arena
+        if ps.base_instance is not None:
+            hosts = hosts + [ps.base_instance]
+        for host in hosts:
             if not host.attached_upgrades or ability_suppressed(state, host):
                 continue
             for up in host.attached_upgrades:

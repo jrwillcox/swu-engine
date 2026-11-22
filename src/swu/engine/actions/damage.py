@@ -166,6 +166,35 @@ def _base_damage_cap(s: GameState, base_owner_id: Optional[str]) -> Optional[int
     return best
 
 
+def _base_shield_upgrade_absorbs(s: GameState, base_ci: CardInstance,
+                                 amount: int) -> bool:
+    """Spend the first ``BaseDamageShieldUpgrade`` on ``base_ci`` that this
+    instance of ``amount`` damage qualifies for: log the prevention, defeat the
+    upgrade, and draw for its controller.  True if one absorbed the damage."""
+    from swu.abilities.registry import get_abilities, BaseDamageShieldUpgrade
+    for upg in list(base_ci.attached_upgrades):
+        sc = getattr(upg.card_def, "set_code", None) or ""
+        cn = getattr(upg.card_def, "card_number", None) or ""
+        if not sc or not cn or ability_suppressed(s, upg):
+            continue
+        spec = next((sp for sp in get_abilities(sc, cn)
+                     if isinstance(sp, BaseDamageShieldUpgrade)), None)
+        if spec is None or amount < spec.min_amount:
+            continue
+        s.event_log.append(DamagePrevented(
+            unit_instance_id=base_ci.instance_id,
+            unit_name=base_ci.card_def.display_name,
+            owner_id=base_ci.owner_id,
+            amount=amount,
+        ))
+        from swu.engine.actions.api import _defeat_attached_upgrade
+        from swu.engine.actions.zones import _draw_cards
+        _defeat_attached_upgrade(s, upg)
+        _draw_cards(s, s.player_by_id(base_ci.owner_id), spec.draw)
+        return True
+    return False
+
+
 def base_damage_after_prevention(s: GameState, base_ci: CardInstance,
                                  amount: int) -> int:
     """Amount of damage that actually lands on ``base_ci``, consuming a pending
@@ -202,6 +231,11 @@ def base_damage_after_prevention(s: GameState, base_ci: CardInstance,
         amount = cap
         if amount <= 0:
             return 0
+    # "If attached base would be dealt 5 or more damage, prevent that damage.  If
+    # you do, defeat this upgrade and draw a card" (Alliance Shield Generator HMW_81)
+    # — a marker on a Fortify upgrade ON this base.
+    if base_ci.attached_upgrades and _base_shield_upgrade_absorbs(s, base_ci, amount):
+        return 0
     armed = getattr(s.game_memory, "prevent_next_base_damage", None)
     if not armed:
         return amount

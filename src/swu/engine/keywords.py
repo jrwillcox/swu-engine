@@ -205,6 +205,24 @@ def _undeployed_keyword_aura_keys() -> frozenset:
     return _UNDEPLOYED_AURA_KEYS[0]
 
 
+def _aura_source_pairs(ps):
+    """``(source_ci, spec_ci)`` pairs for the ConstantAbility aura scans.
+
+    Each arena unit is a source for its OWN specs (``spec_ci is source_ci``) and,
+    as the HOST, for its attached upgrades' ``via_host`` specs.  The player's base
+    contributes ONLY its attached upgrades — the Fortify (HMW) case, "Attached base
+    gains: 'Friendly units gain Overwhelm'" (Military Academy HMW_112) — never its
+    own specs, so no Base's existing ConstantAbility newly enters these scans."""
+    for source_ci in ps.ground_arena + ps.space_arena:
+        yield source_ci, source_ci
+        for up in getattr(source_ci, "attached_upgrades", None) or ():
+            yield source_ci, up
+    base = getattr(ps, "base_instance", None)
+    if base is not None:
+        for up in getattr(base, "attached_upgrades", None) or ():
+            yield base, up
+
+
 def _undeployed_aura_grants(state: "GameState", unit_ci: "CardInstance",
                             kw_name: str) -> list:
     """Every ``KeywordGrant`` of ``kw_name`` an UNDEPLOYED leader's aura currently
@@ -380,46 +398,45 @@ def has_keyword(state: "GameState", unit_ci: "CardInstance", keyword: Keyword) -
         from swu.abilities.registry import get_abilities, ConstantAbility, KeywordGrant
         from swu.abilities.resolver import _spec_matches_ci
         for ps in state.players:
-            for source_ci in ps.ground_arena + ps.space_arena:
+            # An upgrade may carry an aura over OTHER cards, resolved as if its
+            # HOST were the source (``via_host`` — Figure of Unity SEC_104).  The
+            # host stays ``source_ci`` in both cases, so "this unit"/"friendly"/
+            # "not_self" always read off the host.  A Fortify upgrade's host is
+            # the BASE (Military Academy HMW_112) — see ``_aura_source_pairs``.
+            for source_ci, spec_ci in _aura_source_pairs(ps):
                 if not hasattr(source_ci.card_def, "set_code"):
                     continue
-                # An upgrade may carry an aura over OTHER cards, resolved as if its
-                # HOST were the source (``via_host`` — Figure of Unity SEC_104).  The
-                # host stays ``source_ci`` in both cases, so "this unit"/"friendly"/
-                # "not_self" always read off the unit in the arena.
-                for spec_ci in (source_ci,
-                                *(getattr(source_ci, "attached_upgrades", None) or ())):
-                    from_upgrade = spec_ci is not source_ci
-                    sc = getattr(spec_ci.card_def, "set_code", None) or ""
-                    cn = getattr(spec_ci.card_def, "card_number", None) or ""
-                    if not sc or not cn:
+                from_upgrade = spec_ci is not source_ci
+                sc = getattr(spec_ci.card_def, "set_code", None) or ""
+                cn = getattr(spec_ci.card_def, "card_number", None) or ""
+                if not sc or not cn:
+                    continue
+                for spec in get_abilities(sc, cn):
+                    if not isinstance(spec, ConstantAbility):
                         continue
-                    for spec in get_abilities(sc, cn):
-                        if not isinstance(spec, ConstantAbility):
-                            continue
-                        if from_upgrade != bool(getattr(spec, "via_host", False)):
-                            continue  # via_host specs come ONLY from the upgrade slot
-                        if getattr(spec, "upgrade_only", False):
-                            continue  # "Attached unit gains …" — conferred only by the
-                                      # attached-upgrade scan below, never by the card's
-                                      # own unit side (Jarek Yeager JTL_109)
-                        if getattr(spec, "undeployed_only", False):
-                            continue  # a leader's UNDEPLOYED-side aura, read by the
-                                      # base-zone pass below (Savage Opress TS26_5)
-                        # Filter on the keyword FIRST: a condition may itself read this
-                        # layer (Oppo Rancisis LOF_105 asks whether another friendly unit
-                        # has keyword K), and evaluating the conditions of grants for
-                        # *other* keywords would fan that recursion out across every
-                        # keyword on the board.  Conditions are pure predicates, so the
-                        # reordering is free.
-                        if not any(isinstance(eff, KeywordGrant) and eff.keyword == kw_name
-                                   for eff in spec.effects):
-                            continue
-                        if spec.condition and not spec.condition.evaluate(state, source_ci):
-                            continue
-                        if not _spec_matches_ci(spec.target, unit_ci, source_ci, state, {}):
-                            continue
-                        return True
+                    if from_upgrade != bool(getattr(spec, "via_host", False)):
+                        continue  # via_host specs come ONLY from the upgrade slot
+                    if getattr(spec, "upgrade_only", False):
+                        continue  # "Attached unit gains …" — conferred only by the
+                                  # attached-upgrade scan below, never by the card's
+                                  # own unit side (Jarek Yeager JTL_109)
+                    if getattr(spec, "undeployed_only", False):
+                        continue  # a leader's UNDEPLOYED-side aura, read by the
+                                  # base-zone pass below (Savage Opress TS26_5)
+                    # Filter on the keyword FIRST: a condition may itself read this
+                    # layer (Oppo Rancisis LOF_105 asks whether another friendly unit
+                    # has keyword K), and evaluating the conditions of grants for
+                    # *other* keywords would fan that recursion out across every
+                    # keyword on the board.  Conditions are pure predicates, so the
+                    # reordering is free.
+                    if not any(isinstance(eff, KeywordGrant) and eff.keyword == kw_name
+                               for eff in spec.effects):
+                        continue
+                    if spec.condition and not spec.condition.evaluate(state, source_ci):
+                        continue
+                    if not _spec_matches_ci(spec.target, unit_ci, source_ci, state, {}):
+                        continue
+                    return True
     except ImportError:
         pass  # abilities not yet loaded (early boot)
 
@@ -617,37 +634,36 @@ def keyword_value(state: "GameState", unit_ci: "CardInstance", keyword: Keyword)
         from swu.abilities.registry import get_abilities, ConstantAbility, KeywordGrant
         from swu.abilities.resolver import _spec_matches_ci
         for ps in state.players:
-            for source_ci in ps.ground_arena + ps.space_arena:
+            # ``via_host`` upgrade-borne auras, incl. a Fortify upgrade's base — see
+            # the note in ``has_keyword``.
+            for source_ci, spec_ci in _aura_source_pairs(ps):
                 if not hasattr(source_ci.card_def, "set_code"):
                     continue
-                # ``via_host`` upgrade-borne auras — see the note in ``has_keyword``.
-                for spec_ci in (source_ci,
-                                *(getattr(source_ci, "attached_upgrades", None) or ())):
-                    from_upgrade = spec_ci is not source_ci
-                    sc = getattr(spec_ci.card_def, "set_code", None) or ""
-                    cn = getattr(spec_ci.card_def, "card_number", None) or ""
-                    if not sc or not cn:
+                from_upgrade = spec_ci is not source_ci
+                sc = getattr(spec_ci.card_def, "set_code", None) or ""
+                cn = getattr(spec_ci.card_def, "card_number", None) or ""
+                if not sc or not cn:
+                    continue
+                for spec in get_abilities(sc, cn):
+                    if not isinstance(spec, ConstantAbility):
                         continue
-                    for spec in get_abilities(sc, cn):
-                        if not isinstance(spec, ConstantAbility):
-                            continue
-                        if from_upgrade != bool(getattr(spec, "via_host", False)):
-                            continue
-                        if getattr(spec, "upgrade_only", False):
-                            continue  # see the matching note in ``has_keyword``
-                        if getattr(spec, "undeployed_only", False):
-                            continue  # see the matching note in ``has_keyword``
-                        grants = [eff for eff in spec.effects
-                                  if isinstance(eff, KeywordGrant) and eff.keyword == kw_name]
-                        if not grants:
-                            continue  # keyword filter before the condition — see the
-                                      # recursion note in ``has_keyword``
-                        if spec.condition and not spec.condition.evaluate(state, source_ci):
-                            continue
-                        if not _spec_matches_ci(spec.target, unit_ci, source_ci, state, {}):
-                            continue
-                        for eff in grants:
-                            total += _keyword_grant_value(state, eff, source_ci)
+                    if from_upgrade != bool(getattr(spec, "via_host", False)):
+                        continue
+                    if getattr(spec, "upgrade_only", False):
+                        continue  # see the matching note in ``has_keyword``
+                    if getattr(spec, "undeployed_only", False):
+                        continue  # see the matching note in ``has_keyword``
+                    grants = [eff for eff in spec.effects
+                              if isinstance(eff, KeywordGrant) and eff.keyword == kw_name]
+                    if not grants:
+                        continue  # keyword filter before the condition — see the
+                                  # recursion note in ``has_keyword``
+                    if spec.condition and not spec.condition.evaluate(state, source_ci):
+                        continue
+                    if not _spec_matches_ci(spec.target, unit_ci, source_ci, state, {}):
+                        continue
+                    for eff in grants:
+                        total += _keyword_grant_value(state, eff, source_ci)
     except ImportError:
         pass
 

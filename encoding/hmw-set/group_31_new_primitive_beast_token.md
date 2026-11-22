@@ -25,9 +25,7 @@
 
 **Mechanical analysis:** trigger archetype `when_played`; effect families ['damage'].
 
-**Existing primitives that should suffice:** DealDamage, create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** DealDamage, create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -41,9 +39,7 @@
 
 **Mechanical analysis:** trigger archetype `when_played`; effect families ['heal'].
 
-**Existing primitives that should suffice:** Heal, create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** Heal, create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -59,9 +55,7 @@
 
 **Mechanical analysis:** trigger archetype `event`; effect families ['heal', 'draw'].
 
-**Existing primitives that should suffice:** Heal, DrawCards, create-token-unit.
-
-**⚠ Suspected NEW primitive:** beast-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** Heal, DrawCards, create-token-unit, beast-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 

@@ -3124,6 +3124,9 @@ class WhenYouPlayCard:
                                     # like the other filters so an effect can target
                                     # "a unit that costs the same as or less than the
                                     # card you played".
+    power_max: Optional[int] = None  # narrow to a played card whose EFFECTIVE power
+                                     # is <= this ("When you play a unit with 3 or
+                                     # less power" — Insurgent Camp HMW_216)
     exclude_self: bool = True
 
 @dataclass(frozen=True)
@@ -3854,6 +3857,13 @@ class IgnoreAspectPenaltyForPlays:
                                       # penalty" — P25_46), computed as the MARGINAL
                                       # cost of those pips: the full penalty less the
                                       # penalty of the card without them.
+    keyword: Optional[str] = None     # the played card must have this keyword
+                                      # ("upgrades WITH FORTIFY you play" — Grand Moff
+                                      # Tarkin HMW_4)
+    leader_only: bool = False         # honour the marker only while its source is a
+                                      # LEADER — a token-collision guard for a leader
+                                      # whose (set, number) a token unit shares (HMW_4
+                                      # / the Beast token)
 
 
 @dataclass(frozen=True)
@@ -4317,6 +4327,23 @@ class BaseDamageCap:
 
 
 @dataclass(frozen=True)
+class BaseDamageShieldUpgrade:
+    """Constant marker on a FORTIFY upgrade attached to a base: "If attached base
+    would be dealt ``min_amount`` or more damage, prevent that damage.  If you do,
+    defeat this upgrade and draw a card" (Alliance Shield Generator HMW_81).
+
+    The ``BaseDamageCap`` sibling, read at the same single helper
+    ``actions.base_damage_after_prevention`` (so every base-damage site is covered),
+    AFTER the cap: a capped instance below ``min_amount`` no longer qualifies, which
+    keeps the cheaper effect.  Consuming the whole instance, then defeating the
+    upgrade and drawing, happens inline at that helper — a one-shot, so it can never
+    fire twice for one instance; the draw's own empty-deck damage finds the upgrade
+    already gone.  Mandatory, as printed."""
+    min_amount: int = 5
+    draw: int = 1
+
+
+@dataclass(frozen=True)
 class SearchWindowDoubler:
     """Constant marker: while its source is in play, a deck search its controller
     makes looks at TWICE as many cards — "If you would search a number of cards from
@@ -4614,8 +4641,15 @@ class WhenYouPlayOrCreateUnit:
     ``include_self`` (the default) lets the observer fire for its OWN entry — ASH_41
     prints "(including this one)", and the drain runs after the unit is already in
     its arena, so the ordinary in-play trigger scan finds it.  Set it False for an
-    observer that must not see itself arrive."""
+    observer that must not see itself arrive.
+
+    ``any_player`` widens it to a unit entering play under EITHER player, and
+    ``filter`` (a TargetSpec matched against the entered unit from the observer's
+    perspective) narrows which units count — "When a non-leader ground unit enters
+    play (including token units)" (Trap Field HMW_171)."""
     include_self: bool = True
+    any_player: bool = False
+    filter: Optional["TargetSpec"] = None
 
 
 @dataclass(frozen=True)

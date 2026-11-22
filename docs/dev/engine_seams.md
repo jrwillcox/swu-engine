@@ -187,12 +187,23 @@ attached it is an ordinary upgrade that happens to sit on a base.
   `GrantedAbility(TriggerAbility)`, which resolves from the BASE, and its own
   printed triggers, which resolve from the UPGRADE.  WhenPlayed comes from the
   usual UpgradePlayed path.
-- **Not built yet** (lands with the residual card text, `hmw-set:01`): a
-  `ConstantAbility` granted to the base ("Friendly units gain Raid 1", "Friendly
-  space units get +1/+0") and "ignore the aspect penalty on Fortify upgrades"
-  (Grand Moff Tarkin HMW_4).  Grand Moff Tarkin is tagged Fortify upstream only
-  because his text mentions it; `_is_fortify` reads the keyword on Upgrade cards
-  only.
+- **Base auras.** "Attached base gains: 'Friendly units gain Raid 1 / get
+  +1/+0'" is a `ConstantAbility(via_host=True)` on the upgrade (the Figure of
+  Unity SEC_104 shape).  `keywords._aura_source_pairs` and
+  `stats._via_host_stat_bonus` walk the base's attached upgrades with the BASE as
+  host; the base's own specs never enter those scans (Military Academy HMW_112,
+  Verdant Fortress HMW_126, Landing Pad HMW_271).
+- **Base-damage shield.** `BaseDamageShieldUpgrade(min_amount)` on the upgrade is
+  read at `base_damage_after_prevention`, after the ASH_70 cap: prevent the whole
+  instance, defeat the upgrade, draw (Alliance Shield Generator HMW_81).
+- **Aspect waiver.** `IgnoreAspectPenaltyForPlays(keyword="Fortify",
+  leader_only=True)` (Grand Moff Tarkin HMW_4; `leader_only` guards the Beast
+  token that shares his number).  Tarkin is tagged Fortify upstream only because
+  his text mentions it; `_is_fortify` reads the keyword on Upgrade cards only.
+- **Observer filters.** `WhenYouPlayOrCreateUnit(any_player=, filter=)` (Trap
+  Field HMW_171) and `WhenYouPlayCard(power_max=)` (Insurgent Camp HMW_216).
+  `push_bottom_from_discard(disposition="top")` puts the pick on top of the deck
+  (Bacta Tank HMW_37).
 
 ## The escalation rule
 

@@ -202,6 +202,8 @@ REPRINT_ALIASES: dict[tuple[str, str], tuple[str, str]] = {
     ("J24", "6"): ("SHD", "248"),
     # Vanquish  ->  SOR_78
     ("TWI", "77"): ("SOR", "78"),
+    # Verdant Fortress  ->  HMW_126
+    ("P26", "267"): ("HMW", "126"),
     # Victor Leader  ->  JTL_85
     ("P25", "154"): ("JTL", "85"),
     ("P25", "164"): ("JTL", "85"),
