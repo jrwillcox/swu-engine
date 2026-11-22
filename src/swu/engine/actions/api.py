@@ -1268,8 +1268,10 @@ def legal_actions(state: GameState) -> list[Action]:
     # for a GrantedAbility wrapping an ActivatedAbility.  The action is addressed by
     # the UPGRADE's instance_id; a DefeatSelf cost is always payable (you can defeat
     # your own upgrade), and ExhaustSelf refers to the host.
+    # The host may be the BASE: "Attached base gains: 'Action […]: …'" on a
+    # Fortify upgrade (Heavy Ion Cannon HMW_172).
     from swu.abilities.registry import GrantedAbility
-    for host in ps.ground_arena + ps.space_arena:
+    for host in ps.upgrade_hosts():
         if ability_suppressed(state, host):
             continue
         for upg in host.attached_upgrades:
@@ -1562,8 +1564,9 @@ def _resolve_unique_duplicates(s: GameState) -> None:
         return
     for ps in s.players:
         groups: dict[str, list[str]] = {}
-        for unit in ps.ground_arena + ps.space_arena:
-            if getattr(unit.card_def, "is_unique", False):
+        for unit in ps.upgrade_hosts():      # the base holds Fortify upgrades
+            if (getattr(unit.card_def, "is_unique", False)
+                    and unit.zone != Zone.BASE_ZONE):
                 groups.setdefault(unit.card_def.display_name, []).append(unit.instance_id)
             for upg in unit.attached_upgrades:
                 if getattr(upg.card_def, "is_unique", False):

@@ -818,6 +818,14 @@ Group 07 was LAW's four leaders and two bases, scouted as the heaviest group lef
 
 - **`AuraGrantedAbility` wrapping an `ActivatedAbility`**, with **`UseAbility.actor_id`**: an aura giving an Action to every matching unit (the many-actor version of SHD_155's upgrade-granted Action). `source_id` names the spec, `actor_id` the unit using it. A new aura scan in `legal_actions` offers it once per matching unit the active player controls (skipped when no aura is in play). The source may be an enemy card, so the ownership check, `ExhaustSelf`/`DefeatSelf`, resolution and the once-a-round key all use the actor, and the aura's `target` is re-checked at apply time. `describe()` must name the actor (the web and replay layers tell same-kind actions apart by it). Satine Kryze TWI_47.
 
+## hmw-set:01 — framework addition: the Fortify keyword
+
+- **Fortify** (an upgrade attaches to its controller's base, not a unit): `zones._is_fortify`, then `_eligible_upgrade_targets` returns `[controller's base]` and `_attach_upgrade` accepts only that base. Tagged `BASE_ZONE`. Design notes are in `engine_seams.md` § Fortify. HMW_4/37/70/81/95/112/113/126/147/160/171/172/205/206/216/271, P26_267.
+- **`PlayerState.upgrade_hosts()`**: both arenas plus the base. It replaced the arena-only "which card holds this upgrade?" scans (`_find_upgrade_host`, `_apply_defeat_unit`, `_apply_return_to_hand`, `kind="upgrade"` gathering, granted-Action enumeration, the Unique Rule sweep, `defeat_at_regroup`).
+- **`on_unit`** predicate: an upgrade attached to a unit, not a base (read from the zone tag). Added to System Shock JTL_175, Finn SHD_3 and Evidence of the Crime SHD_77, the three registered `kind="upgrade"` cards whose text says "on/attached to a unit".
+- **`resolver._fortify_upgrade_triggers`**: a base upgrade's granted triggers resolve from the base, and its own printed triggers resolve from the upgrade.
+- Bookkeeping: `"Fortify"` moved from PHASE3 to PHASE2 in `audit_coverage.py` (**`PHASE3_KEYWORDS` is empty again**) and `web/swudb_import.py`. All 17 Fortify cards carry residual text, so they classify `text-bearing` and `hmw-set:01` is now a residual-ability group.
+
 ## Earlier primitives (from the deck-encoding phase)
 
 - **`CreateTokenUnit(name, count, enters_ready)`**: Battle Droid TWI_1, Clone Trooper TWI_2. Tokens don't count for conservation and cease to exist when they leave play. (ahsoka:05)

@@ -327,7 +327,7 @@ def _enter_regroup(s: GameState) -> None:
     if not s.is_terminal():
         from swu.cards.models import TokenUpgrade
         for ps in s.players:
-            for host in list(ps.ground_arena) + list(ps.space_arena):
+            for host in ps.upgrade_hosts():      # a Fortify upgrade sits on the base
                 doomed = [up for up in host.attached_upgrades
                           if getattr(up, "defeat_at_regroup", False)]
                 if not doomed:

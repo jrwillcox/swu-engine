@@ -315,14 +315,36 @@ def _upgrade_target_spec(card_def) -> "Optional[TargetSpec]":  # noqa: F821 (imp
     )
 
 
+def _is_fortify(state: GameState, upgrade_ci: CardInstance) -> bool:
+    """Whether ``upgrade_ci`` is an Upgrade with the Fortify keyword ("Attach this
+    to your base, not a unit", HMW).  Such an upgrade attaches only to its
+    controller's own base.  Only an Upgrade card qualifies: Grand Moff Tarkin
+    HMW_4, a Leader, is tagged Fortify upstream because his text mentions it."""
+    from swu.cards.models import Upgrade
+    from swu.engine.keywords import Keyword, has_keyword
+    return (isinstance(upgrade_ci.card_def, Upgrade)
+            and has_keyword(state, upgrade_ci, Keyword.FORTIFY))
+
+
 def _eligible_upgrade_targets(
-    state: GameState, upgrade_ci: CardInstance
+    state: GameState, upgrade_ci: CardInstance,
+    controller_id: Optional[str] = None,
 ) -> list[CardInstance]:
-    """Units that ``upgrade_ci`` may legally be attached to.
+    """Cards that ``upgrade_ci`` may legally be attached to.
 
     With no parseable restriction this is every unit in play (either player);
     otherwise it is the units matching the upgrade's "Attach to …" clause.
+
+    A **Fortify** upgrade is the exception: its only legal host is the base of
+    the player playing it.  ``controller_id`` names that player and defaults to
+    the upgrade's owner, which is correct for every play route except a play out
+    of an opponent's discard pile.  ``_affordable_hand_upgrades`` excludes that
+    route for Fortify.  Fortify ignores the unit-based "Attach to …" clause, so
+    it can be played with no units in play.
     """
+    if _is_fortify(state, upgrade_ci):
+        base = state.player_by_id(controller_id or upgrade_ci.owner_id).base_instance
+        return [base] if base is not None else []
     spec = _upgrade_target_spec(upgrade_ci.card_def)
     units = _all_units_in_play(state)
     if spec is None:
@@ -664,36 +686,46 @@ def _attach_upgrade(
     if target_id is None:
         raise IllegalActionError("Upgrade requires a target")
     upgrade_ci.face_down = False
-    spec = _upgrade_target_spec(upgrade_ci.card_def)
-    for owner_ps in s.players:
-        for unit_ci in owner_ps.ground_arena + owner_ps.space_arena:
-            if unit_ci.instance_id == target_id:
-                if spec is not None:
-                    from swu.abilities.resolver import _spec_matches_ci
-                    if not _spec_matches_ci(spec, unit_ci, upgrade_ci, s, {}):
-                        raise IllegalActionError(
-                            f"{upgrade_ci.card_def.display_name} cannot attach to "
-                            f"{unit_ci.card_def.display_name} ({target_id})"
-                        )
-                upgrade_ci.zone = unit_ci.zone
-                unit_ci.attached_upgrades.append(upgrade_ci)
-                note_upgrade_attached(s, unit_ci)      # Sabine Wren ASH_208
-                # Fire WhenPlayed triggers for the upgrade
-                evt = UpgradePlayed(
-                    player_id=ps.player_id,
-                    instance_id=upgrade_ci.instance_id,
-                    card_name=upgrade_ci.card_def.display_name,
-                    attached_to_instance_id=target_id,
+    fortify = _is_fortify(s, upgrade_ci)
+    if fortify:
+        # Fortify: the only legal host is the playing player's own base.
+        base = ps.base_instance
+        if base is None or base.instance_id != target_id:
+            raise IllegalActionError(
+                f"{upgrade_ci.card_def.display_name} has Fortify and must attach "
+                f"to your base, not {target_id}")
+        host_ci: Optional[CardInstance] = base
+    else:
+        host_ci = next((u for p in s.players for u in p.ground_arena + p.space_arena
+                        if u.instance_id == target_id), None)
+        if host_ci is None:
+            raise IllegalActionError(f"Upgrade target {target_id} not found in any arena")
+        spec = _upgrade_target_spec(upgrade_ci.card_def)
+        if spec is not None:
+            from swu.abilities.resolver import _spec_matches_ci
+            if not _spec_matches_ci(spec, host_ci, upgrade_ci, s, {}):
+                raise IllegalActionError(
+                    f"{upgrade_ci.card_def.display_name} cannot attach to "
+                    f"{host_ci.card_def.display_name} ({target_id})"
                 )
-                s.event_log.append(evt)
-                get_bus().fire(s, evt)
-                from swu.abilities.resolver import fire_triggered_abilities
-                after_idx = 1 - s.player_index(ps.player_id)
-                fire_triggered_abilities(s, evt, after_all_player_idx=after_idx,
-                                         event_ctx={"attached_to_id": target_id,
-                                                    "via_smuggle": via_smuggle})
-                return
-    raise IllegalActionError(f"Upgrade target {target_id} not found in any arena")
+    assert host_ci is not None
+    upgrade_ci.zone = host_ci.zone      # BASE_ZONE for a Fortify upgrade
+    host_ci.attached_upgrades.append(upgrade_ci)
+    note_upgrade_attached(s, host_ci)      # Sabine Wren ASH_208
+    # Fire WhenPlayed triggers for the upgrade
+    evt = UpgradePlayed(
+        player_id=ps.player_id,
+        instance_id=upgrade_ci.instance_id,
+        card_name=upgrade_ci.card_def.display_name,
+        attached_to_instance_id=target_id,
+    )
+    s.event_log.append(evt)
+    get_bus().fire(s, evt)
+    from swu.abilities.resolver import fire_triggered_abilities
+    after_idx = 1 - s.player_index(ps.player_id)
+    fire_triggered_abilities(s, evt, after_all_player_idx=after_idx,
+                             event_ctx={"attached_to_id": target_id,
+                                        "via_smuggle": via_smuggle})
 
 
 # ── Capture ───────────────────────────────────────────────────────────────────
@@ -849,11 +881,12 @@ def _resolve_granted_bounty(s: GameState, collector_id: str, key: str) -> None:
 
 
 def _find_upgrade_host(s: GameState, upgrade_id: str) -> Optional[CardInstance]:
-    """Return the in-play unit whose ``attached_upgrades`` contains ``upgrade_id``
-    (or None).  Used to resolve a granted activated ability from its host and to
-    detach the upgrade when paying a "defeat this upgrade" cost (SHD_155)."""
+    """Return the in-play card whose ``attached_upgrades`` contains ``upgrade_id``
+    (or None).  Usually a unit; a BASE for a Fortify upgrade (HMW).  Used to
+    resolve a granted activated ability from its host and to detach the upgrade
+    when paying a "defeat this upgrade" cost (SHD_155)."""
     for p in s.players:
-        for u in (*p.ground_arena, *p.space_arena):
+        for u in p.upgrade_hosts():
             if any(up.instance_id == upgrade_id for up in u.attached_upgrades):
                 return u
     return None

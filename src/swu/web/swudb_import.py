@@ -33,6 +33,7 @@ PHASE2_KEYWORDS = {
     "Sentinel", "Overwhelm", "Raid", "Ambush", "Restore", "Saboteur",
     "Shielded", "Grit", "Exploit", "Smuggle", "Plot", "Hidden", "Piloting",
     "Support",   # implemented engine-side (ash-set:01)
+    "Fortify",   # implemented engine-side (hmw-set:01)
 }
 DEFERRED_KEYWORDS = {
     "Bounty", "Coordinate",

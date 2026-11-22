@@ -36,14 +36,13 @@ PHASE2_KEYWORDS = frozenset({
     "Coordinate",  # Phase 7: implemented engine-side as an ability template (ahsoka-tano:01, CONTROLLER_N_PLUS_UNITS)
     "Bounty",      # Phase 7: implemented engine-side as an ability template (shd-han-solo:02, GrantedAbility WhenDefeated)
     "Support",     # Phase 7: implemented engine-side (ash-set:01, granted_attack + borrowed abilities)
+    "Fortify",     # HMW (2026-11): implemented engine-side (hmw-set:01, upgrade attaches to its controller's base)
 })
 
 # Genuinely-unimplemented keywords: a card whose ONLY functional content is one of
-# these is a real gap.  EMPTY since ash-set:01 landed Support — every printed SWU
-# keyword is now modelled engine-side.
-PHASE3_KEYWORDS: frozenset[str] = frozenset({
-    "Fortify",     # HMW (2026-11): upgrade attaches to your BASE, not a unit — needs engine work
-})
+# these is a real gap.  EMPTY again since hmw-set:01 landed Fortify, so every
+# printed SWU keyword is modelled engine-side.
+PHASE3_KEYWORDS: frozenset[str] = frozenset()
 
 ALL_KNOWN_KEYWORDS = PHASE2_KEYWORDS | PHASE3_KEYWORDS
 

@@ -251,7 +251,8 @@ def test_set_code_input(tmp_path, monkeypatch):
     assert gslug == f"{set_with_gaps.lower()}-set"
     assert ggroups, f"expected the {set_with_gaps} set to yield gap groups"
     # Only the two campaign kinds, and a keyword group only ever for a keyword that
-    # is still deferred (in PHASE3_KEYWORDS — e.g. HMW's Fortify, pending engine work).
+    # is still deferred (in PHASE3_KEYWORDS, which is empty since hmw-set:01 landed
+    # Fortify, so no keyword group is planned at all).
     assert {g.kind for g in ggroups} <= {"ability", "keyword"}
     assert all(g.keyword in A.PHASE3_KEYWORDS for g in ggroups if g.kind == "keyword")
 

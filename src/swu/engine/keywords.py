@@ -57,6 +57,9 @@ class Keyword(str, Enum):
     COORDINATE = "Coordinate"
     PLOT = "Plot"
     SUPPORT = "Support"
+    # HMW: "Attach this to your base, not a unit."  Read only on an UPGRADE, by
+    # ``zones._is_fortify``; it changes where the upgrade may attach.
+    FORTIFY = "Fortify"
 
 
 # Regex for extracting the numeric parameter from card text.
