@@ -5,11 +5,9 @@
 - **Cards:** 16
 - **⚠ New primitives suspected:** beast-token — see escalation rule; do NOT jam a core-resolution change into a card batch.
 
-## Keyword group: **Fortify**
+## Keyword group: **Fortify** (residual text)
 
-Implement the **Fortify** keyword engine-side once (Phase 2 pattern: keyword query layer / effective-stats / decision-stack as needed), with synthetic-card framework tests first. Then confirm every card below becomes playable and add `Fortify` to the keyword list in `docs/dev/engine_seams.md`.
-
-Note: a card may have rules text *beyond* the keyword. Where flagged 'residual text' below, the keyword unblocks the card but its ability text still needs a separate ability registration (re-run the planner after the keyword lands — it will recluster the residual text into an ability group).
+The **Fortify** keyword is already implemented engine-side; do NOT implement it again.  Its design notes are in `docs/dev/engine_seams.md` (search for `Fortify`).  Encode only each card's *residual* ability text below, as an ordinary ability batch.  A card whose only text is the keyword is already playable and needs nothing.
 
 ## Cards
 

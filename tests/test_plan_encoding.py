@@ -207,6 +207,28 @@ def test_emit_valid_artifacts(tmp_path, monkeypatch):
         assert g.gid in man
 
 
+def test_keyword_spec_for_an_implemented_keyword_asks_only_for_residual_text(tmp_path):
+    """A keyword group outlives its engine work: the planner keeps the group id
+    once planned.  When the keyword is already in PHASE2_KEYWORDS (Fortify after
+    hmw-set:01's engine session), the spec must not tell the next session to
+    implement the keyword again."""
+    group = P.Group(gid="tst-set:01", seq=1, kind="keyword", theme="Fortify keyword",
+                    keyword="Fortify")
+    text = P.write_group_spec(group, tmp_path).read_text(encoding="utf-8")
+    assert "already implemented engine-side" in text
+    assert "do NOT implement it again" in text
+    assert "Implement the **Fortify** keyword" not in text
+
+
+def test_keyword_spec_for_a_deferred_keyword_asks_for_the_engine_work(tmp_path, monkeypatch):
+    monkeypatch.setattr(A, "PHASE3_KEYWORDS", frozenset({"Newkw"}))
+    group = P.Group(gid="tst-set:01", seq=1, kind="keyword", theme="Newkw keyword",
+                    keyword="Newkw")
+    text = P.write_group_spec(group, tmp_path).read_text(encoding="utf-8")
+    assert "Implement the **Newkw** keyword engine-side once" in text
+    assert "already implemented" not in text
+
+
 def test_rerun_stable_ids_no_clobber(tmp_path, monkeypatch):
     monkeypatch.setattr(P, "ENCODING_DIR", tmp_path)
     # Whole-set source (see the _set_with_gaps note above): the demo deck is fully
