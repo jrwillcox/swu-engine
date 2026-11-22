@@ -757,6 +757,177 @@ REPRINT_ALIASES: dict[tuple[str, str], tuple[str, str]] = {
     ("C24", "5"): ("TWI", "134"),    # Asajj Ventress — "another SEPARATIST unit"
     ("C25", "5"): ("SEC", "93"),     # C-3PO — "Action [exhaust, …]"
     ("J24", "5"): ("SHD", "154"),    # Wrecker — BOOM!
+
+    # ── 2026-11 release sweep (HMW / IC27 / P26 / ASHP / HMWP / CST) — mirror
+    #    gaps from scripts/find_reprints.py after the November re-harvest.
+    ("ASHP", "1"): ("ASH", "27"),      # Enoch — Solemn Servant
+    ("ASHP", "3"): ("ASH", "34"),      # Wicket — Yub Nub!
+    ("ASHP", "4"): ("ASH", "44"),      # Barriss Offee — Redeeming Herself
+    ("ASHP", "5"): ("ASH", "45"),      # Reanimated Night Trooper
+    ("ASHP", "6"): ("ASH", "50"),      # Morgan Elsbeth — Life Abandoned
+    ("ASHP", "7"): ("ASH", "64"),      # The Armorer — Secrecy is Our Survival
+    ("ASHP", "8"): ("ASH", "67"),      # Get Lost
+    ("ASHP", "9"): ("ASH", "73"),      # Palace Chef Droid
+    ("ASHP", "10"): ("ASH", "109"),    # T-6 Shuttle 1974 — With a Mentor's Dedication
+    ("ASHP", "11"): ("ASH", "119"),    # Greef Karga — Introductions are in Order
+    ("ASHP", "14"): ("ASH", "135"),    # The Darksaber — Icon of Leadership
+    ("ASHP", "15"): ("ASH", "147"),    # The Cyborg Mech — Mysterious Threat
+    ("ASHP", "16"): ("ASH", "189"),    # Emperor's Messenger
+    ("ASHP", "18"): ("ASH", "203"),    # Mando's N-1 Starfighter — Faster than a Fathier
+    ("ASHP", "20"): ("ASH", "237"),    # Mouse Droid
+    ("CST", "2"): ("ASH", "59"),       # Leia Organa — Vigilant for Danger
+    ("CST", "3"): ("ASH", "158"),      # Han Solo — It'll Work
+    ("HMW", "96"): ("SOR", "70"),      # Devotion
+    ("HMW", "239"): ("LOF", "224"),    # Pounce
+    ("IC27", "15"): ("JTL", "33"),     # Onyx Squadron Brute
+    ("IC27", "16"): ("TWI", "31"),     # Rune Haako — Scheming Second
+    ("IC27", "17"): ("SEC", "30"),     # Death Trooper
+    ("IC27", "20"): ("IBH", "60"),     # Admiral Piett — In Command Now
+    ("IC27", "25"): ("IBH", "99"),     # Blizzard One — Veers at the Helm
+    ("IC27", "27"): ("SOR", "39"),     # AT-AT Suppressor
+    ("IC27", "28"): ("IBH", "72"),     # Avenger — Hunting the Rebels
+    ("IC27", "30"): ("TWI", "41"),     # Lethal Crackdown
+    ("IC27", "33"): ("SHD", "40"),     # Clan Wren Rescuer
+    ("IC27", "36"): ("SHD", "42"),     # Concord Dawn Interceptors
+    ("IC27", "44"): ("TWI", "52"),     # Hello There
+    ("IC27", "48"): ("JTL", "60"),     # Desperate Commando
+    ("IC27", "50"): ("SEC", "63"),     # Rotunda Senate Guards
+    ("IC27", "53"): ("SEC", "71"),     # Disciples' Devotion
+    ("IC27", "54"): ("SOR", "73"),     # Moment of Peace
+    ("IC27", "55"): ("LAW", "130"),    # Betrayed Trust
+    ("IC27", "64"): ("JTL", "88"),     # Captain Phasma — On My Command
+    ("IC27", "69"): ("JTL", "91"),     # Apology Accepted
+    ("IC27", "72"): ("LOF", "95"),     # Lor San Tekka — Secret Keeper
+    ("IC27", "82"): ("IBH", "20"),     # Luke Skywalker — Do You Read Me?
+    ("IC27", "88"): ("SEC", "108"),    # Senator's Aide
+    ("IC27", "90"): ("JTL", "113"),    # Homestead Militia
+    ("IC27", "94"): ("JTL", "123"),    # Dogfight
+    ("IC27", "95"): ("JTL", "124"),    # Tandem Assault
+    ("IC27", "96"): ("SHD", "130"),    # Moment of Glory
+    ("IC27", "100"): ("JTL", "135"),   # Special Forces TIE Fighter
+    ("IC27", "105"): ("IBH", "68"),    # General Veers — Leading the Assault
+    ("IC27", "108"): ("TWI", "137"),   # Savage Opress — Monster
+    ("IC27", "111"): ("LOF", "139"),   # Battle Fury
+    ("IC27", "118"): ("LOF", "145"),   # Jedi Knight
+    ("IC27", "125"): ("TWI", "153"),   # Bold Resistance
+    ("IC27", "129"): ("LOF", "155"),   # DRK-1 Probe Droid
+    ("IC27", "132"): ("JTL", "168"),   # Insurgent Saboteurs
+    ("IC27", "133"): ("SOR", "166"),   # Infiltrator's Skill
+    ("IC27", "134"): ("SHD", "179"),   # Desperate Attack
+    ("IC27", "135"): ("SOR", "170"),   # Power Failure
+    ("IC27", "136"): ("SOR", "172"),   # Open Fire
+    ("IC27", "140"): ("TWI", "180"),   # Separatist Commando
+    ("IC27", "154"): ("SHD", "196"),   # Grogu — Irresistible
+    ("IC27", "156"): ("LOF", "194"),   # J-Type Nubian Starship
+    ("IC27", "164"): ("IBH", "31"),    # Millennium Falcon — Bucket of Bolts
+    ("IC27", "174"): ("ASH", "228"),   # Preparation
+    ("IC27", "176"): ("TWI", "224"),   # Breaking In
+    ("IC27", "177"): ("LOF", "223"),   # Force Illusion
+    ("IC27", "182"): ("LOF", "235"),   # HK-87 Assassin Droid
+    ("IC27", "184"): ("LOF", "239"),   # Consumed by the Dark Side
+    ("IC27", "186"): ("SOR", "236"),   # R2-D2 — Ignoring Protocol
+    ("IC27", "188"): ("SOR", "238"),   # C-3PO — Protocol Droid
+    ("IC27", "190"): ("JTL", "248"),   # Dilapidated Ski Speeder
+    ("IC27", "191"): ("LOF", "250"),   # Medical Frigate
+    ("IC27", "193"): ("JTL", "253"),   # Coordinated Front
+    ("P26", "14"): ("ASH", "31"),      # Hera Syndulla — Renegade General
+    ("P26", "16"): ("ASH", "155"),     # Grogu — Yes. Yes. Yes.
+    ("P26", "20"): ("ASH", "30"),      # Marrok — Mysterious Warrior
+    ("P26", "22"): ("ASH", "112"),     # Luke Skywalker — Answering the Call
+    ("P26", "118"): ("ASH", "97"),     # Moff Gideon — Remnant Commander
+    ("P26", "119"): ("ASH", "62"),     # The Mandalorian — Devoted Rescuer
+    ("P26", "120"): ("LAW", "214"),    # Boba Fett — For a Price
+    ("P26", "121"): ("ASH", "53"),     # Pre Vizsla — Strong-Willed Ruler
+    ("P26", "122"): ("LAW", "71"),     # The Max Rebo Band — Jatz-Wailers
+    ("P26", "123"): ("ASH", "56"),     # Huyang — Your Aptitude Falls Short
+    ("P26", "128"): ("LAW", "237"),    # Qui-Gon Jinn — Influencing Chance
+    ("P26", "129"): ("LAW", "20"),     # Daimyo's Palace
+    ("P26", "130"): ("LAW", "24"),     # Imperial Command Complex
+    ("P26", "131"): ("LAW", "27"),     # Stygeon Spire
+    ("P26", "132"): ("LAW", "28"),     # Canto Bight
+    ("P26", "133"): ("TS26", "1"),     # Count Dooku — Offering Aid
+    ("P26", "134"): ("TS26", "2"),     # Anakin Skywalker — Protect Her At All Costs
+    ("P26", "135"): ("TS26", "3"),     # Maul — Collective Ambition
+    ("P26", "136"): ("TS26", "4"),     # Padmé Amidala — Follow My Lead
+    ("P26", "137"): ("TS26", "5"),     # Savage Opress — You Must Have Your Revenge
+    ("P26", "138"): ("TS26", "6"),     # Rex — No Other Option
+    ("P26", "139"): ("TS26", "7"),     # Asajj Ventress — Ambitious Apprentice
+    ("P26", "140"): ("TS26", "8"),     # Ahsoka Tano — I Have an Idea
+    ("P26", "141"): ("LAW", "68"),     # Millennium Falcon — Dodging Patrols
+    ("P26", "142"): ("ASH", "50"),     # Morgan Elsbeth — Life Abandoned
+    ("P26", "143"): ("LAW", "108"),    # Lando Calrissian — Eyes Open
+    ("P26", "144"): ("LAW", "67"),     # Jyn Erso — Take the Next Chance
+    ("P26", "145"): ("SEC", "90"),     # Director Krennic — I Lose Nothing But Time
+    ("P26", "146"): ("SEC", "133"),    # Syril Karn — Where Is He?
+    ("P26", "147"): ("LAW", "45"),     # Zeb Orellios — Spectre Four
+    ("P26", "148"): ("SEC", "172"),    # Cinta Kaz — The Struggle Comes First
+    ("P26", "149"): ("SEC", "205"),    # Obi-Wan Kenobi — Finding What Doesn't Exist
+    ("P26", "150"): ("LOF", "213"),    # The Legacy Run — Doomed Debris
+    ("P26", "151"): ("LAW", "252"),    # Fett's Firespray — In Pursuit
+    ("P26", "152"): ("ASH", "255"),    # Anakin Skywalker — You Were Right About Me
+    ("P26", "177"): ("ASH", "30"),     # Marrok — Mysterious Warrior
+    ("P26", "178"): ("ASH", "34"),     # Wicket — Yub Nub!
+    ("P26", "180"): ("SEC", "42"),     # Cassian Andor — Lay Low
+    ("P26", "181"): ("ASH", "105"),    # Bo-Katan Kryze — For All of Mandalore
+    ("P26", "182"): ("SEC", "103"),    # Mon Mothma — Clinging to Hope
+    ("P26", "183"): ("ASH", "148"),    # Ninth Sister — Hulking Inquisitor
+    ("P26", "184"): ("LAW", "214"),    # Boba Fett — For a Price
+    ("P26", "185"): ("SEC", "209"),    # The Mandalorian — Cleaning Up Nevarro
+    ("P26", "186"): ("SEC", "219"),    # Ebon Hawk — Cause and Effect
+    ("P26", "187"): ("LAW", "44"),     # Single Reactor Ignition
+    ("P26", "188"): ("ASH", "112"),    # Luke Skywalker — Answering the Call
+    ("P26", "189"): ("ASH", "52"),     # Chimaera — A Frightening Reality
+    ("P26", "190"): ("ASH", "28"),     # Paz Vizsla — For a Brighter Future
+    ("P26", "192"): ("ASH", "64"),     # The Armorer — Secrecy is Our Survival
+    ("P26", "193"): ("SEC", "51"),     # Bo-Katan Kryze — Alone
+    ("P26", "194"): ("ASH", "79"),     # Koska Reeves — Warrior of Mandalore
+    ("P26", "196"): ("ASH", "135"),    # The Darksaber — Icon of Leadership
+    ("P26", "197"): ("ASH", "155"),    # Grogu — Yes. Yes. Yes.
+    ("P26", "198"): ("ASH", "172"),    # Razor Crest — Outfitted Armament
+    ("P26", "199"): ("LAW", "95"),     # Finn — Looking Closer
+    ("P26", "200"): ("LAW", "185"),    # Ben Solo — Facing the Light
+    ("P26", "201"): ("ASH", "40"),     # Poe Dameron — I'll Come Back For You
+    ("P26", "202"): ("LAW", "149"),    # Rey — Skywalker
+    ("P26", "203"): ("ASH", "33"),     # Grand Admiral Thrawn — Orchestrating His Return
+    ("P26", "204"): ("TS26", "14"),    # Yoda — Begun, the Clone War Has
+    ("P26", "205"): ("LAW", "66"),     # Tear This Ship Apart
+    ("P26", "206"): ("LAW", "88"),     # Anakin Skywalker — Prescient Podracer
+    ("P26", "207"): ("TS26", "36"),    # Tribunal — Grave of the 332nd
+    ("P26", "208"): ("ASH", "47"),     # Gar Saxon — Coveting Power
+    ("P26", "210"): ("ASH", "60"),     # Cobb Vanth — Let Me Handle This
+    ("P26", "211"): ("ASH", "63"),     # Bo-Katan's Gauntlet — Reinforce from Above
+    ("P26", "212"): ("TS26", "50"),    # General Grievous — Crush Them!
+    ("P26", "213"): ("TS26", "56"),    # Galactic Escalation
+    ("P26", "215"): ("ASH", "245"),    # Eye of Sion — Delivered from Exile
+    ("P26", "228"): ("ASH", "31"),     # Hera Syndulla — Renegade General
+    ("P26", "229"): ("ASH", "100"),    # Gallius Rax — Counselor to the Empire
+    ("P26", "230"): ("LAW", "171"),    # Stockpile
+    ("P26", "231"): ("ASH", "153"),    # Green Leader — Crynyd's Sacrifice
+    ("P26", "232"): ("LAW", "229"),    # The Master Codebreaker — High Stakes
+    ("P26", "233"): ("ASH", "219"),    # Jod Na Nawood — Keeping Secrets
+    ("P26", "234"): ("LAW", "39"),     # Latts Razzi — Deadly Whipmaster
+    ("P26", "235"): ("ASH", "53"),     # Pre Vizsla — Strong-Willed Ruler
+    ("P26", "236"): ("ASH", "158"),    # Han Solo — It'll Work
+    ("P26", "237"): ("ASH", "197"),    # Executor — Final Destruction of the Alliance
+    ("P26", "238"): ("ASH", "59"),     # Leia Organa — Vigilant for Danger
+    ("P26", "239"): ("ASH", "243"),    # Darth Vader — Meet Your Destiny
+    ("P26", "240"): ("TS26", "30"),    # Maul — One Last Lesson
+    ("P26", "244"): ("SOR", "52"),     # Redemption — Medical Frigate
+    ("P26", "245"): ("TS26", "47"),    # Take Cover
+    ("P26", "247"): ("ASH", "37"),     # Red Leader — Strike the Reactor
+    ("P26", "268"): ("ASH", "151"),    # Operation Cinder
+    ("P26", "274"): ("ASH", "34"),     # Wicket — Yub Nub!
+    ("P26", "279"): ("ASH", "28"),     # Paz Vizsla — For a Brighter Future
+    ("P26", "280"): ("LAW", "77"),     # Shadow of Stygeon Prime
+    ("P26", "281"): ("LAW", "79"),     # K-2SO — Locking the Vault
+    ("P26", "282"): ("ASH", "42"),     # Jabba the Hutt — Eminence of Tatooine
+    ("P26", "283"): ("ASH", "147"),    # The Cyborg Mech — Mysterious Threat
+    ("P26", "284"): ("ASH", "179"),    # Boba Fett's Rancor — Emotionally Complex Creature
+    ("P26", "285"): ("LAW", "54"),     # Maul — Master of the Shadow Collective
+    ("P26", "286"): ("SEC", "48"),     # Captain Rex — Into the Firefight
+    ("P26", "287"): ("LAW", "86"),     # The Stranger — No Survivors
+    ("P26", "288"): ("LAW", "214"),    # Boba Fett — For a Price
+    ("P26", "289"): ("ASH", "62"),     # The Mandalorian — Devoted Rescuer
 }
 
 

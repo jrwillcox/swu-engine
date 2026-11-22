@@ -4,7 +4,110 @@
     "deck": null,
     "set_code": "P26"
   },
-  "total_deck_cards": 67,
-  "playable_deck_cards": 67,
-  "groups": []
+  "total_deck_cards": 189,
+  "playable_deck_cards": 171,
+  "groups": [
+    {
+      "gid": "p26-set:01",
+      "seq": 1,
+      "kind": "ability",
+      "theme": "Direct damage & removal",
+      "keyword": "",
+      "file": "group_01_direct_damage_removal.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "P26_34",
+        "P26_249"
+      ],
+      "done": 0,
+      "total": 2
+    },
+    {
+      "gid": "p26-set:02",
+      "seq": 2,
+      "kind": "ability",
+      "theme": "Card advantage & disruption",
+      "keyword": "",
+      "file": "group_02_card_advantage_disruption.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "P26_266",
+        "P26_269",
+        "P26_273"
+      ],
+      "done": 0,
+      "total": 3
+    },
+    {
+      "gid": "p26-set:03",
+      "seq": 3,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_03_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "P26_246",
+        "P26_248",
+        "P26_250",
+        "P26_251",
+        "P26_264",
+        "P26_265",
+        "P26_271"
+      ],
+      "done": 0,
+      "total": 7
+    },
+    {
+      "gid": "p26-set:04",
+      "seq": 4,
+      "kind": "ability",
+      "theme": "Combat tricks, buffs & tempo",
+      "keyword": "",
+      "file": "group_04_combat_tricks_buffs_tempo.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "P26_275"
+      ],
+      "done": 0,
+      "total": 1
+    },
+    {
+      "gid": "p26-set:05",
+      "seq": 5,
+      "kind": "ability",
+      "theme": "Miscellaneous abilities",
+      "keyword": "",
+      "file": "group_05_miscellaneous_abilities.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "P26_28",
+        "P26_32",
+        "P26_241",
+        "P26_272"
+      ],
+      "done": 0,
+      "total": 4
+    },
+    {
+      "gid": "p26-set:06",
+      "seq": 6,
+      "kind": "keyword",
+      "theme": "Fortify keyword",
+      "keyword": "Fortify",
+      "file": "group_06_fortify_keyword.md",
+      "depends_on": [],
+      "new_primitives": [],
+      "cards": [
+        "P26_267"
+      ],
+      "done": 0,
+      "total": 1
+    }
+  ]
 }

@@ -41,7 +41,9 @@ PHASE2_KEYWORDS = frozenset({
 # Genuinely-unimplemented keywords: a card whose ONLY functional content is one of
 # these is a real gap.  EMPTY since ash-set:01 landed Support — every printed SWU
 # keyword is now modelled engine-side.
-PHASE3_KEYWORDS: frozenset[str] = frozenset()
+PHASE3_KEYWORDS: frozenset[str] = frozenset({
+    "Fortify",     # HMW (2026-11): upgrade attaches to your BASE, not a unit — needs engine work
+})
 
 ALL_KNOWN_KEYWORDS = PHASE2_KEYWORDS | PHASE3_KEYWORDS
 

@@ -1,0 +1,10 @@
+{
+  "deck_slug": "ashp-set",
+  "source": {
+    "deck": null,
+    "set_code": "ASHP"
+  },
+  "total_deck_cards": 20,
+  "playable_deck_cards": 20,
+  "groups": []
+}

@@ -1,7 +1,7 @@
 """Promo / anthology reprint-duplicate ability registrations.
 
 The promo, convention, and anthology sets (ASH / C24 / C25 / G25 / J25 / P25 /
-P26 / JTLP / LOFP) contain many reprint-duplicate faces (each shares a *name*
+P26 / JTLP / LOFP / ASHP / HMWP / CST) contain many reprint-duplicate faces (each shares a *name*
 with an earlier-set card but carries its own subtitle/text, so each is its own
 reprint group with no shipped-set member).  Every card registered here composes
 from EXISTING engine primitives — no new decision kind, no trigger/decision-
