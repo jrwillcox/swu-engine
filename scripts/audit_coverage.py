@@ -213,6 +213,29 @@ def _load_registry() -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
         return set(), set()
 
 
+def _require_registry(registered: set[tuple[str, str]]) -> None:
+    """Stop the audit before it writes anything if the ability registry is empty.
+
+    ``_load_registry`` returns empty sets when the card modules fail to import
+    (a broken checkout, or a Python without the project's dependencies).  The
+    audit would then label every registered card unimplemented and overwrite
+    ``docs/coverage_report.md`` with "Registered in ability registry: 0".
+    Thousands of cards are registered, so an empty registry is always a load
+    failure, never a real result."""
+    if registered:
+        return
+    try:
+        import swu.cards.sor  # noqa: F401 — re-raise the swallowed import error
+    except ImportError as exc:
+        detail = f"{type(exc).__name__}: {exc}"
+    else:
+        detail = "the card modules imported but registered nothing"
+    sys.exit(
+        "audit_coverage: the ability registry is empty, so the report would "
+        f"mark every card unimplemented ({detail}).  Run it with the project "
+        "venv from the swu-game directory.  Nothing was written.")
+
+
 # ── Classification ────────────────────────────────────────────────────────────
 
 def classify(
@@ -267,6 +290,7 @@ def is_playable(label: str) -> bool:
 def audit_deck(deck_path: Path, db_path: str) -> None:
     """Print per-deck readiness: N/M cards playable and list the gaps."""
     registered, escape_hatch = _load_registry()
+    _require_registry(registered)   # an empty registry would report every gap falsely
     cards = index_by_set_number(load_cards(db_path))
 
     import json
@@ -339,6 +363,7 @@ def main() -> None:
         return
 
     registered, escape_hatch = _load_registry()
+    _require_registry(registered)
     cards = load_cards(str(db))
 
     by_type: dict[str, list[CardRow]] = defaultdict(list)
