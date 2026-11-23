@@ -321,6 +321,29 @@ def _keywords_suppressed(state: "GameState", unit_ci: "CardInstance") -> bool:
     return False
 
 
+_RAID_RESTORE_SWAP_RESOLVING: set = set()
+
+
+def _raid_restore_swapped(state: "GameState", unit_ci: "CardInstance",
+                          keyword: Keyword) -> "Keyword | None":
+    """The keyword to read INSTEAD of ``keyword``, or None.
+
+    "For this attack, replace any Raid it has or gains with Restore, or vice versa"
+    (Asajj Ventress HMW_1) — a ``raid_restore_swap`` this_attack modifier on the
+    unit.  Raid reads the unit's RAW Restore (every source, its value included) and
+    Restore reads its raw Raid; the guard set makes that inner read the unswapped
+    one, so the two never chase each other."""
+    if keyword is not Keyword.RAID and keyword is not Keyword.RESTORE:
+        return None
+    if (id(state), unit_ci.instance_id) in _RAID_RESTORE_SWAP_RESOLVING:
+        return None
+    for mod in getattr(state, "modifiers", []):
+        if (mod.kind == "raid_restore_swap"
+                and mod.target_instance_id == unit_ci.instance_id):
+            return Keyword.RESTORE if keyword is Keyword.RAID else Keyword.RAID
+    return None
+
+
 def has_keyword(state: "GameState", unit_ci: "CardInstance", keyword: Keyword) -> bool:
     """Return True if unit_ci has keyword from any active source.
 
@@ -330,6 +353,14 @@ def has_keyword(state: "GameState", unit_ci: "CardInstance", keyword: Keyword) -
       3. Granted by an active ConstantAbility (KeywordGrant static effect)
     A keyword_revoke modifier on this unit suppresses sources 1 and 2.
     """
+    swapped = _raid_restore_swapped(state, unit_ci, keyword)
+    if swapped is not None:
+        guard = (id(state), unit_ci.instance_id)
+        _RAID_RESTORE_SWAP_RESOLVING.add(guard)
+        try:
+            return has_keyword(state, unit_ci, swapped)
+        finally:
+            _RAID_RESTORE_SWAP_RESOLVING.discard(guard)
     kw_name = keyword.value
 
     # A unit whose abilities are suppressed this phase (Mind Trick LOF_202) has NO
@@ -588,6 +619,11 @@ def _keyword_grant_value(state: "GameState", eff, source_ci) -> int:
         own = state.player_index(source_ci.owner_id)
         return sum(1 for i, ps in enumerate(state.players) if i != own
                    for u in ps.ground_arena + ps.space_arena if u.damage > 0)
+    if count == "upgrades_on_controller_base":
+        # "For each upgrade on your base, this unit … gains Restore 1" (Carrion
+        # Spike HMW_66) — the stat count's own helper, so the two halves agree.
+        from swu.engine.actions.stats import _upgrades_on_controller_base
+        return _upgrades_on_controller_base(state, source_ci)
     return 0
 
 
@@ -597,6 +633,14 @@ def keyword_value(state: "GameState", unit_ci: "CardInstance", keyword: Keyword)
     Returns 0 if the keyword is absent or has no numeric parameter.
     Multiple sources add together.
     """
+    swapped = _raid_restore_swapped(state, unit_ci, keyword)
+    if swapped is not None:  # Asajj Ventress HMW_1 — see ``_raid_restore_swapped``
+        guard = (id(state), unit_ci.instance_id)
+        _RAID_RESTORE_SWAP_RESOLVING.add(guard)
+        try:
+            return keyword_value(state, unit_ci, swapped)
+        finally:
+            _RAID_RESTORE_SWAP_RESOLVING.discard(guard)
     kw_name = keyword.value
     total = 0
 

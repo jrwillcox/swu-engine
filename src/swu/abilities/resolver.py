@@ -763,7 +763,8 @@ def _trigger_matches(
                 return False
         if (trigger.aspect or trigger.card_type or trigger.trait or trigger.unique
                 or trigger.cost_min is not None or getattr(trigger, "non_unit", False)
-                or getattr(trigger, "power_max", None) is not None):
+                or getattr(trigger, "power_max", None) is not None
+                or getattr(trigger, "cost_max", None) is not None):
             result = state.find_instance(event.instance_id)
             if result is None:
                 return False
@@ -784,6 +785,10 @@ def _trigger_matches(
             if trigger.cost_min is not None:
                 pc = getattr(played_ci.card_def, "cost", None)
                 if pc is None or pc < trigger.cost_min:
+                    return False
+            if getattr(trigger, "cost_max", None) is not None:
+                pc = getattr(played_ci.card_def, "cost", None)
+                if pc is None or pc > trigger.cost_max:
                     return False
             if trigger.aspect:
                 names = {a.name for a in (getattr(played_ci.card_def, "aspects", None) or ())}
@@ -1888,6 +1893,26 @@ def _spec_matches_ci(
             # Finn SHD_3).  Only a Fortify upgrade (HMW) sits on a base.  An
             # attached card carries its host's zone tag, so the zone answers it.
             if candidate.zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
+                return False
+        if pred == "defender_costs_more":
+            # An ATTACKER candidate whose current defender is a UNIT that costs more
+            # than it — "When a friendly unit attacks a unit that costs more than it"
+            # (Wicket HMW_14, the ``WhenUnitAttacks`` filter).  A base defender has
+            # no cost, so a base attack never matches.
+            did = event_ctx.get("defender_id")
+            dres = state.find_instance(did) if did else None
+            if dres is None or dres[1].zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
+                return False
+            if ((getattr(dres[1].card_def, "cost", 0) or 0)
+                    <= (getattr(candidate.card_def, "cost", 0) or 0)):
+                return False
+        if pred == "on_base":
+            # The inverse of ``on_unit``: an UPGRADE candidate attached to a BASE —
+            # a Fortify upgrade (Wild Space Wanderer HMW_270, "an upgrade on a
+            # base").  Read from the hosts, not the zone tag.
+            if not any(any(x.instance_id == candidate.instance_id
+                           for x in b.attached_upgrades)
+                       for _ps in state.players for b in _ps.base_zone):
                 return False
         if pred == "on_friendly_host":
             # An UPGRADE candidate whose HOST is controlled by the source's
@@ -3879,6 +3904,47 @@ def _when_played_ability_indices(state: "GameState",
         if isinstance(ability.trigger, WhenPlayed):
             out.append(idx)
     return out
+
+
+def push_borrowed_when_played(state: "GameState", source_ci: "CardInstance",
+                              lender: "CardInstance") -> bool:
+    """Re-push ``lender``'s "When Played" abilities as ``resolve_effects`` decisions
+    whose ``source_id`` is ``source_ci`` — the abilities become the SOURCE's, so
+    every "this unit" inside them means the source (Fives TS26_34 "enter play with
+    the When Played abilities of another unit"; Vernestra Rwoh HMW_48 "gains those
+    units' When Played abilities").  The lender may be anywhere — in play, or
+    already on the bottom of the deck.  Returns True when anything was pushed.
+
+    The ``fives_borrow`` event_ctx flag is a TERMINATION guard: a borrowed clause
+    that itself borrows (a second Fives) sees it and does nothing, so two borrowers
+    can never lend to each other forever."""
+    from swu.engine.decisions import PendingDecision
+    from swu.engine.events import DecisionPushed
+    controller_id = source_ci.owner_id
+    owner_idx = state.player_index(controller_id)
+    pushed = False
+    for ability_idx in reversed(_when_played_ability_indices(state, lender)):
+        state.pending_decisions.append(PendingDecision(
+            deciding_player_id=controller_id,
+            kind="resolve_effects",
+            context={
+                "set_code": lender.card_def.set_code,
+                "card_number": lender.card_def.card_number,
+                "ability_idx": ability_idx,
+                "source_id": source_ci.instance_id,
+                "effect_idx": 0,
+                "resolved_targets": {},
+                "event_ctx": {"ability_redo": True, "fives_borrow": True},
+                "after_all_player_idx": owner_idx,
+            },
+            after_resolve_player_index=owner_idx,
+        ))
+        state.event_log.append(DecisionPushed(
+            deciding_player_id=controller_id, kind="resolve_effects"))
+        pushed = True
+    if pushed:
+        state.active_player_index = owner_idx
+    return pushed
 
 
 def _schedule_ability_redo(

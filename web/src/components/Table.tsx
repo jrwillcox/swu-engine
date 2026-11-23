@@ -254,11 +254,18 @@ export function Table({ game, onToggleLog }: { game: Game; onToggleLog?: () => v
       case "cull_for_damage":
         if (ctx.stage !== "select") return null; // the damage target is on-board
         return {
-          title: ctx.pool === "hand" ? "Discard for damage" : "Defeat tokens for damage",
+          title:
+            ctx.pool === "hand"
+              ? "Discard for damage"
+              : ctx.pool === "units"
+                ? "Defeat friendly units"
+                : "Defeat tokens for damage",
           prompt:
             ctx.pool === "hand"
               ? "Discard any number of cards from your hand — you deal that many damage."
-              : "Defeat any number of your tokens — you deal that many damage.",
+              : ctx.pool === "units"
+                ? "Defeat any number of your units — exhaust 2 enemy units for each."
+                : "Defeat any number of your tokens — you deal that many damage.",
           candidates: ctxCandidates,
           pickKind: "SelectCullCard",
           finish: findFinish("FinishCull"),

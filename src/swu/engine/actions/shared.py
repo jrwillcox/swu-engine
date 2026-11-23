@@ -518,10 +518,11 @@ def _enumerate_discard_play_actions(
     # (b) Units granted a FREE per-phase replay by Second Chance SHD_53 (a
     #     per-instance permission in game_memory).  A unit re-enters play with no
     #     host and no cost; leaders can never carry the grant (Attach to a
-    #     non-leader unit), so this is Unit-only.
+    #     non-leader unit).  An EVENT can carry it too — "You may play it again
+    #     from your discard pile for free" (L3-37 HMW_215).
     free_ids = getattr(state.game_memory, "free_discard_play_this_phase", None) or set()
     for ci in ps.discard:
-        if ci.instance_id in free_ids and isinstance(ci.card_def, Unit):
+        if ci.instance_id in free_ids and isinstance(ci.card_def, (Unit, Event)):
             out.append(PlayFromDiscard(ci.instance_id, free=True))
     # (b2) Units in ANOTHER player's discard pile that this player was granted a
     #      free replay of (Stolen AT-Hauler JTL_221 "Choose an opponent.  For this

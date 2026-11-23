@@ -2348,33 +2348,8 @@ def _fives_borrow_when_played(state, source_ci, target_id, event_ctx):
     if res is None:
         return state
     _ps, lender = res
-    from swu.abilities.resolver import _when_played_ability_indices
-    from swu.engine.decisions import PendingDecision
-    from swu.engine.events import DecisionPushed
-    controller_id = source_ci.owner_id
-    owner_idx = state.player_index(controller_id)
-    pushed = False
-    for ability_idx in reversed(_when_played_ability_indices(state, lender)):
-        state.pending_decisions.append(PendingDecision(
-            deciding_player_id=controller_id,
-            kind="resolve_effects",
-            context={
-                "set_code": lender.card_def.set_code,
-                "card_number": lender.card_def.card_number,
-                "ability_idx": ability_idx,
-                "source_id": source_ci.instance_id,
-                "effect_idx": 0,
-                "resolved_targets": {},
-                "event_ctx": {"ability_redo": True, "fives_borrow": True},
-                "after_all_player_idx": owner_idx,
-            },
-            after_resolve_player_index=owner_idx,
-        ))
-        state.event_log.append(DecisionPushed(
-            deciding_player_id=controller_id, kind="resolve_effects"))
-        pushed = True
-    if pushed:
-        state.active_player_index = owner_idx
+    from swu.abilities.resolver import push_borrowed_when_played
+    push_borrowed_when_played(state, source_ci, lender)
     return state
 
 

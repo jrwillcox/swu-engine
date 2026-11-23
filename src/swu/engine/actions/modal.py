@@ -365,7 +365,8 @@ class SelectModalOption(Action):
         top = s.pending_decisions[-1]
         ctx = top.context
         if (self.option_idx not in ctx["option_indices"]
-                or self.option_idx in ctx["chosen"]):
+                or (self.option_idx in ctx["chosen"]
+                    and not ctx.get("allow_repeat"))):
             raise IllegalActionError(
                 f"option {self.option_idx} is not an available modal choice")
         ctx["chosen"].append(int(self.option_idx))
@@ -466,7 +467,13 @@ _MODAL_FUNGIBLE_MODES = {"ready_resource", "exhaust_resource", "kaytoo_damage_ba
                          "bomb_ground", "bomb_space", "exhaust_ground", "exhaust_space",
                          "create_clone_troopers_2", "create_battle_droids_3",
                          "draw_card", "create_credit_token",
+                         "attack_plus_2", "peek_hand_discard_draw",
                          *_CHOOSE_KEYWORD_MODES}
+
+# Modes that hand off to ANOTHER decision (a granted attack, a hand look): the
+# modal pops first, then the follow-up is pushed onto a clean stack.  Mon Cal
+# Cruiser HMW_232.
+_MODAL_HANDOFF_MODES = {"attack_plus_2", "peek_hand_discard_draw"}
 
 
 def _resolve_modal_mode(
@@ -474,6 +481,27 @@ def _resolve_modal_mode(
 ) -> GameState:
     """Apply a chosen modal mode to ``target`` and pop the decision (shared by the
     fungible-mode fast path in ChooseModalOption and the explicit ChooseModalTarget)."""
+    if mode in _MODAL_HANDOFF_MODES:
+        # "Attack with a unit.  It gets +2/+0 for this attack." / "Look at an
+        # opponent's hand.  You may discard a card from it.  If you do, they draw a
+        # card." (Mon Cal Cruiser HMW_232).  The proxy target is ignored; pop the
+        # modal, then push the follow-up decision.
+        s.pending_decisions.pop()
+        s.event_log.append(DecisionResolved(
+            deciding_player_id=top.deciding_player_id, kind="modal",
+            choice=("attack with a unit (+2/+0)" if mode == "attack_plus_2"
+                    else "look at an opponent's hand")))
+        src = s.find_instance(top.context.get("source_id", ""))
+        if src is not None:
+            if mode == "attack_plus_2":
+                from swu.engine.actions import push_granted_attack
+                push_granted_attack(s, src[1], power_bonus=2)
+            else:
+                from swu.engine.actions import push_name_and_discard
+                push_name_and_discard(s, src[1], optional=True, discarder_draws=True)
+        if not s.is_terminal() and not s.pending_decisions:
+            s.active_player_index = top.after_resolve_player_index
+        return s
     if mode == "ready_resource":
         target.exhausted = False
         choice = "readied a resource"
@@ -643,6 +671,18 @@ def _modal_mode_targets(
         for p in state.players:
             out2.extend(p.ground_arena + p.space_arena)
         return out2
+    if mode == "attack_plus_2":
+        # Offered while the controller has a READY unit to attack with (Mon Cal
+        # Cruiser HMW_232); the base is a throwaway proxy.
+        if any(not u.exhausted for u in ps.ground_arena + ps.space_arena):
+            return [ps.base_instance] if ps.base_instance is not None else []
+        return []
+    if mode == "peek_hand_discard_draw":
+        # Offered while the opponent holds a card (Mon Cal Cruiser HMW_232).
+        opp = state.players[1 - state.player_index(controller_id)]
+        if opp.hand and opp.base_instance is not None:
+            return [opp.base_instance]
+        return []
     if mode == "create_credit_token":
         # Creating a Credit targets nothing — the controller's own base is the
         # throwaway proxy (a pool that can never be empty), so the mode is always
@@ -955,13 +995,15 @@ def _choose_two_modal_actions(state: GameState, top) -> list["Action"]:
     yet chosen (mandatory "choose two"; no decline)."""
     ctx = top.context
     chosen = set(ctx["chosen"])
+    repeat = bool(ctx.get("allow_repeat"))
     return [SelectModalOption(i)
-            for i in ctx["option_indices"] if i not in chosen]
+            for i in ctx["option_indices"] if repeat or i not in chosen]
 
 
 def push_choose_modal(
     s: GameState, source_ci: CardInstance, *,
     option_indices: list[int], pick: int = 2, decider_id: str | None = None,
+    allow_repeat: bool = False,
 ) -> None:
     """Push a 'choose_two_modal' decision: "Choose ``pick`` of the given options,
     in any order" (the SOR aspect events).
@@ -980,10 +1022,14 @@ def push_choose_modal(
     Set it to the controller's opponent for "An opponent chooses one:" (Luke
     Skywalker LAW_80) — the say_no SOR_233 decider shift: the opponent picks the
     mode, then _resolve_choose_two_modal hands the chosen option's resolution back
-    to the controller ("You may deal 5 …" is still the controller's choice)."""
+    to the controller ("You may deal 5 …" is still the controller's choice).
+
+    ``allow_repeat`` — "Choose two.  You may choose the same option more than once"
+    (Hunter HMW_35): a chosen option stays offered, and ``pick`` is not capped by
+    the number of options."""
     controller_id = source_ci.owner_id
     owner_idx = s.player_index(controller_id)
-    pick = min(int(pick), len(option_indices))
+    pick = int(pick) if allow_repeat else min(int(pick), len(option_indices))
     if pick <= 0:
         return
     if decider_id is None:
@@ -1001,6 +1047,7 @@ def push_choose_modal(
             "option_indices": list(option_indices),
             "pick": pick,
             "chosen": [],
+            "allow_repeat": bool(allow_repeat),
         },
         after_resolve_player_index=1 - owner_idx,
     )

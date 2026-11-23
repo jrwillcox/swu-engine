@@ -5,7 +5,7 @@
     "set_code": "P26"
   },
   "total_deck_cards": 189,
-  "playable_deck_cards": 174,
+  "playable_deck_cards": 175,
   "groups": [
     {
       "gid": "p26-set:01",
@@ -58,7 +58,7 @@
         "P26_265",
         "P26_271"
       ],
-      "done": 0,
+      "done": 1,
       "total": 7
     },
     {

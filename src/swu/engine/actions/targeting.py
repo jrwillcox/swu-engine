@@ -684,7 +684,8 @@ def _each_player_defeat_targets(state: GameState, ctx: dict, player_id: str) -> 
     leader is a legal — and often the obvious — pick."""
     from swu.cards.models import Leader
     ps = state.player_by_id(player_id)
-    if ctx.get("disposition") == "spare_then_damage" or ctx.get("include_leaders"):
+    if (ctx.get("disposition") in ("spare_then_damage", "damage_chosen")
+            or ctx.get("include_leaders")):
         return [u.instance_id for u in ps.ground_arena + ps.space_arena]
     return [u.instance_id for u in ps.ground_arena + ps.space_arena
             if not isinstance(u.card_def, Leader)]
@@ -713,6 +714,10 @@ def push_each_player_defeats(
         way" — Time of Crisis LOF_177).  The choice widens to any unit they
         control (a deployed leader included), and a player with no unit is simply
         skipped — all of their (zero) units are unchosen.
+      * ``"damage_chosen"`` — deal ``damage_amount`` to each CHOSEN unit, all at
+        once ("Each player chooses a unit they control.  Deal 3 damage to each
+        chosen unit" — Wrecker HMW_263).  Any unit they control is eligible, a
+        deployed leader and the source itself included.
 
       * ``"return_then_defeat_all"`` — each player's chosen unit is RETURNED to its
         owner's hand, and then every non-leader unit still in play is defeated
@@ -767,16 +772,21 @@ def _resolve_each_player_defeats(s: GameState, top) -> GameState:
     ctx = top.context
     chosen = list(ctx.get("chosen_ids", []))
     s.pending_decisions.pop()
-    if ctx.get("disposition") == "spare_then_damage":
+    if ctx.get("disposition") in ("spare_then_damage", "damage_chosen"):
         amount = int(ctx.get("damage_amount", 0))
-        spared = set(chosen)
-        victims = [u.instance_id for p in s.players
-                   for u in p.ground_arena + p.space_arena
-                   if u.instance_id not in spared]
+        if ctx.get("disposition") == "damage_chosen":
+            victims = [tid for tid in chosen if s.find_instance(tid) is not None]
+            choice = f"dealt {amount} to chosen {chosen}"
+        else:
+            spared = set(chosen)
+            victims = [u.instance_id for p in s.players
+                       for u in p.ground_arena + p.space_arena
+                       if u.instance_id not in spared]
+            choice = f"spared {chosen}, dealt {amount} to {len(victims)} unit(s)"
         s.event_log.append(DecisionResolved(
             deciding_player_id=top.deciding_player_id,
             kind="each_player_defeats",
-            choice=f"spared {chosen}, dealt {amount} to {len(victims)} unit(s)",
+            choice=choice,
         ))
         from swu.abilities.resolver import _apply_deal_damage
         source_result = s.find_instance(ctx["source_id"])

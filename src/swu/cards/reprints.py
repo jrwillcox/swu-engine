@@ -215,6 +215,11 @@ REPRINT_ALIASES: dict[tuple[str, str], tuple[str, str]] = {
     ("P26", "249"): ("HMW", "177"),   # Adamant Ewoks
     ("HMWP", "10"): ("HMW", "156"),   # Arena Acklay
     ("HMWP", "5"): ("HMW", "84"),     # Gunga City Guard
+    # hmw-set:07–10 mirrors (2026-11-23)
+    ("HMWP", "8"): ("HMW", "122"),    # Boga
+    # hmw-set:11–13 mirrors (2026-11-23)
+    ("HMWP", "4"): ("HMW", "83"),     # Batcher
+    ("P26", "264"): ("HMW", "44"),    # Ima-Gun Di
     # Victor Leader  ->  JTL_85
     ("P25", "154"): ("JTL", "85"),
     ("P25", "164"): ("JTL", "85"),

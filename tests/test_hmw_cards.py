@@ -1570,3 +1570,1085 @@ def test_damage_ledger_is_dropped_without_an_observer_on_board(repo):
     foe = _place(state, "P1", _unit_def(name="Foe", number="52", power=1, hp=9))
     state = _attack(state, hitter, foe)
     assert state.game_memory.damage_events == []
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:07 — Direct damage & removal
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _attach_card(host, card_def, owner_id):
+    """Attach a real upgrade card to ``host`` directly (no triggers)."""
+    import uuid
+    from swu.engine.state import CardInstance
+    ci = CardInstance(instance_id=f"{owner_id}_u_{uuid.uuid4().hex[:6]}",
+                      card_def=card_def, owner_id=owner_id, zone=host.zone)
+    host.attached_upgrades.append(ci)
+    return ci
+
+
+def _arena_ids(state, pid):
+    ps = state.player_by_id(pid)
+    return {u.instance_id for u in ps.ground_arena + ps.space_arena}
+
+
+def test_HMW_249_frenzied_tri_fighters_defeats_a_cheap_upgrade(repo):
+    state = _make_state()
+    tri = _place(state, "P0", _get_card(repo, "HMW", "249"), arena="space")
+    foe = _place(state, "P1", _unit_def(name="Foe", number="51", hp=9))
+    cheap_def = _get_card(repo, "HMW", "252")                     # cost 2
+    cheap = _attach_card(foe, cheap_def, "P1")
+    pricey = _attach_card(foe, dataclasses.replace(cheap_def, cost=4), "P1")
+    state = _fire_when_played(state, tri)
+    assert _offered_targets(state) == {cheap.instance_id}
+    state = _drive(state, _accept_and_target(cheap.instance_id))
+    left = {u.instance_id for u in state.find_instance(foe.instance_id)[1].attached_upgrades}
+    assert left == {pricey.instance_id}
+
+
+class TestVillainousAmbitionHMW_252:
+
+    def _host(self, aspect):
+        from swu.cards.models import AspectPip
+        return dataclasses.replace(_unit_def(name="Host", number="51", hp=9),
+                                   aspects=(AspectPip(0, aspect, None, False),))
+
+    def test_HMW_252_villainy_host_deals_2_damage(self, repo):
+        from tests.test_sor_cards import _fire_upgrade_played
+        state = _make_state()
+        host = _place(state, "P0", self._host("Villainy"))
+        foe = _place(state, "P1", _unit_def(name="Foe", number="52", hp=9))
+        upg = _attach_card(host, _get_card(repo, "HMW", "252"), "P0")
+        state = _drive(_fire_upgrade_played(state, upg, host),
+                       _accept_and_target(foe.instance_id))
+        assert state.find_instance(foe.instance_id)[1].damage == 2
+
+    def test_HMW_252_non_villainy_host_does_nothing(self, repo):
+        from tests.test_sor_cards import _fire_upgrade_played
+        state = _make_state()
+        host = _place(state, "P0", self._host("Heroism"))
+        _place(state, "P1", _unit_def(name="Foe", number="52", hp=9))
+        upg = _attach_card(host, _get_card(repo, "HMW", "252"), "P0")
+        state = _fire_upgrade_played(state, upg, host)
+        assert not state.pending_decisions
+
+
+class TestForcedPacificationHMW_253:
+
+    def _board(self, n_enemies):
+        state = _make_state()
+        mine = [_place(state, "P0", _unit_def(name=f"Mine{i}", number=str(51 + i)))
+                for i in range(2)]
+        foes = [_place(state, "P1", _unit_def(name=f"Foe{i}", number=str(60 + i)))
+                for i in range(n_enemies)]
+        return state, mine, foes
+
+    def test_HMW_253_one_defeat_exhausts_two_chosen_enemies(self, repo):
+        from tests.test_sor_cards import _play_event_from_hand
+        from swu.engine.actions import (legal_actions, apply, SelectCullCard,
+                                        FinishCull, ChooseCullDamageTarget)
+        state, mine, foes = self._board(4)
+        state, _ = _play_event_from_hand(state, repo, "HMW", "253")
+        state = apply(state, SelectCullCard(mine[0].instance_id))
+        state = apply(state, FinishCull())
+        picks = [a for a in legal_actions(state) if isinstance(a, ChooseCullDamageTarget)]
+        assert {a.target_id for a in picks} == {f.instance_id for f in foes}
+        state = apply(state, ChooseCullDamageTarget(foes[0].instance_id))
+        state = apply(state, ChooseCullDamageTarget(foes[2].instance_id))
+        assert not state.pending_decisions
+        exhausted = {f.instance_id for f in foes
+                     if state.find_instance(f.instance_id)[1].exhausted}
+        assert exhausted == {foes[0].instance_id, foes[2].instance_id}
+        assert _arena_ids(state, "P0") == {mine[1].instance_id}
+
+    def test_HMW_253_enough_defeats_exhaust_every_enemy_unprompted(self, repo):
+        from tests.test_sor_cards import _play_event_from_hand
+        from swu.engine.actions import apply, SelectCullCard
+        state, mine, foes = self._board(3)
+        state, _ = _play_event_from_hand(state, repo, "HMW", "253")
+        state = apply(state, SelectCullCard(mine[0].instance_id))
+        state = apply(state, SelectCullCard(mine[1].instance_id))   # pool empties
+        assert not state.pending_decisions
+        assert all(state.find_instance(f.instance_id)[1].exhausted for f in foes)
+        assert not _arena_ids(state, "P0")
+
+
+def test_HMW_263_wrecker_each_player_picks_a_unit_for_3_damage(repo):
+    from swu.engine.actions import legal_actions, apply, ChooseUnitToDefeat
+    state = _make_state()
+    wrecker = _place(state, "P0", _get_card(repo, "HMW", "263"))
+    pal = _place(state, "P0", _unit_def(name="Pal", number="51", hp=9))
+    foe = _place(state, "P1", _unit_def(name="Foe", number="52", hp=9))
+    other = _place(state, "P1", _unit_def(name="Other", number="53", hp=9))
+    state = _fire_when_played(state, wrecker)
+    offered = {a.target_id for a in legal_actions(state)
+               if isinstance(a, ChooseUnitToDefeat)}
+    assert offered == {wrecker.instance_id, pal.instance_id}
+    state = apply(state, ChooseUnitToDefeat(pal.instance_id))
+    state = apply(state, ChooseUnitToDefeat(foe.instance_id))
+    dmg = {ci.instance_id: state.find_instance(ci.instance_id)[1].damage
+           for ci in (wrecker, pal, foe, other)}
+    assert dmg == {wrecker.instance_id: 0, pal.instance_id: 3,
+                   foe.instance_id: 3, other.instance_id: 0}
+
+
+def test_HMW_270_wild_space_wanderer_defeats_only_a_base_upgrade(repo):
+    state = _make_state()
+    wsw = _place(state, "P0", _get_card(repo, "HMW", "270"), arena="space")
+    pad = _attach_to_base(state, "P1", _get_card(repo, "HMW", "271"))
+    foe = _place(state, "P1", _unit_def(name="Foe", number="51", hp=9))
+    _attach_card(foe, _get_card(repo, "HMW", "252"), "P1")
+    state = _fire_when_played(state, wsw)
+    assert _offered_targets(state) == {pad.instance_id}
+    state = _drive(state, _accept_and_target(pad.instance_id))
+    assert not _base(state, "P1").attached_upgrades
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:08 — Card advantage & disruption
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _costed(name, number, cost, power=2, hp=3):
+    return dataclasses.replace(_unit_def(name=name, number=number, power=power, hp=hp),
+                               cost=cost)
+
+
+def _deck_card(state, owner_id, card_def, top=True):
+    import uuid
+    from swu.engine.state import CardInstance, Zone
+    ci = CardInstance(instance_id=f"{owner_id}_dk_{uuid.uuid4().hex[:6]}",
+                      card_def=card_def, owner_id=owner_id, zone=Zone.DECK)
+    deck = state.player_by_id(owner_id).deck
+    deck.insert(0, ci) if top else deck.append(ci)
+    return ci
+
+
+def _hand_ids(state, pid):
+    return {c.instance_id for c in state.player_by_id(pid).hand}
+
+
+class TestWicketHMW_14:
+
+    def test_HMW_14_undeployed_exhausts_to_draw_when_attacking_up(self, repo):
+        from tests.test_sor_cards import _place_leader, _fire_on_attack
+        state = _make_state()
+        _deck(state, "P0")
+        wicket = _place_leader(state, "P0", _get_leader(repo, "HMW", "14"))
+        small = _place(state, "P0", _costed("Small", "51", 1))
+        big = _place(state, "P1", _costed("Big", "52", 5))
+        before = len(state.player_by_id("P0").hand)
+        state = _drive(_fire_on_attack(state, small, big), _accept_and_target())
+        assert len(state.player_by_id("P0").hand) == before + 1
+        assert state.find_instance(wicket.instance_id)[1].exhausted
+
+    def test_HMW_14_no_offer_against_a_cheaper_unit(self, repo):
+        from tests.test_sor_cards import _place_leader, _fire_on_attack
+        state = _make_state()
+        _place_leader(state, "P0", _get_leader(repo, "HMW", "14"))
+        mid = _place(state, "P0", _costed("Mid", "51", 3))
+        cheap = _place(state, "P1", _costed("Cheap", "52", 2))
+        state = _fire_on_attack(state, mid, cheap)
+        assert not state.pending_decisions
+
+    def test_HMW_14_deployed_on_attack_draws_with_a_cheap_unit(self, repo):
+        from tests.test_sor_cards import _place_deployed_leader, _fire_on_attack
+        state = _make_state()
+        _deck(state, "P0")
+        wicket = _place_deployed_leader(state, "P0", _get_leader(repo, "HMW", "14"))
+        before = len(state.player_by_id("P0").hand)
+        assert not _drive(_fire_on_attack(state, wicket)).player_by_id("P0").hand
+        _place(state, "P0", _costed("Ewok", "51", 3))
+        state = _drive(_fire_on_attack(state, wicket))
+        assert len(state.player_by_id("P0").hand) == before + 1
+
+
+class TestMaulHMW_16:
+
+    def test_HMW_16_plays_a_unit_for_1_less_then_defeats_it_when_played_still_resolves(
+            self, repo):
+        from tests.test_sor_cards import _place_leader
+        from swu.engine.actions import apply, PlayFromHand
+        from swu.engine.actions.costs import _effective_cost
+        state = _make_state()
+        maul = _place_leader(state, "P0", _get_leader(repo, "HMW", "16"))
+        scout = _to_hand(state, "P0", _get_card(repo, "HMW", "85"))
+        upg = _deck_card(state, "P0", _get_card(repo, "HMW", "252"))
+        # Measure the full price first (``_make_state``'s base has no aspects).
+        full = _effective_cost(scout.card_def, state.player_by_id("P0"), state)
+        _give_resources(state, "P0", full - 1)
+        assert _offers_ability(state, maul.instance_id)
+        state = _use_ability(state, maul.instance_id)
+        state = _drive(apply(state, PlayFromHand(scout.instance_id)))
+        p0 = state.player_by_id("P0")
+        assert not any(not r.exhausted for r in p0.resources)   # paid exactly full - 1
+        assert scout.instance_id in {c.instance_id for c in p0.discard}
+        assert scout.instance_id not in _arena_ids(state, "P0")
+        assert upg.instance_id in _hand_ids(state, "P0")      # its When Played ran
+        assert state.find_instance(maul.instance_id)[1].exhausted
+
+    def test_HMW_16_when_deployed_replays_a_unit_defeated_this_phase(self, repo):
+        from tests.test_sor_cards import _place_leader
+        from swu.engine.actions import (legal_actions, apply, deploy_leader_as_effect,
+                                        PlayFromHand)
+        state = _make_state()
+        maul = _place_leader(state, "P0", _get_leader(repo, "HMW", "16"))
+        fallen = _discard(state, "P0", _costed("Fallen", "51", 6))
+        old = _discard(state, "P0", _costed("Old", "52", 1))
+        state.game_memory.units_defeated_this_round.add(fallen.instance_id)
+        _give_resources(state, "P0", 1)
+        state = deploy_leader_as_effect(state, maul.instance_id)
+        plays = {a.instance_id for a in legal_actions(state) if isinstance(a, PlayFromHand)}
+        assert plays == {fallen.instance_id}
+        state = apply(state, PlayFromHand(fallen.instance_id))
+        assert fallen.instance_id in _arena_ids(state, "P0")
+        assert old.instance_id in {c.instance_id for c in state.player_by_id("P0").discard}
+
+
+class TestKeeperOfSkaraNalHMW_41:
+
+    def test_HMW_41_discarding_two_copies_gives_plus_15_and_overwhelm(self, repo):
+        from tests.test_sor_cards import _fire_on_attack
+        from swu.engine.actions import compute_power
+        from swu.engine.keywords import has_keyword, Keyword
+        state = _make_state()
+        keeper_def = _get_card(repo, "HMW", "41")
+        keeper = _place(state, "P0", keeper_def)
+        copies = [_to_hand(state, "P0", keeper_def) for _ in range(2)]
+        state = _drive(_fire_on_attack(state, keeper), _accept_and_target())
+        me = state.find_instance(keeper.instance_id)[1]
+        assert compute_power(state, me) == 20
+        assert has_keyword(state, me, Keyword.OVERWHELM)
+        assert {c.instance_id for c in copies} <= {
+            c.instance_id for c in state.player_by_id("P0").discard}
+
+    def test_HMW_41_one_copy_is_not_enough(self, repo):
+        from tests.test_sor_cards import _fire_on_attack
+        state = _make_state()
+        keeper_def = _get_card(repo, "HMW", "41")
+        keeper = _place(state, "P0", keeper_def)
+        _to_hand(state, "P0", keeper_def)
+        assert not _fire_on_attack(state, keeper).pending_decisions
+
+
+def test_HMW_48_vernestra_bottoms_units_and_gains_their_when_played(repo):
+    from swu.engine.actions import (legal_actions, apply, SelectBottomDiscardCard,
+                                    FinishBottomFromDiscard)
+    state = _make_state()
+    _deck(state, "P0")
+    vern = _place(state, "P0", _get_card(repo, "HMW", "48"))
+    scout = _discard(state, "P0", _get_card(repo, "HMW", "85"))       # cost 2
+    pricey = _discard(state, "P0", _costed("Pricey", "51", 6))
+    upg = _deck_card(state, "P0", _get_card(repo, "HMW", "252"))
+    state = _fire_when_played(state, vern)
+    offered = {a.instance_id for a in legal_actions(state)
+               if isinstance(a, SelectBottomDiscardCard)}
+    assert offered == {scout.instance_id}
+    state = apply(state, SelectBottomDiscardCard(scout.instance_id))
+    state = _drive(apply(state, FinishBottomFromDiscard()))
+    p0 = state.player_by_id("P0")
+    assert p0.deck[-1].instance_id == scout.instance_id or scout.instance_id in {
+        c.instance_id for c in p0.deck}
+    assert upg.instance_id in _hand_ids(state, "P0")         # Scout's search, as Vernestra
+    assert pricey.instance_id in {c.instance_id for c in p0.discard}
+
+
+def test_HMW_61_krennic_draws_only_with_an_upgraded_base(repo):
+    from tests.test_sor_cards import _fire_on_attack
+    state = _make_state()
+    _deck(state, "P0")
+    krennic = _place(state, "P0", _get_card(repo, "HMW", "61"))
+    assert not _drive(_fire_on_attack(state, krennic)).player_by_id("P0").hand
+    _attach_to_base(state, "P0", _get_card(repo, "HMW", "271"))
+    assert len(_drive(_fire_on_attack(state, krennic)).player_by_id("P0").hand) == 1
+
+
+def test_HMW_85_remote_scout_draws_an_upgrade_from_the_top_8(repo):
+    state = _make_state()
+    _deck(state, "P0", n=7)
+    upg = _deck_card(state, "P0", _get_card(repo, "HMW", "252"), top=False)  # 8th card
+    scout = _place(state, "P0", _get_card(repo, "HMW", "85"))
+    state = _drive(_fire_when_played(state, scout))
+    assert _hand_ids(state, "P0") == {upg.instance_id}
+
+
+def test_HMW_101_trust_yourself_shields_a_unit_and_draws_from_top_3(repo):
+    from tests.test_sor_cards import _play_event_from_hand
+    from swu.engine.keywords import shields_on
+    state = _make_state()
+    _deck(state, "P0", n=5)
+    ally = _place(state, "P0", _unit_def(name="Ally", number="51"))
+    top3 = [c.instance_id for c in state.player_by_id("P0").deck[:3]]
+    state, _ = _play_event_from_hand(state, repo, "HMW", "101")
+    state = _drive(state, _accept_and_target(ally.instance_id))
+    assert shields_on(state.find_instance(ally.instance_id)[1]) == 1
+    hand = _hand_ids(state, "P0")
+    assert len(hand) == 1 and hand <= set(top3)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:09 — Card advantage & disruption
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def test_HMW_103_disposable_b1_draws_after_another_friendly_entry(repo):
+    state = _make_state()
+    _deck(state, "P0")
+    b1 = _place(state, "P0", _get_card(repo, "HMW", "103"))
+    state.game_memory.units_played_this_phase.add(b1.instance_id)
+    assert not _drive(_fire_when_played(state, b1)).player_by_id("P0").hand
+    pal = _place(state, "P0", _unit_def(name="Pal", number="51"))
+    state.game_memory.units_played_this_phase.add(pal.instance_id)
+    foe = _place(state, "P1", _unit_def(name="Foe", number="52"))
+    state.game_memory.units_played_this_phase.add(foe.instance_id)
+    assert len(_drive(_fire_when_played(state, b1)).player_by_id("P0").hand) == 1
+
+
+class TestBogaHMW_122:
+
+    def _board(self, repo):
+        state = _make_state()
+        boga = _place(state, "P0", _get_card(repo, "HMW", "122"))
+        ally = _discard(state, "P0", _costed("Ally", "51", 3))
+        tank = _discard(state, "P0", dataclasses.replace(
+            _costed("Tank", "52", 3), traits=("Vehicle",)))
+        twin = _discard(state, "P0", _get_card(repo, "HMW", "122"))
+        return state, boga, ally, tank, twin
+
+    def test_HMW_122_when_played_grants_a_discounted_replay_this_phase(self, repo):
+        from swu.engine.actions import (legal_actions, apply, SelectBottomDiscardCard,
+                                        FinishBottomFromDiscard, PlayFromDiscard)
+        state, boga, ally, tank, twin = self._board(repo)
+        state = _fire_when_played(state, boga)
+        offered = {a.instance_id for a in legal_actions(state)
+                   if isinstance(a, SelectBottomDiscardCard)}
+        assert offered == {ally.instance_id}
+        state = apply(state, SelectBottomDiscardCard(ally.instance_id))
+        if state.pending_decisions:
+            state = apply(state, FinishBottomFromDiscard())
+        assert ally.instance_id in {c.instance_id for c in state.player_by_id("P0").discard}
+        _give_resources(state, "P0", 2)                       # 3 - 1
+        state.active_player_index = 0                         # P0's next action
+        plays =[a for a in legal_actions(state) if isinstance(a, PlayFromDiscard)]
+        assert [(a.instance_id, a.discount) for a in plays] == [(ally.instance_id, 1)]
+        state = apply(state, plays[0])
+        assert ally.instance_id in _arena_ids(state, "P0")
+
+    def test_HMW_122_when_defeated_also_chooses(self, repo):
+        from tests.test_sor_cards import _fire_when_defeated
+        from swu.engine.actions import legal_actions, SelectBottomDiscardCard
+        state, boga, ally, _tank, _twin = self._board(repo)
+        state = _fire_when_defeated(state, boga)
+        offered = {a.instance_id for a in legal_actions(state)
+                   if isinstance(a, SelectBottomDiscardCard)}
+        assert offered == {ally.instance_id}
+
+
+class TestLocalSupportHMW_148:
+
+    def _play(self, repo, top_traits):
+        from tests.test_sor_cards import _fire_upgrade_played
+        state = _make_state()
+        host = _place(state, "P0", _unit_def(name="Trooper", number="51"))  # Trooper
+        top = _deck_card(state, "P0", dataclasses.replace(
+            _unit_def(name="Top", number="52"), traits=top_traits))
+        upg = _attach_card(host, _get_card(repo, "HMW", "148"), "P0")
+        return _drive(_fire_upgrade_played(state, upg, host)), top
+
+    def test_HMW_148_draws_a_top_card_sharing_a_trait(self, repo):
+        state, top = self._play(repo, ("Trooper", "Rebel"))
+        assert _hand_ids(state, "P0") == {top.instance_id}
+
+    def test_HMW_148_leaves_an_unrelated_top_card(self, repo):
+        state, top = self._play(repo, ("Creature",))
+        assert not state.player_by_id("P0").hand
+        assert state.player_by_id("P0").deck[0].instance_id == top.instance_id
+
+
+def test_HMW_173_rebel_operation_discounts_per_rebel_unit_and_leader(repo):
+    from tests.test_sor_cards import _place_leader
+    from swu.engine.actions.costs import _play_cost
+    state = _make_state()
+    op = _to_hand(state, "P0", _get_card(repo, "HMW", "173"))
+    ps = state.player_by_id("P0")
+    # The leader's aspects move the base price, so measure with it already placed.
+    leader = _place_leader(state, "P0", _get_leader(repo, "HMW", "14"))     # an Ewok
+    _place(state, "P0", _unit_def(name="Imp", number="52"))           # not Rebel
+    base_cost = _play_cost(state, op, ps)
+    _place(state, "P0", dataclasses.replace(_unit_def(name="Reb", number="51"),
+                                            traits=("Rebel",)))
+    leader.card_def = dataclasses.replace(leader.card_def, traits=("Rebel",))
+    assert base_cost - _play_cost(state, op, ps) == 2
+    _deck(state, "P0")
+    from tests.test_sor_cards import _play_event_from_hand
+    state, _ = _play_event_from_hand(state, repo, "HMW", "173")
+    assert len(state.player_by_id("P0").hand) >= 2
+
+
+class TestStormchaserHMW_180:
+
+    def _disaster(self):
+        return dataclasses.replace(_unit_def(name="Quake", number="51"),
+                                   traits=("Disaster",))
+
+    def test_HMW_180_draws_with_a_disaster_in_the_discard(self, repo):
+        state = _make_state()
+        _deck(state, "P0")
+        sc = _place(state, "P0", _get_card(repo, "HMW", "180"))
+        _discard(state, "P0", self._disaster())
+        assert len(_drive(_fire_when_played(state, sc)).player_by_id("P0").hand) == 1
+
+    def test_HMW_180_no_draw_without_a_disaster(self, repo):
+        state = _make_state()
+        _deck(state, "P0")
+        sc = _place(state, "P0", _get_card(repo, "HMW", "180"))
+        assert not _drive(_fire_when_played(state, sc)).player_by_id("P0").hand
+
+
+def test_HMW_189_neebray_manta_draws_three(repo):
+    state = _make_state()
+    _deck(state, "P0")
+    manta = _place(state, "P0", _get_card(repo, "HMW", "189"), arena="space")
+    assert len(_drive(_fire_when_played(state, manta)).player_by_id("P0").hand) == 3
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:10 — Card advantage & disruption
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def test_HMW_204_nightbrother_replays_a_discard_unit_ready_for_3_less(repo):
+    from swu.engine.actions import legal_actions, apply, PlayFromHand
+    state = _make_state()
+    nb = _place(state, "P0", _get_card(repo, "HMW", "204"), arena="space")
+    fallen = _discard(state, "P0", _costed("Fallen", "51", 5))
+    _give_resources(state, "P0", 2)
+    state = _fire_when_played(state, nb)
+    plays = {a.instance_id for a in legal_actions(state) if isinstance(a, PlayFromHand)}
+    assert plays == {fallen.instance_id}
+    state = apply(state, PlayFromHand(fallen.instance_id))
+    unit = state.find_instance(fallen.instance_id)[1]
+    assert fallen.instance_id in _arena_ids(state, "P0") and not unit.exhausted
+
+
+class TestL337HMW_215:
+
+    def _play_cheap_event(self, repo):
+        from tests.test_sor_cards import _play_event_from_hand
+        state = _make_state()
+        _place(state, "P0", _get_card(repo, "HMW", "215"))
+        for i in range(2):
+            _place(state, "P1", _costed(f"Big{i}", str(51 + i), 6, power=6, hp=9))
+        state, evt = _play_event_from_hand(state, repo, "HMW", "238")   # cost 2
+        return _drive(state, _accept_and_target()), evt
+
+    def test_HMW_215_grants_a_free_replay_once_per_phase(self, repo):
+        from swu.engine.actions import legal_actions, apply, PlayFromDiscard
+        state, evt = self._play_cheap_event(repo)
+        state.active_player_index = 0
+        replay = [a for a in legal_actions(state)
+                  if isinstance(a, PlayFromDiscard) and a.instance_id == evt.instance_id]
+        assert replay and replay[0].free
+        state = _drive(apply(state, replay[0]), _accept_and_target())
+        assert len(state.player_by_id("P1").hand) == 2             # both bounced
+        assert evt.instance_id not in state.game_memory.free_discard_play_this_phase
+
+    def test_HMW_215_ignores_an_expensive_event(self, repo):
+        from tests.test_sor_cards import _play_event_from_hand
+        state = _make_state()
+        _place(state, "P0", _get_card(repo, "HMW", "215"))
+        _deck(state, "P0")
+        _place(state, "P0", dataclasses.replace(_unit_def(name="Reb", number="51"),
+                                                traits=("Rebel",)))
+        state, _ = _play_event_from_hand(state, repo, "HMW", "173")   # costs 4
+        state = _drive(state)
+        assert not state.game_memory.free_discard_play_this_phase
+
+
+class TestSandcrawlerSalesTeamHMW_222:
+
+    def test_HMW_222_tatooine_base_bounces_a_cheap_upgrade(self, repo):
+        state = _make_state()
+        _set_base(state, repo, "P0", "19")                        # Tatooine
+        sst = _place(state, "P0", _get_card(repo, "HMW", "222"))
+        foe = _place(state, "P1", _unit_def(name="Foe", number="51", hp=9))
+        upg = _attach_card(foe, _get_card(repo, "HMW", "252"), "P1")
+        state = _drive(_fire_when_played(state, sst), _accept_and_target(upg.instance_id))
+        assert upg.instance_id in _hand_ids(state, "P1")
+
+    def test_HMW_222_no_offer_without_tatooine(self, repo):
+        state = _make_state()
+        sst = _place(state, "P0", _get_card(repo, "HMW", "222"))
+        foe = _place(state, "P1", _unit_def(name="Foe", number="51", hp=9))
+        _attach_card(foe, _get_card(repo, "HMW", "252"), "P1")
+        assert not _fire_when_played(state, sst).pending_decisions
+
+
+class TestMonCalCruiserHMW_232:
+
+    def _modes(self, repo, opp_hand=True):
+        from swu.engine.actions import legal_actions, ChooseModalOption
+        state = _make_state()
+        mc = _place(state, "P0", _get_card(repo, "HMW", "232"), arena="space")
+        _place(state, "P0", _unit_def(name="Striker", number="51"))
+        _place(state, "P1", _unit_def(name="Foe", number="52", hp=9))
+        if opp_hand:
+            _to_hand(state, "P1", _unit_def(name="Secret", number="53"))
+        state = _to_decision(_fire_when_played(state, mc), "modal")
+        return state, {a.mode for a in legal_actions(state)
+                       if isinstance(a, ChooseModalOption)}
+
+    def test_HMW_232_attack_mode_grants_an_attack(self, repo):
+        from swu.engine.actions import apply, ChooseModalOption
+        state, modes = self._modes(repo)
+        assert modes == {"attack_plus_2", "peek_hand_discard_draw"}
+        state = apply(state, ChooseModalOption("attack_plus_2"))
+        assert state.pending_decisions[-1].kind == "granted_attack"
+
+    def test_HMW_232_peek_mode_looks_at_the_hand(self, repo):
+        from swu.engine.actions import apply, ChooseModalOption
+        state, _ = self._modes(repo)
+        state = apply(state, ChooseModalOption("peek_hand_discard_draw"))
+        assert state.pending_decisions[-1].kind == "name_and_discard"
+
+    def test_HMW_232_peek_mode_needs_an_opponent_hand(self, repo):
+        _, modes = self._modes(repo, opp_hand=False)
+        assert modes == {"attack_plus_2"}
+
+
+def test_HMW_236_booma_ball_returns_a_cheap_upgrade(repo):
+    from tests.test_sor_cards import _fire_upgrade_played
+    state = _make_state()
+    host = _place(state, "P0", _unit_def(name="Host", number="51", hp=9))
+    foe = _place(state, "P1", _unit_def(name="Foe", number="52", hp=9))
+    target = _attach_card(foe, _get_card(repo, "HMW", "252"), "P1")
+    ball = _attach_card(host, _get_card(repo, "HMW", "236"), "P0")
+    state = _drive(_fire_upgrade_played(state, ball, host),
+                   _accept_and_target(target.instance_id))
+    assert target.instance_id in _hand_ids(state, "P1")
+
+
+def test_HMW_238_exploit_confidence_bounces_a_6_power_non_leader(repo):
+    from tests.test_sor_cards import _play_event_from_hand
+    state = _make_state()
+    big = _place(state, "P1", _costed("Big", "51", 6, power=6, hp=9))
+    _place(state, "P1", _costed("Mid", "52", 5, power=5, hp=9))
+    state, _ = _play_event_from_hand(state, repo, "HMW", "238")
+    from swu.engine.actions import legal_actions, ChooseTarget
+    offered = {a.target_id for a in legal_actions(state) if isinstance(a, ChooseTarget)}
+    assert offered <= {big.instance_id}
+    state = _drive(state, _accept_and_target(big.instance_id))
+    assert big.instance_id in _hand_ids(state, "P1")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:11 — the HMW leader block + Hunter
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _with_aspect(card_def, *aspects):
+    from swu.cards.models import AspectPip
+    pips = tuple(AspectPip(position=i, name=a, color="", is_duplicate=False)
+                 for i, a in enumerate(aspects))
+    return dataclasses.replace(card_def, aspects=pips)
+
+
+def _kw_unit(name, number, text, keywords, power=2, hp=5):
+    return dataclasses.replace(_unit_def(name=name, number=number, power=power, hp=hp),
+                               text=text, keywords=keywords)
+
+
+def _resource_card(state, owner_id, card_def, exhausted=False):
+    import uuid
+    from swu.engine.state import CardInstance, Zone
+    ci = CardInstance(instance_id=f"{owner_id}_res_{uuid.uuid4().hex[:6]}",
+                      card_def=card_def, owner_id=owner_id, zone=Zone.RESOURCES)
+    ci.face_down = True
+    ci.exhausted = exhausted
+    state.player_by_id(owner_id).resources.append(ci)
+    return ci
+
+
+def _step_to(state, kind, picker=None, limit=10):
+    """Resolve decisions (via ``picker``, else the first legal action) until one of
+    ``kind`` is on top; fails if the stack drains first."""
+    from swu.engine.actions import legal_actions, apply
+    for _ in range(limit):
+        assert state.pending_decisions, f"stack drained before a {kind} decision"
+        if state.pending_decisions[-1].kind == kind:
+            return state
+        acts = legal_actions(state)
+        state = apply(state, (picker(state, acts) if picker else None) or acts[0])
+    raise AssertionError(f"no {kind} decision within {limit} steps")
+
+
+def _granted_attack(state, attacker_id, defender_id=None):
+    from swu.engine.actions import apply, AttackWithUnit
+    assert state.pending_decisions[-1].kind == "granted_attack"
+    return apply(state, AttackWithUnit(attacker_id, defender_id))
+
+
+class TestAsajjVentressHMW_1:
+
+    def test_HMW_1_raid_becomes_restore_for_the_attack(self, repo):
+        state = _make_state()
+        asajj = _place_leader(state, "P0", _get_leader(repo, "HMW", "1"))
+        raider = _place(state, "P0", _kw_unit("Raider", "51", "Raid 2", ("Raid",)))
+        _base(state, "P0").damage = 5
+        state = _granted_attack(_use_ability(state, asajj.instance_id),
+                                raider.instance_id)
+        state = _drive(state)
+        assert _base(state, "P1").damage == 2       # no Raid bonus
+        assert _base(state, "P0").damage == 3       # Restore 2 instead
+
+    def test_HMW_1_restore_becomes_raid_and_the_swap_lapses(self, repo):
+        from swu.engine.keywords import Keyword, has_keyword
+        state = _make_state()
+        asajj = _place_leader(state, "P0", _get_leader(repo, "HMW", "1"))
+        healer = _place(state, "P0", _kw_unit("Healer", "51", "Restore 2", ("Restore",)))
+        _base(state, "P0").damage = 5
+        state = _drive(_granted_attack(_use_ability(state, asajj.instance_id),
+                                       healer.instance_id))
+        assert _base(state, "P1").damage == 4       # Raid 2
+        assert _base(state, "P0").damage == 5       # no Restore
+        unit = state.find_instance(healer.instance_id)[1]
+        assert has_keyword(state, unit, Keyword.RESTORE)
+        assert not has_keyword(state, unit, Keyword.RAID)
+
+    def test_HMW_1_deployed_has_restore_2_and_a_free_action(self, repo):
+        from tests.test_sor_cards import _place_deployed_leader
+        from swu.engine.keywords import Keyword, has_keyword, keyword_value
+        state = _make_state()
+        asajj = _place_deployed_leader(state, "P0", _get_leader(repo, "HMW", "1"))
+        assert keyword_value(state, asajj, Keyword.RESTORE) == 2
+        assert not has_keyword(state, asajj, Keyword.RAID)
+        assert _offers_ability(state, asajj.instance_id)
+        asajj.exhausted = True                       # nothing left able to attack
+        assert not _offers_ability(state, asajj.instance_id)
+
+
+class TestOmegaHMW_6:
+
+    def test_HMW_6_attack_with_a_heroism_unit_that_gains_grit(self, repo):
+        state = _make_state()
+        _give_resources(state, "P0", 1)
+        omega = _place_leader(state, "P0", _get_leader(repo, "HMW", "6"))
+        hero = _place(state, "P0", _with_aspect(_unit_def("Hero", "51", power=1, hp=9),
+                                                "Heroism"))
+        hero.damage = 3
+        plain = _place(state, "P0", _unit_def("Plain", "52"))
+        state = _use_ability(state, omega.instance_id)
+        from swu.engine.actions import legal_actions, AttackWithUnit
+        attackers = {a.attacker_id for a in legal_actions(state)
+                     if isinstance(a, AttackWithUnit)}
+        assert hero.instance_id in attackers and plain.instance_id not in attackers
+        state = _drive(_granted_attack(state, hero.instance_id))
+        assert _base(state, "P1").damage == 4       # 1 power + Grit 3
+
+    def test_HMW_6_deployed_gives_other_heroism_units_grit(self, repo):
+        from tests.test_sor_cards import _place_deployed_leader
+        from swu.engine.keywords import Keyword, has_keyword
+        state = _make_state()
+        omega = _place_deployed_leader(state, "P0", _get_leader(repo, "HMW", "6"))
+        hero = _place(state, "P0", _with_aspect(_unit_def("Hero", "51"), "Heroism"))
+        plain = _place(state, "P0", _unit_def("Plain", "52"))
+        assert has_keyword(state, hero, Keyword.GRIT)
+        assert not has_keyword(state, plain, Keyword.GRIT)
+        assert not has_keyword(state, omega, Keyword.GRIT)
+
+
+class TestDarthVaderHMW_7:
+
+    def test_HMW_7_undeployed_gives_cost_3_plus_units_raid_1(self, repo):
+        from swu.engine.keywords import Keyword, keyword_value
+        state = _make_state()
+        _place_leader(state, "P0", _get_leader(repo, "HMW", "7"))
+        big = _place(state, "P0", _costed("Big", "51", 3))
+        small = _place(state, "P0", _costed("Small", "52", 2))
+        assert keyword_value(state, big, Keyword.RAID) == 1
+        assert keyword_value(state, small, Keyword.RAID) == 0
+
+    def test_HMW_7_deployed_raid_1_and_aura_for_others(self, repo):
+        from tests.test_sor_cards import _place_deployed_leader
+        from swu.engine.keywords import Keyword, keyword_value
+        state = _make_state()
+        vader = _place_deployed_leader(state, "P0", _get_leader(repo, "HMW", "7"))
+        big = _place(state, "P0", _costed("Big", "51", 4))
+        assert keyword_value(state, vader, Keyword.RAID) == 1   # not 2
+        assert keyword_value(state, big, Keyword.RAID) == 1
+
+
+class TestGeneralGrievousHMW_8:
+
+    def test_HMW_8_plays_two_units_one_at_a_time(self, repo):
+        from swu.engine.actions import apply, legal_actions, PlayFromHand
+        state = _make_state()
+        _give_resources(state, "P0", 4)
+        gg = _place_leader(state, "P0", _get_leader(repo, "HMW", "8"))
+        a = _to_hand(state, "P0", _costed("A", "51", 2))
+        b = _to_hand(state, "P0", _costed("B", "52", 2))
+        state = _use_ability(state, gg.instance_id)
+        state = apply(state, PlayFromHand(a.instance_id))
+        nxt = [x for x in legal_actions(state) if isinstance(x, PlayFromHand)]
+        assert [x.instance_id for x in nxt] == [b.instance_id]
+        state = _drive(apply(state, nxt[0]))
+        assert {a.instance_id, b.instance_id} <= _arena_ids(state, "P0")
+
+    def test_HMW_8_deployed_gets_plus_3_with_more_units(self, repo):
+        from tests.test_sor_cards import _place_deployed_leader
+        from swu.engine.actions import compute_power
+        state = _make_state()
+        gg = _place_deployed_leader(state, "P0", _get_leader(repo, "HMW", "8"))
+        foe = _place(state, "P1", _unit_def("Foe", "52"))
+        assert compute_power(state, gg) == 3
+        state.player_by_id("P1").ground_arena.remove(foe)
+        assert compute_power(state, gg) == 6
+
+
+class TestChewbaccaHMW_9:
+
+    def test_HMW_9_exhausted_unit_attacks_but_not_a_base(self, repo):
+        from swu.engine.actions import legal_actions, AttackWithUnit
+        state = _make_state()
+        _give_resources(state, "P0", 2)
+        chewie = _place_leader(state, "P0", _get_leader(repo, "HMW", "9"))
+        tired = _place(state, "P0", _unit_def("Tired", "51"))
+        tired.exhausted = True
+        foe = _place(state, "P1", _unit_def("Foe", "52", hp=9))
+        state = _use_ability(state, chewie.instance_id)
+        opts = {(a.attacker_id, a.defender_id) for a in legal_actions(state)
+                if isinstance(a, AttackWithUnit)}
+        assert opts == {(tired.instance_id, foe.instance_id)}
+
+    def test_HMW_9_deployed_action_once_each_round(self, repo):
+        from tests.test_sor_cards import _place_deployed_leader
+        state = _make_state()
+        chewie = _place_deployed_leader(state, "P0", _get_leader(repo, "HMW", "9"))
+        tired = _place(state, "P0", _unit_def("Tired", "51"))
+        tired.exhausted = True
+        foe = _place(state, "P1", _unit_def("Foe", "52", hp=9))
+        state = _drive(_granted_attack(_use_ability(state, chewie.instance_id),
+                                       tired.instance_id, foe.instance_id))
+        state.active_player_index = 0
+        assert not _offers_ability(state, chewie.instance_id)
+
+
+class TestOshaHMW_17:
+
+    def _setup(self, repo, villain_cost=2):
+        from tests.test_sor_cards import _place_deployed_leader
+        state = _make_state()
+        osha = _place_deployed_leader(state, "P0", _get_leader(repo, "HMW", "17"))
+        villain = _resource_card(state, "P0", _with_aspect(
+            _costed("Villain", "51", villain_cost), "Villainy"))
+        _give_resources(state, "P0", 2)
+        return state, osha, villain
+
+    def test_HMW_17_plays_a_villainy_resource_then_may_resource(self, repo):
+        from swu.engine.actions import apply, PlayFromHand, SelectHandCardToResource
+        state, osha, villain = self._setup(repo)
+        spare = _to_hand(state, "P0", _unit_def("Spare", "53"))
+        state = _use_ability(state, osha.instance_id)
+        # Villainy penalty (+2) waived: cost 2 from the two OTHER resources.
+        state = apply(state, PlayFromHand(villain.instance_id))
+        assert villain.instance_id in _arena_ids(state, "P0")
+        ps = state.player_by_id("P0")
+        assert all(r.exhausted for r in ps.resources)
+        assert state.pending_decisions[-1].kind == "resource_from_hand"
+        state = apply(state, SelectHandCardToResource(spare.instance_id))
+        res = next(r for r in state.player_by_id("P0").resources
+                   if r.instance_id == spare.instance_id)
+        assert res.exhausted
+
+    def test_HMW_17_not_offered_when_the_card_cannot_pay_for_itself(self, repo):
+        # Cost 3 vs 2 OTHER ready resources: the ready Villain can't fund itself.
+        state, osha, villain = self._setup(repo, villain_cost=3)
+        assert not _offers_ability(state, osha.instance_id)
+        villain.exhausted = True       # same budget, so still nothing playable
+        assert not _offers_ability(state, osha.instance_id)
+        _give_resources(state, "P0", 1)
+        assert _offers_ability(state, osha.instance_id)
+
+    def test_HMW_17_not_offered_without_a_villainy_resource(self, repo):
+        from tests.test_sor_cards import _place_deployed_leader
+        state = _make_state()
+        osha = _place_deployed_leader(state, "P0", _get_leader(repo, "HMW", "17"))
+        _resource_card(state, "P0", _costed("Neutral", "51", 1))
+        _give_resources(state, "P0", 3)
+        assert not _offers_ability(state, osha.instance_id)
+
+    def test_HMW_17_undeployed_needs_a_defeated_heroism_unit(self, repo):
+        state = _make_state()
+        osha = _place_leader(state, "P0", _get_leader(repo, "HMW", "17"))
+        _resource_card(state, "P0", _with_aspect(_costed("Villain", "51", 2), "Villainy"))
+        _give_resources(state, "P0", 2)
+        assert not _offers_ability(state, osha.instance_id)
+        state.game_memory.defeated_aspects_this_round["P0"] = ["Heroism"]
+        assert _offers_ability(state, osha.instance_id)
+
+
+class TestHunterHMW_35:
+
+    def _modal(self, repo):
+        state = _make_state()
+        hunter = _place(state, "P0", _get_card(repo, "HMW", "35"))
+        hunter.exhausted = True
+        state = _fire_when_played(state, hunter)
+        assert state.pending_decisions[-1].kind == "choose_two_modal"
+        return state, hunter
+
+    def test_HMW_35_the_same_option_twice_gives_two_shields(self, repo):
+        from swu.engine.actions import apply, SelectModalOption
+        state, hunter = self._modal(repo)
+        state = apply(state, SelectModalOption(1))
+        state = apply(state, SelectModalOption(1))   # repeat is allowed
+        state = _drive(state, _accept_and_target(hunter.instance_id))
+        unit = state.find_instance(hunter.instance_id)[1]
+        assert sum(1 for u in unit.attached_upgrades
+                   if u.card_def.name == "Shield") == 2
+
+    def test_HMW_35_attack_option_lets_exhausted_hunter_hit_a_unit(self, repo):
+        from swu.engine.actions import apply, legal_actions, SelectModalOption, AttackWithUnit
+        state, hunter = self._modal(repo)
+        foe = _place(state, "P1", _unit_def("Foe", "52", hp=9))
+        state = apply(state, SelectModalOption(2))
+        state = apply(state, SelectModalOption(2))
+        for _ in range(5):
+            if not state.pending_decisions:
+                break
+            if state.pending_decisions[-1].kind == "granted_attack":
+                break
+            state = apply(state, legal_actions(state)[0])
+        opts = {(a.attacker_id, a.defender_id) for a in legal_actions(state)
+                if isinstance(a, AttackWithUnit)}
+        assert opts == {(hunter.instance_id, foe.instance_id)}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:12 — Combat tricks, buffs & tempo
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def test_HMW_39_mother_talzin_gives_others_restore_1(repo):
+    from swu.engine.keywords import Keyword, keyword_value
+    state = _make_state()
+    talzin = _place(state, "P0", _get_card(repo, "HMW", "39"))
+    other = _place(state, "P0", _unit_def("Other", "51"))
+    foe = _place(state, "P1", _unit_def("Foe", "52"))
+    assert keyword_value(state, other, Keyword.RESTORE) == 1
+    assert keyword_value(state, foe, Keyword.RESTORE) == 0
+    assert keyword_value(state, talzin, Keyword.RESTORE) == 0
+    assert keyword_value(state, talzin, Keyword.RAID) == 1
+
+
+class TestDookuHMW_42:
+
+    def test_HMW_42_readies_a_unit_and_heals_its_cost(self, repo):
+        state = _make_state()
+        dooku = _place(state, "P0", _get_card(repo, "HMW", "42"))
+        tired = _place(state, "P0", _costed("Tired", "51", 4))
+        tired.exhausted = True
+        _base(state, "P0").damage = 10
+        state = _drive(_fire_when_played(state, dooku),
+                       _accept_and_target(tired.instance_id))
+        assert not state.find_instance(tired.instance_id)[1].exhausted
+        assert _base(state, "P0").damage == 6
+
+    def test_HMW_42_ready_units_are_not_offered(self, repo):
+        state = _make_state()
+        dooku = _place(state, "P0", _get_card(repo, "HMW", "42"))
+        _place(state, "P0", _costed("Fresh", "51", 4))
+        state = _fire_when_played(state, dooku)
+        assert not state.pending_decisions
+
+
+class TestImaGunDiHMW_44:
+
+    def _defeat(self, repo, my_res, their_res):
+        from tests.test_sor_cards import _defeat_and_fire
+        state = _make_state()
+        _give_resources(state, "P0", my_res)
+        _give_resources(state, "P1", their_res)
+        _deck(state, "P0")
+        spare = _to_hand(state, "P0", _unit_def("Spare", "53"))
+        ima = _place(state, "P0", _get_card(repo, "HMW", "44"))
+        return _defeat_and_fire(state, ima, "P0"), spare
+
+    def test_HMW_44_behind_on_resources_ramps_two(self, repo):
+        from swu.engine.actions import apply, legal_actions, SelectHandCardToResource
+        state, spare = self._defeat(repo, 2, 4)
+        state = _step_to(state, "resource_from_hand")
+        state = apply(state, SelectHandCardToResource(spare.instance_id))
+        while state.pending_decisions:
+            state = apply(state, legal_actions(state)[0])
+        res = state.player_by_id("P0").resources
+        assert len(res) == 4
+        assert all(r.exhausted for r in res[-2:])
+
+    def test_HMW_44_no_ramp_when_not_behind(self, repo):
+        state, _ = self._defeat(repo, 4, 4)
+        state = _drive(state, _accept_and_target())
+        assert len(state.player_by_id("P0").resources) == 4
+
+
+class TestLowAltitudeCombatHMW_50:
+
+    def test_HMW_50_moves_a_space_unit_then_offers_a_ground_attack(self, repo):
+        from tests.test_sor_cards import _play_event_from_hand
+        from swu.engine.actions import legal_actions, AttackWithUnit
+        state = _make_state()
+        flyer = _place(state, "P1", _unit_def("Flyer", "51"), arena="space")
+        mine = _place(state, "P0", _unit_def("Mine", "52", power=2))
+        state, _ = _play_event_from_hand(state, repo, "HMW", "50")
+        state = _step_to(state, "granted_attack", _accept_and_target(flyer.instance_id))
+        p1 = state.player_by_id("P1")
+        assert flyer.instance_id in {u.instance_id for u in p1.ground_arena}
+        assert not p1.space_arena
+        opts = {(a.attacker_id, a.defender_id) for a in legal_actions(state)
+                if isinstance(a, AttackWithUnit)}
+        assert (mine.instance_id, flyer.instance_id) in opts
+        state = _granted_attack(state, mine.instance_id, flyer.instance_id)
+        state = _drive(state)
+        assert flyer.instance_id in {c.instance_id for c in  # 4 damage ≥ 3 HP
+                                     state.player_by_id("P1").discard}
+
+    def test_HMW_50_no_space_unit_no_attack(self, repo):
+        from tests.test_sor_cards import _play_event_from_hand
+        state = _make_state()
+        _place(state, "P0", _unit_def("Mine", "52"))
+        state, _ = _play_event_from_hand(state, repo, "HMW", "50")
+        state = _drive(state)
+        assert not state.pending_decisions
+        assert _base(state, "P1").damage == 0
+
+
+def test_HMW_52_a_koba_gives_plus_2_for_the_phase(repo):
+    from swu.engine.actions import compute_power
+    state = _make_state()
+    akoba = _place(state, "P0", _get_card(repo, "HMW", "52"))
+    ally = _place(state, "P0", _unit_def("Ally", "51", power=2))
+    state = _drive(_fire_when_played(state, akoba), _accept_and_target(ally.instance_id))
+    assert compute_power(state, state.find_instance(ally.instance_id)[1]) == 4
+
+
+class TestYodaHMW_56:
+
+    def test_HMW_56_returns_to_deck_top_and_heals(self, repo):
+        from tests.test_sor_cards import _defeat_and_fire
+        state = _make_state()
+        _deck(state, "P0")
+        yoda = _place(state, "P0", _get_card(repo, "HMW", "56"))
+        _base(state, "P0").damage = 5
+        state = _defeat_and_fire(state, yoda, "P0")
+        state = _drive(state, _accept_and_target(_base(state, "P0").instance_id))
+        ps = state.player_by_id("P0")
+        assert ps.deck[0].instance_id == yoda.instance_id
+        assert yoda.instance_id not in {c.instance_id for c in ps.discard}
+        assert _base(state, "P0").damage == 3
+
+
+class TestRhoMedicalShuttleHMW_63:
+
+    def test_HMW_63_when_played_heals_another_unit(self, repo):
+        state = _make_state()
+        rho = _place(state, "P0", _get_card(repo, "HMW", "63"))
+        rho.damage = 1
+        hurt = _place(state, "P0", _unit_def("Hurt", "51", hp=5))
+        hurt.damage = 2
+        state = _fire_when_played(state, rho)
+        from swu.engine.actions import legal_actions, ChooseTarget
+        state = _drive(state, lambda s, acts: next(
+            (a for a in acts if type(a).__name__ == "AcceptTrigger"), None))
+        offered = {a.target_id for a in legal_actions(state) if isinstance(a, ChooseTarget)}
+        assert rho.instance_id not in offered
+        state = _drive(state, _accept_and_target(hurt.instance_id))
+        assert state.find_instance(hurt.instance_id)[1].damage == 1
+
+    def test_HMW_63_on_attack_heals_a_base(self, repo):
+        from tests.test_sor_cards import _fire_on_attack
+        state = _make_state()
+        rho = _place(state, "P0", _get_card(repo, "HMW", "63"))
+        _base(state, "P0").damage = 3
+        state = _drive(_fire_on_attack(state, rho),
+                       _accept_and_target(_base(state, "P0").instance_id))
+        assert _base(state, "P0").damage == 2
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:13 — Combat tricks, buffs & tempo
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def test_HMW_66_carrion_spike_scales_with_base_upgrades(repo):
+    from swu.engine.actions import compute_power
+    from swu.engine.keywords import Keyword, has_keyword, keyword_value
+    state = _make_state()
+    spike = _place(state, "P0", _get_card(repo, "HMW", "66"), arena="space")
+    assert compute_power(state, spike) == 3
+    assert keyword_value(state, spike, Keyword.RESTORE) == 0
+    _attach_to_base(state, "P0", _get_card(repo, "HMW", "37"))
+    _attach_to_base(state, "P0", _get_card(repo, "HMW", "95"))
+    _attach_to_base(state, "P1", _get_card(repo, "HMW", "70"))   # enemy base: no
+    assert compute_power(state, spike) == 5
+    assert keyword_value(state, spike, Keyword.RESTORE) == 2
+    assert has_keyword(state, spike, Keyword.SHIELDED)
+
+
+def test_HMW_72_grand_army_marine_shields_a_friendly_gungan(repo):
+    from swu.engine.actions import legal_actions, ChooseTarget
+    state = _make_state()
+    marine = _place(state, "P0", _get_card(repo, "HMW", "72"))
+    _place(state, "P0", _unit_def("Trooper", "51"))
+    state = _fire_when_played(state, marine)
+    offered = {a.target_id for a in legal_actions(state) if isinstance(a, ChooseTarget)}
+    assert offered <= {marine.instance_id}
+    state = _drive(state, _accept_and_target(marine.instance_id))
+    unit = state.find_instance(marine.instance_id)[1]
+    assert any(u.card_def.name == "Shield" for u in unit.attached_upgrades)
+
+
+def test_HMW_73_peppi_bow_gets_plus_1_plus_1_while_upgraded(repo):
+    from swu.engine.actions import compute_power, compute_hp
+    from swu.engine.tokens import attach_token
+    state = _make_state()
+    peppi = _place(state, "P0", _get_card(repo, "HMW", "73"))
+    assert (compute_power(state, peppi), compute_hp(state, peppi)) == (2, 3)
+    attach_token(state, state.player_by_id("P0"), peppi, "Shield")
+    assert (compute_power(state, peppi), compute_hp(state, peppi)) == (3, 4)
+
+
+def test_HMW_74_yord_fandar_sentinel_at_15_base_damage(repo):
+    from swu.engine.keywords import Keyword, has_keyword
+    state = _make_state()
+    yord = _place(state, "P0", _get_card(repo, "HMW", "74"))
+    assert not has_keyword(state, yord, Keyword.SENTINEL)
+    _base(state, "P1").damage = 15                   # EITHER base counts
+    assert has_keyword(state, yord, Keyword.SENTINEL)
+
+
+def test_HMW_80_fambaa_shields_each_unshielded_friendly_ground_unit(repo):
+    from swu.engine.tokens import attach_token
+    state = _make_state()
+    fambaa = _place(state, "P0", _get_card(repo, "HMW", "80"))
+    bare = _place(state, "P0", _unit_def("Bare", "51"))
+    shielded = _place(state, "P0", _unit_def("Shielded", "52"))
+    attach_token(state, state.player_by_id("P0"), shielded, "Shield")
+    flyer = _place(state, "P0", _unit_def("Flyer", "53"), arena="space")
+    foe = _place(state, "P1", _unit_def("Foe", "54"))
+    state = _drive(_fire_when_played(state, fambaa))
+
+    def shields(ci):
+        unit = state.find_instance(ci.instance_id)[1]
+        return sum(1 for u in unit.attached_upgrades if u.card_def.name == "Shield")
+    assert (shields(fambaa), shields(bare), shields(shielded),
+            shields(flyer), shields(foe)) == (1, 1, 1, 0, 0)
+
+
+def test_HMW_83_batcher_gets_plus_1_while_defending(repo):
+    from swu.engine.actions import apply, AttackWithUnit
+    state = _make_state()
+    batcher = _place(state, "P0", _get_card(repo, "HMW", "83"))
+    foe = _place(state, "P1", _unit_def("Foe", "51", power=1, hp=9))
+    state.active_player_index = 1
+    state = _drive(apply(state, AttackWithUnit(foe.instance_id, batcher.instance_id)))
+    assert state.find_instance(foe.instance_id)[1].damage == 3   # 2 + 1

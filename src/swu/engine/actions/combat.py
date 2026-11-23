@@ -270,6 +270,18 @@ class AttackWithUnit(Action):
             # lapses with the ordinary this_attack sweep.  Landed BEFORE the combat
             # pipeline runs, so a borrowed Raid/Overwhelm/Saboteur and a borrowed
             # "On Attack" trigger are all live from the declare step.
+            # "For this attack, replace any Raid it has or gains with Restore, or
+            # vice versa" (Asajj Ventress HMW_1) — read by the keyword layer, so it
+            # covers every source of either keyword, granted mid-attack included.
+            if gctx.get("swap_raid_restore"):
+                s.modifiers.append(Modifier(
+                    modifier_id=s.alloc_modifier_id(),
+                    source_instance_id=source_id,
+                    target_instance_id=attacker.instance_id,
+                    kind="raid_restore_swap",
+                    value={},
+                    duration="this_attack",
+                ))
             lender_id = gctx.get("borrow_lender_id") or source_id
             if gctx.get("borrow_abilities") and lender_id != attacker.instance_id:
                 s.modifiers.append(Modifier(
@@ -2471,6 +2483,7 @@ def push_granted_attack(
     defender_suppress_abilities: bool = False,
     borrow_abilities: bool = False,
     borrow_lender_id: Optional[str] = None,
+    swap_raid_restore: bool = False,
 ) -> None:
     """Push a 'granted_attack' decision: the source's controller attacks with a
     unit that gets a bonus for that attack (e.g. Surprise Strike, Shoot First,
@@ -2621,6 +2634,10 @@ def push_granted_attack(
         attacker).  DOCUMENTED NARROWING: constant and activated abilities are not
         borrowed — they are read by scans keyed on the card in the arena, and only
         the keyword and trigger layers have a per-instance seam a duration can ride.
+    swap_raid_restore
+        "For this attack, replace any Raid it has or gains with Restore, or vice
+        versa" (Asajj Ventress HMW_1) — a ``raid_restore_swap`` this_attack modifier
+        on the attacker, read at the top of ``has_keyword`` / ``keyword_value``.
 
     The decision is presented to the controller as AttackWithUnit options;
     resolving one applies the bonus (this-attack) and runs combat.  If the
@@ -2688,6 +2705,7 @@ def push_granted_attack(
             # abilities for the duration of the attack (see the modifier landed at
             # the AttackWithUnit site).
             "borrow_abilities": bool(borrow_abilities),
+            "swap_raid_restore": bool(swap_raid_restore),
             # The lender, when it is NOT the source — "this unit gains the
             # DISCARDED unit's abilities for this attack" (Improvised Identity
             # ASH_230), a lender sitting in the discard pile.  Default: the source
