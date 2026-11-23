@@ -1019,6 +1019,8 @@ def _cull_pool(state: GameState, ctx: dict) -> list[CardInstance]:
     chosen = set(ctx.get("chosen", ()))
     if ctx["pool"] == "hand":
         pool = list(ps.hand)
+    elif ctx["pool"] == "units":  # every friendly unit, a deployed leader included
+        pool = list(ps.ground_arena + ps.space_arena)
     else:  # "tokens" — token units in the arenas plus token upgrades on them
         from swu.cards.models import TokenUnit, TokenUpgrade
         pool = []
@@ -1057,11 +1059,13 @@ def push_cull_for_damage(
     target_arena: Optional[str] = None,
     allow_base: bool = False,
     then_modal: Optional[list[str]] = None,
+    exhaust_enemy_per: int = 0,
 ) -> None:
     """Push a 'cull_for_damage' decision (Darth Vader LAW_11, Han Solo LAW_17).
 
-    ``pool`` is ``"hand"`` (discard cards from your hand) or ``"tokens"`` (defeat
-    friendly tokens — token units and token upgrades alike).  ``min_count`` /
+    ``pool`` is ``"hand"`` (discard cards from your hand), ``"tokens"`` (defeat
+    friendly tokens — token units and token upgrades alike) or ``"units"`` (defeat
+    any friendly units, a deployed leader included).  ``min_count`` /
     ``max_count`` bound the "any number" (``None`` = the whole pool); a
     ``min_count`` of 1 makes it a cost with no decline.  Pushed only when the pool
     can meet ``min_count`` AND a damage target exists — culling for nothing is
@@ -1072,7 +1076,16 @@ def push_cull_for_damage(
     modal resolves on a clean stack ("Epic Action [defeat a friendly token]: Give an
     Experience or Shield token to a unit, or create a Credit token" — Alliance
     Outpost LAW_19).  With it set the damage-target stage is skipped and the
-    damage-target push guard does not apply, since nothing is being damaged."""
+    damage-target push guard does not apply, since nothing is being damaged.
+
+    ``exhaust_enemy_per`` likewise REPLACES the damage: for each card culled that
+    actually left play, the controller exhausts that many enemy units ("Defeat any
+    number of friendly units.  For each friendly unit defeated this way, exhaust 2
+    enemy units" — Forced Pacification HMW_253).  The picks are an ``"exhaust"``
+    stage of this same decision, re-pushed after the pop and answered with
+    ``ChooseCullDamageTarget`` (one distinct READY enemy unit each — exhausting an
+    already-exhausted unit does nothing, so it is never offered).  When the count
+    covers every candidate they are all exhausted without a prompt."""
     controller_id = source_ci.owner_id
     ctx = {
         "source_id": source_ci.instance_id,
@@ -1086,11 +1099,13 @@ def push_cull_for_damage(
         "target_arena": target_arena,
         "allow_base": bool(allow_base),
         "then_modal": list(then_modal) if then_modal else None,
+        "exhaust_enemy_per": int(exhaust_enemy_per),
     }
     available = _cull_pool(s, ctx)
     if len(available) < max(1, int(min_count)):
         return  # nothing to cull — fizzle cleanly, no prompt
-    if not then_modal and not _cull_damage_targets(s, ctx):
+    if (not then_modal and not exhaust_enemy_per
+            and not _cull_damage_targets(s, ctx)):
         return  # nothing to hit — fizzle cleanly, no prompt
     ctx["candidates"] = _candidate_card_views(
         s, [ci.instance_id for ci in available])
@@ -1111,6 +1126,8 @@ def _cull_for_damage_actions(state: GameState, top) -> list["Action"]:
     ctx = top.context
     if ctx.get("stage") == "target":
         return [ChooseCullDamageTarget(t) for t in _cull_damage_targets(state, ctx)]
+    if ctx.get("stage") == "exhaust":
+        return [ChooseCullDamageTarget(t) for t in _cull_exhaust_targets(state, ctx)]
     acts: list[Action] = []
     cap = ctx.get("max_count")
     if cap is None or len(ctx["chosen"]) < int(cap):
@@ -1152,6 +1169,15 @@ def _resolve_cull_for_damage(
         from swu.abilities.resolver import _apply_defeat_unit
         for cid in chosen:
             _apply_defeat_unit(s, cid)
+    # ``exhaust_enemy_per``: "for each friendly unit defeated THIS WAY" — counted
+    # against the arenas (a defeated leader goes back to its base zone, and a
+    # defeated token ceases to exist, so ``find_instance`` alone would mislead).
+    per = int(ctx.get("exhaust_enemy_per", 0) or 0)
+    if per and not s.is_terminal():
+        in_arena = {u.instance_id for p in s.players
+                    for u in p.ground_arena + p.space_arena}
+        defeated = sum(1 for cid in chosen if cid not in in_arena)
+        _start_cull_exhaust(s, top, per * defeated)
     if target_id is not None and amount > 0:
         from swu.abilities.resolver import _apply_deal_damage
         source_result = s.find_instance(ctx["source_id"])
@@ -1223,10 +1249,78 @@ def _advance_cull_to_target(s: GameState, top) -> GameState:
     ctx = top.context
     ctx["stage"] = "target"
     # A ``then_modal`` cull has no damage stage at all — the cull IS the cost and
-    # the modal is the payoff (Alliance Outpost LAW_19).
-    if (ctx.get("then_modal") or not ctx["chosen"]
-            or not _cull_damage_targets(s, ctx)):
+    # the modal is the payoff (Alliance Outpost LAW_19); nor does an
+    # ``exhaust_enemy_per`` one (Forced Pacification HMW_253).
+    if (ctx.get("then_modal") or ctx.get("exhaust_enemy_per")
+            or not ctx["chosen"] or not _cull_damage_targets(s, ctx)):
         return _resolve_cull_for_damage(s, top, None)
+    return s
+
+
+def _cull_exhaust_targets(state: GameState, ctx: dict) -> list[str]:
+    """The ``"exhaust"`` stage's candidates (Forced Pacification HMW_253): READY
+    enemy units an exhaust from this source can reach (``_target_protected`` — "can't
+    be exhausted by enemy card abilities", LOF_40).  A picked unit is now exhausted,
+    so it drops out on its own: the picks are distinct by construction."""
+    from swu.abilities.resolver import _target_protected
+    src = state.find_instance(ctx["source_id"])
+    source_ci = src[1] if src is not None else None
+    return [u.instance_id for p in state.players
+            if p.player_id != ctx["controller_id"]
+            for u in p.ground_arena + p.space_arena
+            if not u.exhausted
+            and not _target_protected(state, u.instance_id, source_ci, "exhaust")]
+
+
+def _start_cull_exhaust(s: GameState, top, count: int) -> None:
+    """Exhaust ``count`` enemy units for an ``exhaust_enemy_per`` cull (the
+    original decision has already been popped).  Enough to cover every candidate →
+    exhaust them all with no prompt; otherwise re-push this decision kind at its
+    ``"exhaust"`` stage, one ``ChooseCullDamageTarget`` per unit."""
+    ctx = {
+        "source_id": top.context["source_id"],
+        "controller_id": top.context["controller_id"],
+        "stage": "exhaust",
+        "pool": top.context["pool"],
+        "chosen": [],
+        "remaining": int(count),
+    }
+    cands = _cull_exhaust_targets(s, ctx)
+    if count <= 0 or not cands:
+        return
+    if count >= len(cands):
+        for tid in cands:
+            s.find_instance(tid)[1].exhausted = True
+        return
+    controller_id = ctx["controller_id"]
+    s.pending_decisions.append(PendingDecision(
+        deciding_player_id=controller_id,
+        kind="cull_for_damage",
+        context=ctx,
+        after_resolve_player_index=top.after_resolve_player_index,
+    ))
+    s.active_player_index = s.player_index(controller_id)
+    s.event_log.append(DecisionPushed(
+        deciding_player_id=controller_id, kind="cull_for_damage"))
+
+
+def _apply_cull_exhaust_pick(s: GameState, top, target_id: str) -> GameState:
+    """Exhaust one picked enemy unit; pop the decision once the count is spent or
+    no ready enemy unit is left."""
+    ctx = top.context
+    s.find_instance(target_id)[1].exhausted = True
+    ctx["chosen"].append(target_id)
+    ctx["remaining"] = int(ctx["remaining"]) - 1
+    if ctx["remaining"] > 0 and _cull_exhaust_targets(s, ctx):
+        return s
+    s.pending_decisions.pop()
+    s.event_log.append(DecisionResolved(
+        deciding_player_id=top.deciding_player_id,
+        kind="cull_for_damage",
+        choice=f"exhausted {ctx['chosen']}",
+    ))
+    if not s.is_terminal() and not s.pending_decisions:
+        s.active_player_index = top.after_resolve_player_index
     return s
 
 
@@ -1243,6 +1337,10 @@ class ChooseCullDamageTarget(Action):
         s = copy.deepcopy(state)
         top = s.pending_decisions[-1]
         ctx = top.context
+        if ctx.get("stage") == "exhaust":
+            if self.target_id not in _cull_exhaust_targets(s, ctx):
+                raise IllegalActionError(f"{self.target_id} is not a legal exhaust target")
+            return _apply_cull_exhaust_pick(s, top, self.target_id)
         if ctx.get("stage") != "target":
             raise IllegalActionError("cull_for_damage is not at the target stage")
         if self.target_id not in _cull_damage_targets(s, ctx):

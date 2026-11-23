@@ -60,7 +60,7 @@ from swu.engine.actions.zones import (
     _apply_put_on_deck, _attach_upgrade, _draw_cards, _eligible_upgrade_targets, _put_unit_in_play, _resolve_event_ability, _upgrade_target_spec,
 )
 from swu.engine.actions.shared import (
-    _candidate_card_views, spend_force_token,
+    _candidate_card_views, _resource_top_of_deck, spend_force_token,
 )
 from swu.engine.actions.combat import (
     note_hand_or_deck_discard, push_granted_attack, push_select_token,
@@ -1523,7 +1523,9 @@ class SelectHandCardToResource(Action):
         ps.hand.remove(card)
         card.zone = Zone.RESOURCES
         card.face_down = True
-        card.exhausted = False
+        # TS26_12 prints "…and ready it"; a plain "resource a card" (Osha HMW_17)
+        # enters exhausted.
+        card.exhausted = bool(ctx.get("enters_exhausted"))
         ps.resources.append(card)
         s.event_log.append(CardResourced(
             player_id=ps.player_id,
@@ -1574,6 +1576,14 @@ def _resolve_resource_from_hand(s: GameState) -> None:
         pid = ctx["controller_id"]
         led = s.game_memory.defeat_resources_at_regroup
         led[pid] = int(led.get(pid, 0)) + placed
+    if placed and ctx.get("then_resource_deck_top"):
+        # "If you do, resource the top card of your deck" (Ima-Gun Di HMW_44) —
+        # exhausted, like every ability-made resource (Resupply SOR_126's note).
+        ps = s.player_by_id(ctx["controller_id"])
+        before = len(ps.resources)
+        _resource_top_of_deck(s, ps)
+        if len(ps.resources) > before:
+            ps.resources[-1].exhausted = True
     if not s.is_terminal() and not s.pending_decisions:
         s.active_player_index = top.after_resolve_player_index
 
@@ -1581,10 +1591,13 @@ def _resolve_resource_from_hand(s: GameState) -> None:
 def push_resource_from_hand(
     s: GameState, source_ci: CardInstance, *, count: int,
     then_defeat_resources_at_regroup: bool = False,
+    enters_exhausted: bool = False,
+    then_resource_deck_top: bool = False,
 ) -> None:
     """Push a 'resource_from_hand' decision: "You may resource up to ``count`` cards
     from your hand, each entering READY" (Sundari Palace TS26_12, whose count is the
-    controller's friendly leader units).
+    controller's friendly leader units).  ``enters_exhausted`` is the plain "you may
+    resource a card from your hand" (Osha HMW_17), which has no "and ready it".
 
     Always "up to" — ``FinishResourceFromHand`` is offered from the start, since the
     printed clause is a per-leader "you may" and ramping is a real cost (the card you
@@ -1606,6 +1619,8 @@ def push_resource_from_hand(
             "placed": 0,
             "then_defeat_resources_at_regroup": bool(
                 then_defeat_resources_at_regroup),
+            "enters_exhausted": bool(enters_exhausted),
+            "then_resource_deck_top": bool(then_resource_deck_top),
         },
         # Using the ability is an action, so the seat passes once it settles (the
         # bottom_from_hand convention).

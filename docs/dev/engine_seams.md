@@ -45,15 +45,23 @@ adding one; `granted_attack` and `play_from_hand` take many options:
   or `(name, value)`), `bonus_trait`, `bonus_if_defender_unit`,
   `bonus_if_odd_cost_diff_from`, `then_defeat_attacker` (Heroic Sacrifice SOR_150),
   and `defender_power_bonus`/`defender_hp_bonus`, a `this_attack` debuff on the chosen
-  defender (Jyn Erso SOR_18).
+  defender (Jyn Erso SOR_18), and `swap_raid_restore` (a `raid_restore_swap`
+  modifier read at the top of `has_keyword`/`keyword_value`; Asajj Ventress HMW_1).
 - **`play_from_hand`:** `trait`, `enters_ready`, `then_opponents_ready`,
   `cost_reduction`, `then_damage`, `cost_max`, `grant_keyword`, `free`, `aspect`,
   `exclude_aspect`, `from_discard`, `ignore_aspect_penalty`, `defeat_at_regroup`,
   `grant_keyword_if_credit_spent`, `then_self_base_damage_cost` (Galactic Ambition
   SOR_235), `eligible_ids` (restricts the choice, e.g. to discard cards),
-  `then_defeat_ids` (Consolidation of Power TWI_89), and `cost_reduction_if_trait`, a
+  `then_defeat_ids` (Consolidation of Power TWI_89), `then_defeat_played` (the played
+  unit itself, beneath its When Played triggers; Maul HMW_16), and `cost_reduction_if_trait`, a
   `(trait, reduction)` pair that replaces `cost_reduction` for a card with that trait
-  (Palpatine's Return SHD_94; applied by `_play_reduction_for`).
+  (Palpatine's Return SHD_94; applied by `_play_reduction_for`), `resources_of`
+  (another player's — or your own — resource row; LAW_66, Osha HMW_17) and
+  `waive_aspect` (every penalty pip of one aspect, Heroism/Villainy included; HMW_17).
+  Ability-made resources enter EXHAUSTED (Resupply SOR_126's ruling):
+  `push_resource_from_hand(enters_exhausted=, then_resource_deck_top=)` (HMW_17,
+  Ima-Gun Di HMW_44). `push_choose_modal(allow_repeat=True)` lets one option be picked
+  twice (Hunter HMW_35).
 
 | Kind | Models | Example |
 |---|---|---|
@@ -88,7 +96,7 @@ adding one; `granted_attack` and `play_from_hand` take many options:
 | `pay_resources_for_tokens` | "Pay up to N resources; get a token for each" | Curious Flock LOF_255 |
 | `use_force` | "You may use the Force for a bonus" (`decline_penalty`) | Impossible Escape LOF_218 |
 | `discard_unit_damage` | "Put a unit from your discard on the bottom of your deck; deal damage equal to its power" | Sarlacc LAW_163 |
-| `cull_for_damage` | "Give up any number of your own cards (hand or tokens); deal that much damage" | Vader LAW_11, Han LAW_17 |
+| `cull_for_damage` | "Give up any number of your own cards (hand, tokens or `pool="units"`); deal that much damage" — or, with `exhaust_enemy_per`, exhaust that many enemy units per card (an `"exhaust"` stage) | Vader LAW_11, Han LAW_17, Forced Pacification HMW_253 |
 | `reveal_play_credit` | "Reveal the top card; a player may play it free; the other gets credits" | Vermillion LAW_215 |
 | `per_exploit_damage` | "For each exploited unit, deal its power to an enemy" | Count Dooku TWI_138 |
 | `assign_indirect_damage` | "Deal N indirect damage" (the receiver assigns it; shields don't apply) | First Order Stormtrooper JTL_132 |

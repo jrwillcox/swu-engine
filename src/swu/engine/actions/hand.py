@@ -55,7 +55,7 @@ from swu.engine.actions.dispatch import (
     register_decisions,
 )
 from swu.engine.actions.costs import (
-    _affordable_with_credits, _effective_cost, _event_aspect_waiver, _exhaust_resources, _ignorable_aspect_penalty, _pay_play_cost, _piloting_cost, _piloting_discount_entry, _play_cost, _play_reduction_for, _smuggle_cost, _usable_credits,
+    _affordable_with_credits, _aspect_penalty, _effective_cost, _event_aspect_waiver, _exhaust_resources, _ignorable_aspect_penalty, _pay_play_cost, _piloting_cost, _piloting_discount_entry, _play_cost, _play_reduction_for, _smuggle_cost, _usable_credits,
 )
 from swu.engine.actions.zones import (
     _apply_capture, _attach_upgrade, _draw_cards, _eligible_upgrade_targets, _find_in_arenas, _put_unit_in_play, _resolve_event_ability,
@@ -140,6 +140,8 @@ class PlayFromHand(Action):
             ctx.get("cost_reduction_if_trait"))
         if bool(ctx.get("ignore_aspect_penalty")):
             cost_reduction += _ignorable_aspect_penalty(ci.card_def, deciding_ps, s)
+        cost_reduction += _waived_aspect_penalty(
+            ci.card_def, deciding_ps, s, ctx.get("waive_aspect"))
         if bool(ctx.get("free")):
             cost = 0
         else:
@@ -238,6 +240,13 @@ class PlayFromHand(Action):
         for _cid in (ctx.get("then_defeat_ids") or ()):
             if s.find_instance(_cid) is not None:
                 _apply_defeat_unit_by_id(s, _cid)
+        # "Then, defeat it" (Maul HMW_16): the played unit itself, once it is in
+        # play and its play event has fired — its When Played triggers are already
+        # pushed, so they resolve AFTER the defeat, as the card's reminder says.
+        if bool(ctx.get("then_defeat_played")) and not s.is_terminal():
+            if any(u.instance_id == ci.instance_id
+                   for u in deciding_ps.ground_arena + deciding_ps.space_arena):
+                _apply_defeat_unit_by_id(s, ci.instance_id)
 
         # "It gains Hidden … Give an Experience token and a Shield token to IT"
         # (Three Lessons LOF_225) — choice-free tokens on the just-played unit, and
@@ -896,7 +905,21 @@ def _play_from_hand_candidates(
         exclude_aspect=ctx.get("exclude_aspect"),
         cost_reduction_if_trait=ctx.get("cost_reduction_if_trait"),
         shares_keyword_with_id=ctx.get("shares_keyword_with_id"),
-        resources_of=ctx.get("resources_of"))
+        resources_of=ctx.get("resources_of"),
+        waive_aspect=ctx.get("waive_aspect"))
+
+
+def _waived_aspect_penalty(card, ps: PlayerState, state: GameState,
+                           aspect: Optional[str]) -> int:
+    """The penalty ``card``'s ``aspect`` pips alone add — "ignoring its Villainy
+    aspect penalties" (Osha HMW_17).  Every unmatched pip of that one aspect, so
+    unlike ``ignore_aspect_penalty`` (Daimyo's Palace LAW_20) it can waive Heroism
+    or Villainy and more than one pip."""
+    if not aspect:
+        return 0
+    pips = tuple(a.name for a in (getattr(card, "aspects", None) or ())
+                 if a.name == aspect)
+    return _aspect_penalty(pips, ps, state)
 
 
 def _playable_units_from_hand(
@@ -909,6 +932,7 @@ def _playable_units_from_hand(
     cost_reduction_if_trait=None,
     shares_keyword_with_id: Optional[str] = None,
     resources_of: Optional[str] = None,
+    waive_aspect: Optional[str] = None,
 ) -> list[CardInstance]:
     """Units in ``ps``'s hand that match ``trait`` (if given) and are currently
     affordable at their effective cost, less ``cost_reduction`` (floored at 0).
@@ -975,11 +999,19 @@ def _playable_units_from_hand(
                                                  cost_reduction_if_trait)
             reduction = base_reduction + (
                 _ignorable_aspect_penalty(cd, ps, state) if ignore_aspect_penalty else 0)
+            reduction += _waived_aspect_penalty(cd, ps, state, waive_aspect)
+            # A card played out of its player's OWN resource row (Osha HMW_17)
+            # leaves it before the cost is paid, so if it was ready it cannot help
+            # pay for itself.
+            available = ps.available_resources
+            if (resources_of == ps.player_id and zone is ps.resources
+                    and not ci.exhausted):
+                available -= 1
             # Credits can cover a shortfall when paying the played unit's cost
             # (jabba-the-hutt:07), so they count toward affordability here too.
             if free or (
                     max(0, _effective_cost(cd, ps, state) - reduction)
-                    <= ps.available_resources + _usable_credits(state, ps)):
+                    <= available + _usable_credits(state, ps)):
                 out.append(ci)
     return out
 
@@ -1047,6 +1079,8 @@ def push_play_from_hand(
     then_owner_resources_deck_top: bool = False,
     repeat_max: int = 0,
     up_to: bool = False,
+    then_defeat_played: bool = False,
+    waive_aspect: Optional[str] = None,
 ) -> None:
     """Push a 'play_from_hand' decision: the source's controller plays a unit
     (matching ``trait`` if given) from hand, paying its cost (Admiral Ozzel).
@@ -1125,6 +1159,10 @@ def push_play_from_hand(
         pile" (Unnatural Life TWI_189, computed from
         ``game_memory.units_defeated_this_round`` at push time and stored as a list
         in the decision context).
+    waive_aspect
+        Ignore every penalty pip of this ONE aspect ("ignoring its Villainy aspect
+        penalties" — Osha HMW_17, with ``resources_of`` = the controller's own id
+        to play out of their own resource row).
     then_self_base_damage_cost
         After the unit enters play, deal damage to the CONTROLLER's own base equal
         to the played unit's **printed** cost — "Play a … unit from your hand for
@@ -1146,7 +1184,8 @@ def push_play_from_hand(
         aspect=aspect, free=free, include_discard=from_discard,
         ignore_aspect_penalty=ignore_aspect_penalty, exclude_aspect=exclude_aspect,
         eligible_ids=eligible_ids, cost_reduction_if_trait=cost_reduction_if_trait,
-        shares_keyword_with_id=shares_keyword_with_id, resources_of=resources_of)
+        shares_keyword_with_id=shares_keyword_with_id, resources_of=resources_of,
+        waive_aspect=waive_aspect)
     if candidates:
         # Candidates sitting in the DISCARD pile are not clickable board subjects
         # in the web client (the discard is a non-interactive pile), so surface
@@ -1231,6 +1270,12 @@ def push_play_from_hand(
                 # that damage" (Shien Flurry LOF_220) — a ONE-SHOT damage_prevention
                 # modifier on the played unit.
                 "then_prevent_next_damage": int(then_prevent_next_damage),
+                # "Play a unit from your hand … Then, defeat it.  (When Played
+                # abilities resolve after the unit is defeated.)" (Maul HMW_16) —
+                # the played unit itself is defeated straight after it enters play,
+                # beneath its own When Played triggers.
+                "then_defeat_played": bool(then_defeat_played),
+                "waive_aspect": waive_aspect,
             },
             after_resolve_player_index=after_idx,
         )

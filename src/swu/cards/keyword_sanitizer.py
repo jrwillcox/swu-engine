@@ -137,8 +137,11 @@ def _is_reference_only(text: str, kw: str) -> bool:
     occurrences = list(re.finditer(r"\b" + re.escape(kw) + r"\b", text, re.IGNORECASE))
     if not occurrences:
         return False
+    # "…with K" and "any K it has or gains" (Asajj Ventress HMW_1: "replace any
+    # Raid it has or gains with Restore, or vice versa") both name a keyword OTHER
+    # units carry.
     ref_spans = {(m.end() - len(kw), m.end())
-                 for m in re.finditer(r"\bwith\s+" + re.escape(kw) + r"\b",
+                 for m in re.finditer(r"\b(?:with|any)\s+" + re.escape(kw) + r"\b",
                                       text, re.IGNORECASE)}
     for m in occurrences:
         if (m.start(), m.end()) not in ref_spans:
@@ -428,6 +431,23 @@ def _is_lose_only(text: str | None, kw: str) -> bool:
     return True
 
 
+def _deploy_bar_keywords(deploy_box: str, tagged: Iterable[str]) -> list[str]:
+    """The keywords a leader's deploy box prints as its own leading lines, in
+    printed order ("Overwhelm (When attacking …)", "Raid 1", "Restore 2").  The
+    candidates are every known keyword plus whatever the card is tagged with, so a
+    keyword newer than ``_KNOWN_KEYWORDS`` on a real bar line is still kept."""
+    candidates = set(_KNOWN_KEYWORDS) | {"Fortify"} | set(tagged)
+    out: list[str] = []
+    for line in _normalise(deploy_box).split("\n"):
+        line = line.strip()
+        for kw in sorted(candidates, key=len, reverse=True):
+            if re.match(re.escape(kw) + r"\b", line, re.IGNORECASE):
+                if kw not in out:
+                    out.append(kw)
+                break
+    return out
+
+
 def sanitize_keywords(
     card_type: str | None,
     text: str | None,
@@ -490,6 +510,13 @@ def sanitize_keywords(
          reads a revoked keyword as a bare mention (Domesticated Loth-Cat ASH_68
          "Enemy units lose Ambush and Support"; Poe Dameron ASH_40 "All units lose
          Sentinel"; Tusken Tracker LOF_209 "Each enemy unit loses Hidden").
+     11. **Leader = deploy-box bar.**  A Leader with a deploy box possesses exactly
+         the keywords printed as that box's leading lines (less any an ability
+         models, per rules 2/3/4/6/8) — it both STRIPS mentioned-only tags (Fennec
+         Shand SHD_16's Ambush, Saw Gerrera LAW_1's Overwhelm, Bossk SHD_10's
+         Bounty) and ADDS printed-but-untagged ones (Count Dooku TWI_5 and Anakin
+         Skywalker TWI_12 → Overwhelm).  Rules 1, 5, 7, 9 and 10 then never run on
+         such a leader.
     """
     kws = tuple(keywords)
     if card_type not in _SANITISED_TYPES:
@@ -530,16 +557,29 @@ def sanitize_keywords(
     rule1_text = text
     if card_type == "Leader" and deploy_box:
         rule1_text = "\n".join(x for x in (text, deploy_box) if x)
+    ability_owned = conditional | triggered | from_hand | dynamic
+    if raid_via_grit:
+        ability_owned = ability_owned | {"Raid"}
+    # RULE 11 — a LEADER's keywords ARE its deploy-box bar.  An undeployed leader
+    # is never in an arena, so only the deployed side's keywords can ever matter,
+    # and that side prints them as its own leading lines.  The upstream tags miss
+    # this both ways: they add keywords the text only mentions ("Give it Ambush",
+    # "play a card using Smuggle", "a unit with a Bounty") and omit printed ones
+    # (Anakin Skywalker TWI_12's Overwhelm was never tagged).  MEASURED DB-wide:
+    # exactly the 12 leaders whose tags disagreed with their bar change — see
+    # ``_deploy_bar_keywords``.  A keyword an ability already models (rules 2/3/4/
+    # 6/8) stays out, as it does for every other card.
+    if card_type == "Leader" and deploy_box and deploy_box.strip():
+        return tuple(kw for kw in _deploy_bar_keywords(deploy_box, kws)
+                     if kw not in ability_owned)
     out = []
     for kw in kws:
-        if kw in conditional or kw in triggered or kw in from_hand or kw in dynamic:
+        if kw in ability_owned:
             continue  # implemented self-grant — the ability owns it
         if kw in granted_only:
             continue  # only ever granted to a target — never on this card's bar
         if kw in chosen_aura:
             continue  # choosable-keyword aura — never possessed by this card
-        if kw == "Raid" and raid_via_grit:
-            continue  # Grit unconditional self-grant models this card's Raid
         if kw in _KNOWN_KEYWORDS and rule1_text and _is_spurious(rule1_text, kw):
             continue  # grant-to-others-only
         if kw in _KNOWN_KEYWORDS and text and _is_reference_only(text, kw):

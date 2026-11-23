@@ -288,6 +288,15 @@ def _play_cost_reduction(state: GameState, ci: CardInstance,
                     total += spec.amount * sum(
                         1 for u in ps_own.ground_arena + ps_own.space_arena
                         if has_trait(state, u, want))
+                    if getattr(spec, "per_trait_includes_leader", False):
+                        # "… each friendly Rebel unit AND LEADER" (Rebel Operation
+                        # HMW_173): the undeployed leader in the base zone.
+                        from swu.cards.models import Leader
+                        total += spec.amount * sum(
+                            1 for b in ps_own.base_zone
+                            if isinstance(b.card_def, Leader)
+                            and not getattr(b, "deployed", False)
+                            and want in (getattr(b.card_def, "traits", None) or ()))
                 elif getattr(spec, "per_friendly_damaged_unit", False):
                     # Scaling reduction: ``amount`` once per DAMAGED unit the
                     # controller controls, either arena (Phoenix Squadron Fighters

@@ -1,6 +1,6 @@
 # Encoding manifest — `p26-set`
 
-Deck readiness: **174/189** cards playable. Encoding groups: **2/6** complete.
+Deck readiness: **175/189** cards playable. Encoding groups: **2/6** complete.
 
 Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py p26-set --group NN`.
 
@@ -10,7 +10,7 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 |--:|----------|------|-------|------:|----------|----------------|------------|
 | 1 | `p26-set:01` | ability | Direct damage & removal | 2 | 2/2 ✅ | — | — |
 | 2 | `p26-set:02` | ability | Card advantage & disruption | 3 | 0/3 | — | — |
-| 3 | `p26-set:03` | ability | Combat tricks, buffs & tempo | 7 | 0/7 | — | — |
+| 3 | `p26-set:03` | ability | Combat tricks, buffs & tempo | 7 | 1/7 | — | — |
 | 4 | `p26-set:04` | ability | Combat tricks, buffs & tempo | 1 | 0/1 | — | — |
 | 5 | `p26-set:05` | ability | Miscellaneous abilities | 4 | 0/4 | — | — |
 | 6 | `p26-set:06` | keyword | Fortify keyword | 1 | 1/1 ✅ | — | — |
@@ -31,7 +31,7 @@ p26-set:02
 # Admiral Holdo (P26_266), I've Got A Bad Feeling (P26_269), Jar Jar Binks (P26_273)
 ```
 
-### `p26-set:03` — Combat tricks, buffs & tempo (0/7)
+### `p26-set:03` — Combat tricks, buffs & tempo (1/7)
 ```
 p26-set:03
 # Garnac (P26_246), Grand Inquisitor (P26_248), Victor Squadron (P26_250), Luke Skywalker (P26_251), Ima-Gun Di (P26_264), Nuvo Vindi (P26_265), Luminara Unduli (P26_271)

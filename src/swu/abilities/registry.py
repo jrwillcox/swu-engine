@@ -218,6 +218,11 @@ class Condition(Enum):
                                                  # unit is a Transport" — Special
                                                  # Modifications SEC_227); the trait
                                                  # sibling of ATTACHED_HOST_NAMED
+    ATTACHED_HOST_HAS_ASPECT = "attached_host_has_aspect"  # the aspect sibling:
+                                                 # the HOST prints param among its
+                                                 # aspects ("If attached unit is a
+                                                 # Villainy unit" — Villainous
+                                                 # Ambition HMW_252)
     ATTACHED_HOST_NAMED = "attached_host_named"  # source is an upgrade whose
                                                  # host unit's name contains param
     CONTROLLER_CONTROLS_NAMED = "controller_controls_named"  # the controller has
@@ -262,6 +267,13 @@ class Condition(Enum):
                                       # event sibling of the unit gate; Bib Fortuna
                                       # SOR_177's exhaust action is never offered
                                       # with no playable event)
+    CONTROLLER_CAN_PLAY_UNIT_FROM_RESOURCES = "controller_can_play_unit_from_resources"
+                                      # param=aspect: the controller's OWN resource
+                                      # row holds ≥1 unit of that aspect affordable
+                                      # with that aspect's penalties ignored (a ready
+                                      # one cannot pay for itself) — gates Osha
+                                      # HMW_17's Action so it is never offered when
+                                      # nothing could be played
     CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_COST_MAX = "controller_can_play_unit_from_hand_cost_max"
                                       # the controller holds ≥1 affordable unit in
                                       # hand whose printed cost is ≤ `param` — gates
@@ -283,6 +295,30 @@ class Condition(Enum):
                                       # once-per-game Epic Action that plays such a
                                       # unit (Daimyo's Palace LAW_20) so the epic is
                                       # not wasted when nothing is playable
+    CONTROLLER_HAS_UNIT_COST_MAX = "controller_has_unit_cost_max"  # the controller
+                                      # has ≥1 arena unit (ready or not) whose
+                                      # printed cost is ≤ `param` ("If you control a
+                                      # unit that costs 3 or less" — Wicket HMW_14)
+    CONTROLLER_OTHER_UNIT_ENTERED_THIS_PHASE = \
+        "controller_other_unit_entered_this_phase"  # a unit OTHER than the source,
+                                      # owned by the controller, is in
+                                      # ``units_played_this_phase`` (played, created
+                                      # as a token, or a deployed leader) — "If
+                                      # another friendly unit entered play this phase
+                                      # (including leader and token units)"
+                                      # (Disposable B1 HMW_103).  It counts even if
+                                      # that unit has since left play.
+    CONTROLLER_HAND_OR_DISCARD_HAS_TRAIT = "controller_hand_or_discard_has_trait"
+                                      # a card with trait `param` is in the
+                                      # controller's hand or discard pile
+                                      # (Stormchaser HMW_180's Disaster card)
+    CONTROLLER_BASE_UPGRADED = "controller_base_upgraded"  # the controller's base
+                                      # carries ≥1 upgrade (Fortify) — "If your base
+                                      # is upgraded" (Director Krennic HMW_61)
+    CONTROLLER_HAND_NAMED_COUNT_MIN = "controller_hand_named_count_min"  # param =
+                                      # (name, n): ≥ n cards with that exact name in
+                                      # the controller's hand ("discard 2 cards named
+                                      # Keeper of Skara Nal" — HMW_41)
     CONTROLLER_HAS_READY_UNIT_COST_MAX = "controller_has_ready_unit_cost_max"
                                       # the controller has ≥1 ready (unexhausted)
                                       # unit in an arena whose printed cost is ≤
@@ -1669,6 +1705,13 @@ class ConditionCheck:
             # gate and the offered candidates never disagree.
             from swu.engine.actions import _playable_events_from_hand
             return bool(_playable_events_from_hand(state, ps, self.param or 0))
+        if c == Condition.CONTROLLER_CAN_PLAY_UNIT_FROM_RESOURCES:
+            # Osha HMW_17 — the very filter ``push_play_from_hand(resources_of=)``
+            # offers from, so the gate and the candidates never disagree.
+            from swu.engine.actions import _playable_units_from_hand
+            return bool(_playable_units_from_hand(
+                state, ps, None, aspect=self.param, resources_of=ps.player_id,
+                waive_aspect=self.param))
         if c == Condition.CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_COST_MAX:
             # ≥1 affordable unit in hand whose printed cost is ≤ `param`.
             from swu.engine.actions import _playable_units_from_hand
@@ -1714,6 +1757,41 @@ class ConditionCheck:
             from swu.engine.actions import _playable_units_from_hand
             return bool(_playable_units_from_hand(
                 state, ps, None, ignore_aspect_penalty=True))
+        if c == Condition.CONTROLLER_HAS_UNIT_COST_MAX:
+            # ≥1 arena unit, ready or exhausted, printed cost ≤ `param` (Wicket HMW_14).
+            # A leader unit prints no play cost, so it never counts.
+            from swu.cards.models import Leader
+            cap = int(self.param or 0)
+            for ci in ps.ground_arena + ps.space_arena:
+                cost = getattr(ci.card_def, "cost", None)
+                if (not isinstance(ci.card_def, Leader) and cost is not None
+                        and cost <= cap):
+                    return True
+            return False
+        if c == Condition.CONTROLLER_OTHER_UNIT_ENTERED_THIS_PHASE:
+            # Disposable B1 HMW_103.  ``find_instance`` reaches the discard, so a unit
+            # that entered and has since been defeated still counts (a defeated
+            # token has ceased to exist and is the one blind spot).
+            for iid in state.game_memory.units_played_this_phase:
+                if iid == source_ci.instance_id:
+                    continue
+                res = state.find_instance(iid)
+                if res is not None and res[0].player_id == ps.player_id:
+                    return True
+            return False
+        if c == Condition.CONTROLLER_HAND_OR_DISCARD_HAS_TRAIT:
+            trait = self.param or ""
+            return any(trait in (getattr(ci.card_def, "traits", None) or ())
+                       for ci in ps.hand + ps.discard)
+        if c == Condition.CONTROLLER_BASE_UPGRADED:
+            # "If your base is upgraded" (Director Krennic HMW_61): a Fortify upgrade.
+            base = ps.base_instance
+            return base is not None and bool(base.attached_upgrades)
+        if c == Condition.CONTROLLER_HAND_NAMED_COUNT_MIN:
+            # ≥ n cards with exactly this name in hand (Keeper of Skara Nal HMW_41).
+            name, n = self.param
+            return sum(1 for ci in ps.hand
+                       if getattr(ci.card_def, "name", None) == name) >= int(n)
         if c == Condition.CONTROLLER_HAS_READY_UNIT_COST_MAX:
             # ≥1 ready (unexhausted) arena unit whose printed cost is ≤ `param`.
             # A ready unit always has a legal attack (the enemy base at minimum),
@@ -1962,6 +2040,17 @@ class ConditionCheck:
                         if any(u.instance_id == source_ci.instance_id
                                for u in unit.attached_upgrades):
                             return has_trait(state, unit, trait)
+            return False
+        if c == Condition.ATTACHED_HOST_HAS_ASPECT:
+            # The aspect sibling of ATTACHED_HOST_HAS_TRAIT (Villainous Ambition
+            # HMW_252) — the same printed-aspect read as ``TargetSpec.aspects``.
+            aspect = self.param or ""
+            for p in state.players:
+                for unit in p.ground_arena + p.space_arena:
+                    if any(u.instance_id == source_ci.instance_id
+                           for u in unit.attached_upgrades):
+                        return aspect in {a.name for a in (
+                            getattr(unit.card_def, "aspects", None) or ())}
             return False
         if c == Condition.CONTROLLER_CONTROLS_NAMED:
             # The controller has a card whose name contains param in play: the
@@ -3166,6 +3255,9 @@ class WhenYouPlayCard:
     cost_min: Optional[int] = None  # narrow to a played card whose printed cost
                                     # is >= this ("a unit that costs 4 or more" —
                                     # Grogu ASH_18)
+    cost_max: Optional[int] = None  # narrow to a played card whose printed cost
+                                    # is <= this ("an event that costs 3 or less"
+                                    # — L3-37 HMW_215)
     via_smuggle: bool = False       # narrow to a card played USING the Smuggle
                                     # keyword ("When you play a card using Smuggle"
                                     # — Hondo Ohnaka SHD_5); reads the same
@@ -3680,6 +3772,11 @@ class CostReduction:
                                       # is still in hand, so it never counts itself.
                                       # Read at the same single play-cost site;
                                       # None = flat ``amount``.
+    per_trait_includes_leader: bool = False  # with ``per_friendly_trait``: an
+                                      # UNDEPLOYED leader with the trait counts too
+                                      # ("for each friendly Rebel unit and leader" —
+                                      # Rebel Operation HMW_173); a deployed one is
+                                      # already an arena unit, so never twice.
     host_trait: Optional[str] = None  # upgrade-only: the reduction applies only when
                                       # the chosen host unit has this EFFECTIVE trait
                                       # ("This upgrade costs 1 resource less to play

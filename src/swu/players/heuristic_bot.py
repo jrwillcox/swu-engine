@@ -1401,6 +1401,12 @@ class HeuristicBot:
         chosen = list((getattr(top, "context", None) or {}).get("chosen", ()))
         selects = [a for a in legal if type(a).__name__ == "SelectCullCard"]
         if selects and not chosen:
+            if (getattr(top, "context", None) or {}).get("pool") == "units":
+                # Forced Pacification HMW_253: give up the CHEAPEST friendly unit.
+                def cost(a: "Action") -> float:
+                    cv, _ = idx.get(a.instance_id, (None, None))
+                    return float(getattr(cv, "cost", 0) or 0) if cv else 0.0
+                return min(selects, key=cost)
             return selects[0]
         finish = self._first(legal, "FinishCull")
         if finish is not None:

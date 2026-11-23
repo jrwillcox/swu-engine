@@ -464,6 +464,13 @@ def _stat_bonus_amount(state: GameState, source_ci: CardInstance,
     return base * _stat_bonus_count(state, source_ci, count_src, target_ci)
 
 
+def _upgrades_on_controller_base(state: GameState, source_ci: CardInstance) -> int:
+    """How many upgrades sit on the base of ``source_ci``'s controller (Carrion
+    Spike HMW_66) — shared by the stat count and the keyword-value count."""
+    base = state.player_by_id(source_ci.owner_id).base_instance
+    return len(getattr(base, "attached_upgrades", None) or ()) if base else 0
+
+
 def _stat_bonus_count(state: GameState, source_ci: CardInstance,
                       count_src: str,
                       target_ci: Optional[CardInstance] = None) -> int:
@@ -572,6 +579,10 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
         # since tokens ARE upgrade cards per CR (so an Experience token nets +2/+2:
         # its own inherent +1/+1 plus this +1/+1).
         return len(getattr(source_ci, "attached_upgrades", None) or ())
+    if count_src == "upgrades_on_controller_base":
+        # Carrion Spike HMW_66: "For each upgrade on your base, this unit gets
+        # +1/+0 …" — the Fortify upgrades the controller's base hosts.
+        return _upgrades_on_controller_base(state, source_ci)
     if count_src == "controller_hand_size":
         # Qi'ra ASH_226: "This unit gets -1/-0 for each card in your hand."  Count
         # the buff controller's hand (the source is in play, so never in hand).

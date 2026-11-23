@@ -414,6 +414,13 @@ def _finish_bottom_from_discard(s: GameState) -> GameState:
                     + (", ".join(c.card_def.display_name for c in chosen)
                        or "nothing")),
         ))
+        # "Choose a … unit in your discard pile.  For this phase, you may play that
+        # unit from your discard pile.  It costs 1 resource less" (Boga HMW_122) —
+        # the Aid from the Innocent TWI_201 discounted replay permission.
+        red = ctx.get("then_discard_play_discount")
+        if red is not None:
+            for c in chosen:
+                s.game_memory.discard_play_discount_this_phase[c.instance_id] = int(red)
         window = ctx.get("then_deck_search_shared_trait")
         src_res = s.find_instance(ctx["source_id"])
         if window and chosen and src_res is not None:
@@ -457,6 +464,15 @@ def _finish_bottom_from_discard(s: GameState) -> GameState:
         kind="bottom_from_discard",
         choice=f"bottomed {len(chosen)} ({names})",
     ))
+    # "This unit gains those units' When Played abilities" (Vernestra Rwoh HMW_48):
+    # each bottomed card lends its When Played clauses to the source, which
+    # resolves them now as its own (the Fives TS26_34 borrow).
+    if ctx.get("then_borrow_when_played") and chosen:
+        src_res = s.find_instance(ctx["source_id"])
+        if src_res is not None:
+            from swu.abilities.resolver import push_borrowed_when_played
+            for ci in reversed(chosen):
+                push_borrowed_when_played(s, src_res[1], ci)
     # "…and create that many <token> tokens" (Reprocess TWI_88) — the payoff scales
     # with how many cards were actually bottomed, so it is settled here, after the
     # pop, and yields nothing when the controller chose none.
@@ -532,6 +548,8 @@ def push_bottom_from_discard(
     exclude_ids: Optional[frozenset] = None,
     disposition: str = "bottom",
     then_deck_search_shared_trait: Optional[int] = None,
+    then_borrow_when_played: bool = False,
+    then_discard_play_discount: Optional[int] = None,
 ) -> None:
     """Push a 'bottom_from_discard' decision (Restock SOR_252): choose up to
     ``count`` cards across both players' discard piles; each goes to the bottom of
@@ -568,7 +586,12 @@ def push_bottom_from_discard(
     ``exclude_ids`` drops specific instances from the candidate set — an EVENT is
     already in its owner's discard by the time its own ability resolves, so "put
     ANOTHER card in a discard pile …" must exclude the event itself (Commence
-    Patrol JTL_205) while still offering a second copy of the same card."""
+    Patrol JTL_205) while still offering a second copy of the same card.
+
+    ``then_borrow_when_played`` settles at the finish too: the source gains each
+    bottomed card's "When Played" abilities and resolves them now, as its own
+    ("put up to 2 units … on the bottom of your deck.  This unit gains those units'
+    'When Played' abilities" — Vernestra Rwoh HMW_48; the Fives TS26_34 borrow)."""
     controller_id = source_ci.owner_id
     owner_idx = s.player_index(controller_id)
     piles = ([s.player_by_id(controller_id)] if own_only else list(s.players))
@@ -596,6 +619,8 @@ def push_bottom_from_discard(
             "then_heal_base": int(then_heal_base),
             "disposition": str(disposition),
             "then_deck_search_shared_trait": then_deck_search_shared_trait,
+            "then_borrow_when_played": bool(then_borrow_when_played),
+            "then_discard_play_discount": then_discard_play_discount,
         },
         after_resolve_player_index=1 - owner_idx,
     )

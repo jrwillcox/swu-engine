@@ -1,6 +1,6 @@
 # Encoding manifest — `hmw-set`
 
-Deck readiness: **117/272** cards playable. Encoding groups: **6/31** complete.
+Deck readiness: **161/272** cards playable. Encoding groups: **13/31** complete.
 
 Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py hmw-set --group NN`.
 
@@ -14,13 +14,13 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 | 4 | `hmw-set:04` | ability | Direct damage & removal | 7 | 7/7 ✅ | — | — |
 | 5 | `hmw-set:05` | ability | Direct damage & removal | 7 | 7/7 ✅ | — | — |
 | 6 | `hmw-set:06` | ability | Direct damage & removal | 7 | 7/7 ✅ | — | — |
-| 7 | `hmw-set:07` | ability | Direct damage & removal | 5 | 0/5 | — | — |
-| 8 | `hmw-set:08` | ability | Card advantage & disruption | 7 | 0/7 | — | — |
-| 9 | `hmw-set:09` | ability | Card advantage & disruption | 7 | 1/7 | — | — |
-| 10 | `hmw-set:10` | ability | Card advantage & disruption | 7 | 1/7 | — | — |
-| 11 | `hmw-set:11` | ability | Combat tricks, buffs & tempo | 7 | 0/7 | — | — |
-| 12 | `hmw-set:12` | ability | Combat tricks, buffs & tempo | 7 | 0/7 | — | — |
-| 13 | `hmw-set:13` | ability | Combat tricks, buffs & tempo | 7 | 1/7 | — | — |
+| 7 | `hmw-set:07` | ability | Direct damage & removal | 5 | 5/5 ✅ | — | — |
+| 8 | `hmw-set:08` | ability | Card advantage & disruption | 7 | 7/7 ✅ | — | — |
+| 9 | `hmw-set:09` | ability | Card advantage & disruption | 7 | 7/7 ✅ | — | — |
+| 10 | `hmw-set:10` | ability | Card advantage & disruption | 7 | 7/7 ✅ | — | — |
+| 11 | `hmw-set:11` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
+| 12 | `hmw-set:12` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
+| 13 | `hmw-set:13` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
 | 14 | `hmw-set:14` | ability | Combat tricks, buffs & tempo | 7 | 1/7 | — | — |
 | 15 | `hmw-set:15` | ability | Combat tricks, buffs & tempo | 7 | 0/7 | — | — |
 | 16 | `hmw-set:16` | ability | Combat tricks, buffs & tempo | 7 | 0/7 | — | — |
@@ -80,43 +80,43 @@ hmw-set:06
 # Ty Yorrick (HMW_185), Mining Guild Trespasser (HMW_186), Giant Gorax (HMW_188), Nightfall (HMW_193), Maim (HMW_207), Don't Touch Anything (HMW_217), Separatist Harbinger (HMW_244)
 ```
 
-### `hmw-set:07` — Direct damage & removal (0/5)
+### `hmw-set:07` — Direct damage & removal (✅ done)
 ```
 hmw-set:07
 # Frenzied Tri-Fighters (HMW_249), Villainous Ambition (HMW_252), Forced Pacification (HMW_253), Wrecker (HMW_263), Wild Space Wanderer (HMW_270)
 ```
 
-### `hmw-set:08` — Card advantage & disruption (0/7)
+### `hmw-set:08` — Card advantage & disruption (✅ done)
 ```
 hmw-set:08
 # Wicket (HMW_14), Maul (HMW_16), Keeper of Skara Nal (HMW_41), Vernestra Rwoh (HMW_48), Director Krennic (HMW_61), Remote Scout (HMW_85), Trust Yourself (HMW_101)
 ```
 
-### `hmw-set:09` — Card advantage & disruption (1/7)
+### `hmw-set:09` — Card advantage & disruption (✅ done)
 ```
 hmw-set:09
 # Disposable B1 (HMW_103), Boga (HMW_122), Local Support (HMW_148), Gungi (HMW_166), Rebel Operation (HMW_173), Stormchaser (HMW_180), Neebray Manta (HMW_189)
 ```
 
-### `hmw-set:10` — Card advantage & disruption (1/7)
+### `hmw-set:10` — Card advantage & disruption (✅ done)
 ```
 hmw-set:10
 # Nightbrother (HMW_204), L3-37 (HMW_215), Sandcrawler Sales Team (HMW_222), Mon Cal Cruiser (HMW_232), Booma Ball (HMW_236), Exploit Confidence (HMW_238), Surveillance Cruiser (HMW_247)
 ```
 
-### `hmw-set:11` — Combat tricks, buffs & tempo (0/7)
+### `hmw-set:11` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmw-set:11
 # Asajj Ventress (HMW_1), Omega (HMW_6), Darth Vader (HMW_7), General Grievous (HMW_8), Chewbacca (HMW_9), Osha (HMW_17), Hunter (HMW_35)
 ```
 
-### `hmw-set:12` — Combat tricks, buffs & tempo (0/7)
+### `hmw-set:12` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmw-set:12
 # Mother Talzin (HMW_39), Dooku (HMW_42), Ima-Gun Di (HMW_44), Low Altitude Combat (HMW_50), A'Koba (HMW_52), Yoda (HMW_56), Rho Medical Shuttle (HMW_63)
 ```
 
-### `hmw-set:13` — Combat tricks, buffs & tempo (1/7)
+### `hmw-set:13` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmw-set:13
 # Carrion Spike (HMW_66), Grand Army Marine (HMW_72), Peppi Bow (HMW_73), Yord Fandar (HMW_74), Fambaa Shield Team (HMW_80), Batcher (HMW_83), Gunga City Guard (HMW_84)

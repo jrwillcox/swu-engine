@@ -178,6 +178,9 @@ class GameSession:
                 amount = top.context.get("damage_amount", 0)
                 base = (f"Choose a unit you control to spare — every unit not "
                         f"chosen this way takes {amount} damage.")
+            elif top.context.get("disposition") == "damage_chosen":
+                amount = top.context.get("damage_amount", 0)
+                base = f"Choose a unit you control — it takes {amount} damage."
             elif top.context.get("disposition") == "return_then_defeat_all":
                 base = ("Choose one of your non-leader units to return to hand — "
                         "every non-leader unit left in play is then defeated.")

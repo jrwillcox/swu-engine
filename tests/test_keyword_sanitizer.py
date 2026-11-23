@@ -162,6 +162,53 @@ def test_leader_is_sanitised():
     assert sanitize_keywords("Leader", text, ("Raid",)) == ()
 
 
+# ── Rule 11: a leader's keywords ARE its deploy-box bar ───────────────────────
+
+@pytest.mark.parametrize("name,text,deploy_box,tagged,expected", [
+    # "Give it Ambush" — "it" read as the leader herself by rule 1.
+    ("Fennec Shand SHD_16",
+     "Action [1 resource, Exhaust]: Play a unit that costs 4 or less from your "
+     "hand (paying its cost). Give it Ambush for this phase.",
+     "Saboteur (When this unit attacks, ignore Sentinel and defeat the defender's "
+     "Shields.)\nAction: Play a unit that costs 4 or less from your hand (paying "
+     "its cost). Give it Ambush for this phase.",
+     ("Ambush", "Saboteur"), ("Saboteur",)),
+    # The tag names a keyword the card GRANTS; its printed Overwhelm was untagged.
+    ("Count Dooku TWI_5",
+     "Action [Exhaust]: Play a Separatist card from your hand. It gains Exploit 1.",
+     "Overwhelm (When attacking an enemy unit, deal excess damage to the "
+     "opponent's base.)\nOn Attack: The next Separatist card you play this phase "
+     "gains Exploit 3.",
+     ("Exploit",), ("Overwhelm",)),
+    # Upstream never tagged the printed keyword at all.
+    ("Anakin Skywalker TWI_12",
+     "Action [Exhaust, deal 2 damage to your base]: Attack with a unit.",
+     "Overwhelm (When attacking an enemy unit, deal excess damage to the "
+     "opponent's base.)\nThis unit gets +1/+0 for every 5 damage on your base.",
+     (), ("Overwhelm",)),
+    # "a unit with a Bounty" is a reference; the deployed side prints no keyword.
+    ("Bossk SHD_10",
+     "Action [Exhaust]: Deal 1 damage to a unit with a Bounty.",
+     "When you collect a bounty: You may collect that bounty again.",
+     ("Bounty",), ()),
+    # "replace any Raid it has … with Restore" above a bare "Restore 2" line.
+    ("Asajj Ventress HMW_1",
+     "Action [Exhaust]: Attack with a unit. For this attack, replace any Raid it "
+     "has or gains with Restore, or vice versa.",
+     "Restore 2\nAction: Attack with a unit. For this attack, replace any Raid it "
+     "has or gains with Restore, or vice versa.",
+     ("Raid", "Restore"), ("Restore",)),
+])
+def test_leader_keywords_are_its_deploy_bar(name, text, deploy_box, tagged, expected):
+    assert sanitize_keywords("Leader", text, tagged, deploy_box=deploy_box) == expected
+
+
+def test_leader_without_a_deploy_box_keeps_the_text_rules():
+    # A blank deploy box gives rule 11 nothing to read — rules 1–10 still apply.
+    text = "Action [Exhaust]: A friendly unit gains Raid 1 for this phase."
+    assert sanitize_keywords("Leader", text, ("Raid",), deploy_box="  \n") == ()
+
+
 # ── Robustness ────────────────────────────────────────────────────────────────
 
 def test_no_text_passes_through():
