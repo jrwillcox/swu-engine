@@ -142,23 +142,25 @@ def _maarva_andor():
 # PlotPlay/FinishPlot).  These two cards carry residual "When Played" text beyond
 # the keyword.
 
+def _garindan_name_and_discard(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import push_name_and_discard
+    push_name_and_discard(state, source_ci)
+    return state
+
+
 @card_ability("SEC", "186")
 def _garindan():
     """SEC_186 — Garindan (Unit, Underworld): "When Played: Name a card. Look at
     an opponent's hand and discard a card with that name from it."
 
-    DEVIATION (documented): modelled as a mandatory ``WhenPlayed`` discarding one
-    card from the opponent's hand via the established
-    ``DiscardFromHand(chooser="opponent")`` first-card simplification (the same
-    simplification K-2SO SOR_145 and Poe's repeated-modal opponent_discards use).
-    The faithful "name a card, look at the hand, and discard a card with that
-    name" is a controller-chosen hand-strip, which would need a new
-    look-at-opponent-hand-and-pick decision kind; that is out of scope for this
-    keyword group, so the engine instead discards the opponent's first card.  An
-    empty opponent hand is a clean no-op."""
+    The ``name_and_discard`` decision (Chimaera SOR_185): the controller names a
+    card and a copy leaves the opponent's hand.  Only names in that hand are
+    offered — naming anything else can only discard nothing (the Chimaera
+    optimal-play collapse).  An empty opponent hand pushes no prompt.  (Until
+    2026-11-23 this discarded the opponent's first card.)"""
     return TriggerAbility(
         trigger=WhenPlayed(),
-        effects=[DiscardFromHand(count=1, chooser="opponent")],
+        effects=[CustomEffect(fn=_garindan_name_and_discard)],
     )
 
 
@@ -336,9 +338,8 @@ def _chopper():
 
     Reuses the ``WhenDealsCombatDamageToBase`` trigger (Ketsu Onyo SHD_147, fired
     at the base-combat-damage step).  "Each player discards" is two mandatory
-    ``DiscardFromHand`` effects — one for the controller, one for the opponent
-    (both the established first-card simplification; a player with an empty hand
-    discards nothing)."""
+    ``DiscardFromHand`` effects — one for the controller, one for the opponent,
+    each picking their own card (a player with an empty hand discards nothing)."""
     return TriggerAbility(
         trigger=WhenDealsCombatDamageToBase(),
         effects=[
@@ -884,19 +885,15 @@ def _furtive_handmaiden():
 
     An optional ``OnAttack`` trigger (the "you may") gated by
     ``CONTROLLER_HAS_CARD_IN_HAND`` so it is not offered with an empty hand (the
-    discard cost cannot be paid — the Bail Organa SEC_198 gate).  Two plain
-    mandatory-once-accepted effects bind the cost to the payoff: a
-    ``DiscardFromHand`` (the established first-card simplification — the controller
-    doesn't pick *which* card) then ``DrawCards(1)``.  Since the condition
-    guarantees ≥1 card, the discard always lands, so "if you do" holds."""
+    discard cost cannot be paid — the Bail Organa SEC_198 gate).  The controller
+    picks the card; ``then_draw=1`` draws only AFTER that choice, so the drawn card
+    can't be the one discarded.  Since the condition guarantees ≥1 card, the discard
+    always lands, so "if you do" holds."""
     return TriggerAbility(
         trigger=OnAttack(),
         optional=True,
         condition=ConditionCheck(Condition.CONTROLLER_HAS_CARD_IN_HAND),
-        effects=[
-            DiscardFromHand(count=1, chooser="controller"),
-            DrawCards(count=1),
-        ],
+        effects=[DiscardFromHand(count=1, chooser="controller", then_draw=1)],
     )
 
 

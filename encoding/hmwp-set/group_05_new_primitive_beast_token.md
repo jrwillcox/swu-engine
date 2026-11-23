@@ -3,7 +3,6 @@
 - **Group id (paste this):** `hmwp-set:05`
 - **Kind:** ability
 - **Cards:** 1
-- **⚠ New primitives suspected:** beast-token — see escalation rule; do NOT jam a core-resolution change into a card batch.
 
 ## Cards
 

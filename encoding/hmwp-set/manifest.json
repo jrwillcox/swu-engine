@@ -5,7 +5,7 @@
     "set_code": "HMWP"
   },
   "total_deck_cards": 20,
-  "playable_deck_cards": 13,
+  "playable_deck_cards": 18,
   "groups": [
     {
       "gid": "hmwp-set:01",
@@ -57,7 +57,7 @@
         "HMWP_7",
         "HMWP_13"
       ],
-      "done": 2,
+      "done": 4,
       "total": 4
     },
     {
@@ -74,7 +74,7 @@
         "HMWP_12",
         "HMWP_18"
       ],
-      "done": 0,
+      "done": 3,
       "total": 3
     },
     {
@@ -85,9 +85,7 @@
       "keyword": "",
       "file": "group_05_new_primitive_beast_token.md",
       "depends_on": [],
-      "new_primitives": [
-        "beast-token"
-      ],
+      "new_primitives": [],
       "cards": [
         "HMWP_1"
       ],
@@ -102,9 +100,7 @@
       "keyword": "",
       "file": "group_06_new_primitive_weakness_token.md",
       "depends_on": [],
-      "new_primitives": [
-        "weakness-token"
-      ],
+      "new_primitives": [],
       "cards": [
         "HMWP_15"
       ],

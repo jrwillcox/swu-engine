@@ -1,6 +1,6 @@
 # Encoding manifest — `hmw-set`
 
-Deck readiness: **161/272** cards playable. Encoding groups: **13/31** complete.
+Deck readiness: **238/272** cards playable. Encoding groups: **25/31** complete.
 
 Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py hmw-set --group NN`.
 
@@ -8,7 +8,7 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 
 | # | group id | kind | theme | cards | progress | new primitives | depends on |
 |--:|----------|------|-------|------:|----------|----------------|------------|
-| 1 | `hmw-set:01` | keyword | Fortify keyword | 16 | 16/16 ✅ | beast-token | — |
+| 1 | `hmw-set:01` | keyword | Fortify keyword | 16 | 16/16 ✅ | — | — |
 | 2 | `hmw-set:02` | ability | Direct damage & removal | 7 | 7/7 ✅ | — | — |
 | 3 | `hmw-set:03` | ability | Direct damage & removal | 7 | 7/7 ✅ | — | — |
 | 4 | `hmw-set:04` | ability | Direct damage & removal | 7 | 7/7 ✅ | — | — |
@@ -21,24 +21,24 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 | 11 | `hmw-set:11` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
 | 12 | `hmw-set:12` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
 | 13 | `hmw-set:13` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
-| 14 | `hmw-set:14` | ability | Combat tricks, buffs & tempo | 7 | 1/7 | — | — |
-| 15 | `hmw-set:15` | ability | Combat tricks, buffs & tempo | 7 | 0/7 | — | — |
-| 16 | `hmw-set:16` | ability | Combat tricks, buffs & tempo | 7 | 0/7 | — | — |
-| 17 | `hmw-set:17` | ability | Combat tricks, buffs & tempo | 7 | 0/7 | — | — |
-| 18 | `hmw-set:18` | ability | Combat tricks, buffs & tempo | 7 | 0/7 | — | — |
-| 19 | `hmw-set:19` | ability | Combat tricks, buffs & tempo | 7 | 1/7 | — | — |
-| 20 | `hmw-set:20` | ability | Combat tricks, buffs & tempo | 7 | 0/7 | — | — |
-| 21 | `hmw-set:21` | ability | Combat tricks, buffs & tempo | 2 | 0/2 | — | — |
-| 22 | `hmw-set:22` | ability | Miscellaneous abilities | 7 | 0/7 | — | — |
-| 23 | `hmw-set:23` | ability | Miscellaneous abilities | 7 | 0/7 | — | — |
-| 24 | `hmw-set:24` | ability | Miscellaneous abilities | 7 | 0/7 | — | — |
-| 25 | `hmw-set:25` | ability | New primitive: weakness-token | 7 | 0/7 | weakness-token | — |
-| 26 | `hmw-set:26` | ability | New primitive: weakness-token | 7 | 0/7 | weakness-token, beast-token | — |
-| 27 | `hmw-set:27` | ability | New primitive: weakness-token | 7 | 0/7 | weakness-token, beast-token | — |
-| 28 | `hmw-set:28` | ability | New primitive: weakness-token | 3 | 0/3 | weakness-token | — |
-| 29 | `hmw-set:29` | ability | New primitive: beast-token | 7 | 0/7 | beast-token | — |
-| 30 | `hmw-set:30` | ability | New primitive: beast-token | 7 | 0/7 | beast-token | — |
-| 31 | `hmw-set:31` | ability | New primitive: beast-token | 3 | 0/3 | beast-token | — |
+| 14 | `hmw-set:14` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
+| 15 | `hmw-set:15` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
+| 16 | `hmw-set:16` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
+| 17 | `hmw-set:17` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
+| 18 | `hmw-set:18` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
+| 19 | `hmw-set:19` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
+| 20 | `hmw-set:20` | ability | Combat tricks, buffs & tempo | 7 | 7/7 ✅ | — | — |
+| 21 | `hmw-set:21` | ability | Combat tricks, buffs & tempo | 2 | 2/2 ✅ | — | — |
+| 22 | `hmw-set:22` | ability | Miscellaneous abilities | 7 | 7/7 ✅ | — | — |
+| 23 | `hmw-set:23` | ability | Miscellaneous abilities | 7 | 7/7 ✅ | — | — |
+| 24 | `hmw-set:24` | ability | Miscellaneous abilities | 7 | 7/7 ✅ | — | — |
+| 25 | `hmw-set:25` | ability | New primitive: weakness-token | 7 | 7/7 ✅ | — | — |
+| 26 | `hmw-set:26` | ability | New primitive: weakness-token | 7 | 0/7 | — | — |
+| 27 | `hmw-set:27` | ability | New primitive: weakness-token | 7 | 0/7 | — | — |
+| 28 | `hmw-set:28` | ability | New primitive: weakness-token | 3 | 0/3 | — | — |
+| 29 | `hmw-set:29` | ability | New primitive: beast-token | 7 | 0/7 | — | — |
+| 30 | `hmw-set:30` | ability | New primitive: beast-token | 7 | 0/7 | — | — |
+| 31 | `hmw-set:31` | ability | New primitive: beast-token | 3 | 0/3 | — | — |
 
 ## Copy-paste entries
 
@@ -122,73 +122,73 @@ hmw-set:13
 # Carrion Spike (HMW_66), Grand Army Marine (HMW_72), Peppi Bow (HMW_73), Yord Fandar (HMW_74), Fambaa Shield Team (HMW_80), Batcher (HMW_83), Gunga City Guard (HMW_84)
 ```
 
-### `hmw-set:14` — Combat tricks, buffs & tempo (1/7)
+### `hmw-set:14` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmw-set:14
 # Opee Sea Killer (HMW_90), Pelta Relief Frigate (HMW_91), Starlit Purrgil (HMW_92), Resonate (HMW_98), Garnac (HMW_104), Stormtrooper Patrol (HMW_107), Invasion Lander (HMW_111)
 ```
 
-### `hmw-set:15` — Combat tricks, buffs & tempo (0/7)
+### `hmw-set:15` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmw-set:15
 # Leia Organa (HMW_115), Chewbacca (HMW_117), Ryyk Blademaster (HMW_118), Saw Gerrera (HMW_119), Hijacked AT-ST (HMW_121), King Grakchawwaa (HMW_123), Luminara Unduli (HMW_124)
 ```
 
-### `hmw-set:16` — Combat tricks, buffs & tempo (0/7)
+### `hmw-set:16` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmw-set:16
 # Chewbacca's Bowcaster (HMW_127), Child of Dathomir (HMW_129), Soaring Can-Cell (HMW_131), Wroshyr Rebel (HMW_133), Lifetree Caravan (HMW_136), V-19 Skirmisher (HMW_137), Commander Gree (HMW_138)
 ```
 
-### `hmw-set:17` — Combat tricks, buffs & tempo (0/7)
+### `hmw-set:17` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmw-set:17
 # Rex (HMW_141), Wookiee Rangers (HMW_142), Origin Tree Shyyyo (HMW_145), Log Trap (HMW_149), Overgrowth (HMW_151), Chief Chirpa (HMW_164), Commandeered Tour Shuttle (HMW_165)
 ```
 
-### `hmw-set:18` — Combat tricks, buffs & tempo (0/7)
+### `hmw-set:18` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmw-set:18
 # Han Solo (HMW_170), Village Troublemaker (HMW_176), Aggrocrab (HMW_184), Enraged (HMW_190), Hunter's Instinct (HMW_191), Victor Squadron (HMW_203), Luke Skywalker (HMW_208)
 ```
 
-### `hmw-set:19` — Combat tricks, buffs & tempo (1/7)
+### `hmw-set:19` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmw-set:19
 # Corona Squadron X-Wing (HMW_209), Sol (HMW_210), Tech (HMW_211), The Chieftain (HMW_212), Phee Genoa (HMW_214), Lakeside Shaaks (HMW_228), Raiding Party (HMW_230)
 ```
 
-### `hmw-set:20` — Combat tricks, buffs & tempo (0/7)
+### `hmw-set:20` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmw-set:20
 # Ritual Dragon (HMW_234), C-3PO (HMW_255), Jedi Interceptor (HMW_256), Ewok Archers (HMW_257), Pack Guardian (HMW_259), Ben Kenobi (HMW_261), Heroic Bravery (HMW_264)
 ```
 
-### `hmw-set:21` — Combat tricks, buffs & tempo (0/2)
+### `hmw-set:21` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmw-set:21
 # Familiar Strategem (HMW_266), Renew (HMW_267)
 ```
 
-### `hmw-set:22` — Miscellaneous abilities (0/7)
+### `hmw-set:22` — Miscellaneous abilities (✅ done)
 ```
 hmw-set:22
 # The Warrior (HMW_18), Fett's Firespray (HMW_53), Boss Lyonie (HMW_57), Numa (HMW_88), Nute Gunray (HMW_105), The First Legion (HMW_108), Zam Wesell (HMW_134)
 ```
 
-### `hmw-set:23` — Miscellaneous abilities (0/7)
+### `hmw-set:23` — Miscellaneous abilities (✅ done)
 ```
 hmw-set:23
 # Dooku's Solar Sailer (HMW_154), Raze to Ruin (HMW_161), Teebo (HMW_162), Volley Fire (HMW_192), New Tactics (HMW_218), Teeka (HMW_221), Therm Scissorpunch (HMW_223)
 ```
 
-### `hmw-set:24` — Miscellaneous abilities (0/7)
+### `hmw-set:24` — Miscellaneous abilities (✅ done)
 ```
 hmw-set:24
 # Boba Fett (HMW_225), Awakened Exogorth (HMW_233), Sun Fac (HMW_243), Pyke Sarisa (HMW_246), Blockade Ship (HMW_251), Queen Amidala (HMW_260), Twi'lek Kalikori (HMW_265)
 ```
 
-### `hmw-set:25` — New primitive: weakness-token (0/7)
+### `hmw-set:25` — New primitive: weakness-token (✅ done)
 ```
 hmw-set:25
 # Maz Kanata (HMW_2), Doctor Hemlock (HMW_3), Bossk (HMW_15), Talzin's Shuttle (HMW_40), Clone X Assassin (HMW_59), Nuvo Vindi (HMW_62), Clone of the Zillo Beast (HMW_65)

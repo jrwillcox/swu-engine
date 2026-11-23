@@ -51,7 +51,7 @@ from swu.engine.actions.dispatch import (
     register_decisions,
 )
 from swu.engine.actions.costs import (
-    _affordable_with_credits, _consume_play_discount, _consume_standing_discount, _effective_cost, _pay_play_cost, _play_cost, _usable_credits,
+    _affordable_with_credits, _pay_play_cost, _play_cost, _spend_play_discounts, _usable_credits,
 )
 from swu.engine.actions.damage import (
     _bases_cannot_heal, note_base_healed,
@@ -60,13 +60,13 @@ from swu.engine.actions.zones import (
     _apply_put_on_deck, _attach_upgrade, _draw_cards, _eligible_upgrade_targets, _put_unit_in_play, _resolve_event_ability, _upgrade_target_spec,
 )
 from swu.engine.actions.shared import (
-    _candidate_card_views, _resource_top_of_deck, spend_force_token,
+    _candidate_card_views, _fire_card_played, _resource_top_of_deck, spend_force_token,
 )
 from swu.engine.actions.combat import (
     note_hand_or_deck_discard, push_granted_attack, push_select_token,
 )
 from swu.engine.actions.hand import (
-    push_play_from_hand,
+    _divert_to_exploit, _exploit_best_case, push_play_from_hand,
 )
 
 
@@ -274,8 +274,10 @@ def _finish_deck_search(s: GameState) -> GameState:
         bottom_at_regroup = bool(ctx.get("bottom_at_regroup"))
         played_names: list[str] = []
         for ci in selected:
-            cost = 0 if free else max(0, _effective_cost(ci.card_def, ps, s) - cost_reduction)
+            cost = 0 if free else _play_cost(s, ci, ps, extra_reduction=cost_reduction)
             _pay_play_cost(s, ps, cost)
+            if not free:
+                _spend_play_discounts(s, ci, ps)
             evt = CardPlayed(
                 player_id=ps.player_id,
                 instance_id=ci.instance_id,
@@ -297,7 +299,7 @@ def _finish_deck_search(s: GameState) -> GameState:
                 ci.return_to_owner_hand_at_regroup = True
             if bottom_at_regroup:
                 ci.bottom_at_regroup = True
-            get_bus().fire(s, evt)
+            _fire_card_played(s, evt, top.after_resolve_player_index)
             played_names.append(ci.card_def.display_name)
         choice = f"played {', '.join(played_names) or 'nothing'}"
         s.event_log.append(DecisionResolved(
@@ -323,8 +325,10 @@ def _finish_deck_search(s: GameState) -> GameState:
                 ci.zone = Zone.DISCARD
                 ps.discard.append(ci)
                 continue
-            cost = max(0, _effective_cost(ci.card_def, ps, s) - cost_reduction)
+            cost = _play_cost(s, ci, ps, target_host_id=host_id,
+                              extra_reduction=cost_reduction)
             _pay_play_cost(s, ps, cost)
+            _spend_play_discounts(s, ci, ps, host_id)
             evt = CardPlayed(
                 player_id=ps.player_id,
                 instance_id=ci.instance_id,
@@ -336,7 +340,7 @@ def _finish_deck_search(s: GameState) -> GameState:
             if "Villainy" in card_aspects:
                 s.game_memory.villainy_players_this_phase.add(ps.player_id)
             _attach_upgrade(s, ps, ci, host_id)
-            get_bus().fire(s, evt)
+            _fire_card_played(s, evt, top.after_resolve_player_index)
             played_names.append(ci.card_def.display_name)
         s.event_log.append(DecisionResolved(
             deciding_player_id=top.deciding_player_id,
@@ -727,8 +731,17 @@ class PlayTopCard(Action):
         ci = ps.deck[0]
         reduction = int(top.context.get("cost_reduction", 0) or 0)
         free = bool(top.context.get("free"))
-        base = _play_cost(s, ci, ps, target_host_id=self.upgrade_target_id)
-        cost = 0 if free else max(0, base - reduction)
+        # Exploit applies to this play too (Ezra Bridger SOR_192): the exploit
+        # decision takes over and replays this action after the sacrifices.
+        if isinstance(ci.card_def, Unit) and _divert_to_exploit(
+                s, ps, ci, top, origin="deck_top",
+                replay={"action": "PlayTopCard",
+                        "upgrade_target_id": self.upgrade_target_id},
+                extra_reduction=reduction, from_zone=ps.deck):
+            return s
+        reduction += int(top.context.get("exploit_discount", 0) or 0)
+        cost = 0 if free else _play_cost(s, ci, ps, target_host_id=self.upgrade_target_id,
+                                         extra_reduction=reduction)
         if not _affordable_with_credits(ps, cost, s):
             raise IllegalActionError("Cannot afford the top card")
         # "You may use the Force … If you do, play that card" (As I Have Foreseen
@@ -743,8 +756,8 @@ class PlayTopCard(Action):
         ps.deck.pop(0)
         ci.face_down = False
         _pay_play_cost(s, ps, cost)
-        _consume_play_discount(s, ci, ps)
-        _consume_standing_discount(s, ci, ps)
+        if not free:
+            _spend_play_discounts(s, ci, ps, self.upgrade_target_id)
         s.event_log.append(DecisionResolved(
             deciding_player_id=top.deciding_player_id,
             kind="peek_top",
@@ -762,7 +775,8 @@ class PlayTopCard(Action):
             s.game_memory.villainy_players_this_phase.add(ps.player_id)
         after_idx = top.after_resolve_player_index
         if isinstance(ci.card_def, (Unit, Leader)):
-            _put_unit_in_play(s, ps, ci, cost_paid=cost)
+            _put_unit_in_play(s, ps, ci, cost_paid=cost, exploited_powers=list(
+                top.context.get("exploited_powers") or []))
         elif isinstance(ci.card_def, Upgrade):
             _attach_upgrade(s, ps, ci, self.upgrade_target_id)
         elif isinstance(ci.card_def, Event):
@@ -814,13 +828,15 @@ def _peek_top_actions(state: GameState, top: PendingDecision) -> list[Action]:
             cd = ci.card_def
             if isinstance(cd, Upgrade):
                 for host in _eligible_upgrade_targets(state, ci):
-                    base = _play_cost(state, ci, ps, target_host_id=host.instance_id)
-                    cost = 0 if free else max(0, base - reduction)
+                    cost = 0 if free else _play_cost(
+                        state, ci, ps, target_host_id=host.instance_id,
+                        extra_reduction=reduction)
                     if _affordable_with_credits(ps, cost, state):
                         acts.append(PlayTopCard(host.instance_id))
             elif isinstance(cd, (Unit, Event)):
-                base = _play_cost(state, ci, ps)
-                cost = 0 if free else max(0, base - reduction)
+                cost = 0 if free else _play_cost(
+                    state, ci, ps,
+                    extra_reduction=reduction + _exploit_best_case(state, ci, ps))
                 if _affordable_with_credits(ps, cost, state):
                     acts.append(PlayTopCard())
     return acts
@@ -1064,7 +1080,7 @@ def push_search_and_play(
         if free:
             candidate_ids.append(ci.instance_id)
             continue
-        cost = max(0, _effective_cost(cd, ps, s) - cost_reduction)
+        cost = _play_cost(s, ci, ps, extra_reduction=cost_reduction)
         if cost <= ps.available_resources + _usable_credits(s, ps):
             candidate_ids.append(ci.instance_id)
     owner_idx = s.player_index(actor_id)
@@ -1133,7 +1149,8 @@ def push_search_and_play_upgrade(
         spec = _upgrade_target_spec(cd)
         if spec is not None and not _spec_matches_ci(spec, host, ci, s, {}):
             continue
-        cost = max(0, _effective_cost(cd, ps, s) - cost_reduction)
+        cost = _play_cost(s, ci, ps, target_host_id=host_id,
+                          extra_reduction=cost_reduction)
         if cost <= ps.available_resources + _usable_credits(s, ps):
             candidate_ids.append(ci.instance_id)
     owner_idx = s.player_index(actor_id)

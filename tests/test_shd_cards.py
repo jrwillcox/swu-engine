@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from tests.test_sor_cards import (
     repo,  # noqa: F401 — pytest fixture
+    _resolve_discards,
     _get_card, _make_state, _place, _fire_when_played, _fire_when_defeated,
     _fire_on_attack, _fire_upgrade_played, _place_leader, _find_instance,
     _experience_count, _shield_count, _defeat_and_fire, _play_event_from_hand,
@@ -6498,6 +6499,8 @@ class TestGroup09CardAdvantage:
             _put_in_hand(state, "P1", filler)
         p1_hand_before = len(state.player_by_id("P1").hand)
         state = self._play_event(state, pil_ci)
+        assert state.pending_decisions[-1].deciding_player_id == "P1"  # they choose
+        state = _resolve_discards(state)
         assert len(state.player_by_id("P1").hand) == p1_hand_before - 2, \
             "the opponent discards 2 cards"
 
@@ -6908,6 +6911,7 @@ class TestNoBargain:
         p1_before = len(state.player_by_id("P1").hand)
         p0_hand_before = len(state.player_by_id("P0").hand)
         state, _evt = _play_event_from_hand(state, repo, "SHD", "244", owner="P0")
+        state = _resolve_discards(state)
         assert not state.pending_decisions
         assert len(state.player_by_id("P1").hand) == p1_before - 1
         # +1 drawn, and the event itself was played from hand (net accounting below).

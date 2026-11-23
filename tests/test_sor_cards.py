@@ -100,6 +100,22 @@ def _make_state(include_bases: bool = True):
     )
 
 
+def _resolve_discards(state, pick_ids=()):
+    """Resolve pending hand-discard choices (``DiscardFromHand`` and friends push a
+    ``discard_excess_from_hand`` decision for the discarding player).  Discards the
+    cards in ``pick_ids`` first when offered, else the first legal card."""
+    from swu.engine.actions import apply, legal_actions
+    for _ in range(20):
+        if not (state.pending_decisions
+                and state.pending_decisions[-1].kind == "discard_excess_from_hand"):
+            break
+        acts = legal_actions(state)
+        act = next((a for a in acts if getattr(a, "instance_id", None) in pick_ids),
+                   acts[0])
+        state = apply(state, act)
+    return state
+
+
 def _place(state, owner_id: str, card_def, arena: str = "ground"):
     """Place card_def directly into arena. Returns the CardInstance."""
     from swu.engine.state import CardInstance, Zone
@@ -6734,12 +6750,14 @@ class TestLothalInsurgentSOR190:
 
     def test_SOR_190_opponent_draws_then_discards_when_another_played(self, repo):
         """With another card played this phase, the opponent draws 1 then discards a
-        random (first) hand card."""
+        card of their choice (here: their old hand card)."""
         state = _make_state()
         insurgent = _place(state, "P0", _get_card(repo, "SOR", "190"), "ground")
         hand, deck = self._opp_hand_and_deck(state, repo)
         state.game_memory.cards_played_this_phase["P0"] = 2  # "played another card"
         state = self._drain(_fire_when_played(state, insurgent))
+        assert state.pending_decisions[-1].deciding_player_id == "P1"  # they choose
+        state = _resolve_discards(state, pick_ids=(hand.instance_id,))
         p1 = state.players[1]
         assert deck.instance_id in {c.instance_id for c in p1.hand}, "opponent drew the deck card"
         assert hand.instance_id in {c.instance_id for c in p1.discard}, "opponent discarded its old card"

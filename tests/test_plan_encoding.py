@@ -37,6 +37,17 @@ def planned():
     return slug, groups, meta
 
 
+@pytest.fixture
+def planned_with_open_escalation(monkeypatch):
+    """The fixture deck's persisted manifest has one escalation group, flagged
+    ``opponent-chooses-target`` back when that primitive did not exist.  It has
+    long since landed, so a re-plan now (rightly) drops the flag.  To keep testing
+    how escalation groups are separated and ordered, pretend it is still unbuilt."""
+    monkeypatch.setattr(P, "_LANDED_CAPABILITIES",
+                        P._LANDED_CAPABILITIES - {"opponent-chooses-target"})
+    return P.plan(DECK, None, _db())
+
+
 def test_slug_from_fixture(planned):
     slug, _, _ = planned
     assert slug == "shd-han-solo"
@@ -52,8 +63,8 @@ def test_determinism():
     assert sig(g1) == sig(g2)
 
 
-def test_group_kinds_separated(planned):
-    _, groups, _ = planned
+def test_group_kinds_separated(planned_with_open_escalation):
+    _, groups, _ = planned_with_open_escalation
     keyword_groups = [g for g in groups if g.kind == "keyword"]
     ability_groups = [g for g in groups if g.kind == "ability"]
     assert {g.keyword for g in keyword_groups} == {"Smuggle", "Bounty"}
@@ -78,8 +89,8 @@ def test_keyword_group_membership(planned):
     assert {"SHD_148", "SHD_160", "SHD_252"} <= cids
 
 
-def test_ordering_keyword_first_escalation_last(planned):
-    _, groups, _ = planned
+def test_ordering_keyword_first_escalation_last(planned_with_open_escalation):
+    _, groups, _ = planned_with_open_escalation
     seqs = [g.seq for g in groups]
     assert seqs == sorted(seqs), "groups must be in ascending seq order"
     kinds_in_order = [g.kind for g in groups]
@@ -252,6 +263,25 @@ def test_rerun_stable_ids_no_clobber(tmp_path, monkeypatch):
         "done": len(done_group.cards), "total": len(done_group.cards)}
     P.emit(slug2, groups2, meta2)
     assert spec.read_text(encoding="utf-8") == "SENTINEL — already encoded"
+
+
+def test_rerun_drops_a_landed_primitive_from_a_persisted_group(tmp_path, monkeypatch):
+    """A persisted group keeps its id, but a primitive since flipped to "existing"
+    must stop flagging it as an escalation (Beast / Weakness tokens, HMW) — while a
+    still-missing one keeps the flag."""
+    import json
+    monkeypatch.setattr(P, "ENCODING_DIR", tmp_path)
+    set_with_gaps = _set_with_gaps()
+    slug, groups, meta = P.plan(None, set_with_gaps, _db())
+    P.emit(slug, groups, meta)
+    manifest = tmp_path / slug / "manifest.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["groups"][0]["new_primitives"] = ["weakness-token", "not-yet-built"]
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    assert "weakness-token" in P._LANDED_CAPABILITIES
+    _, groups2, _ = P.plan(None, set_with_gaps, _db())
+    assert groups2[0].gid == data["groups"][0]["gid"]
+    assert groups2[0].new_primitives == ["not-yet-built"]
 
 
 def test_set_code_input(tmp_path, monkeypatch):

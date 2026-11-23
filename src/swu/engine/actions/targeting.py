@@ -40,7 +40,6 @@ from swu.engine.events import (
 )
 from swu.engine.state import CardInstance, GameState
 from swu.engine.tokens import attach_token
-from swu.engine.triggers import get_bus
 
 from swu.engine.actions.base import (
     Action, IllegalActionError,
@@ -52,7 +51,7 @@ from swu.engine.actions.zones import (
     _apply_put_on_deck, _defeat_unit, _put_unit_in_play,
 )
 from swu.engine.actions.shared import (
-    _take_from_hand,
+    _fire_card_played, _take_from_hand,
 )
 
 
@@ -106,7 +105,7 @@ class ReplayReturnedUnit(Action):
         _put_unit_in_play(
             s, owner_ps, ci, grant_keyword=grant_keyword,
             play_source="hand", cost_paid=0)
-        get_bus().fire(s, card_played_evt)
+        _fire_card_played(s, card_played_evt, after_idx)
         if not s.is_terminal() and not s.pending_decisions:
             s.active_player_index = after_idx
         return s

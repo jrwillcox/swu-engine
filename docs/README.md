@@ -16,6 +16,7 @@ Start with the [top-level README](../README.md).
 |---|---|
 | [bots.md](bots.md) | Difficulty levels, the heuristic and LLM bots, and how to measure a bot change. |
 | [testing.md](testing.md) | Test tiers, the invariant oracle, soak campaigns and regression tests. |
+| [known_deviations.md](known_deviations.md) | Where the engine knowingly differs from the Comprehensive Rules, and whether it can change a game. |
 | [pipeline.md](pipeline.md) | Building `data/swu.db` from the publisher's API, and refreshing it for a new set. |
 | [openapi.json](openapi.json) | Generated backend schema (`python -m swu.web --export-openapi docs/openapi.json`). |
 

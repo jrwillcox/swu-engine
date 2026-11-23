@@ -502,6 +502,8 @@ def _analyse_ability_coverage(agg_abilities: dict[str, int], reachable_keys: set
         WhenDefeatedRedo, OnAttackRedo,
         CrossArenaAttack, CannotBeAttacked, CannotBeAttackedWhileExhausted,
         CostRoute, AbilityDamageBonus, BaseUpgradeDefeatReplacement,
+        UnitsEnterPlayReady, NthUnitPlayDiscount,
+        AmbushCanAttackBases, CopyLeaderTraits,
     )
 
     registry = get_all_registered()
@@ -548,7 +550,13 @@ def _analyse_ability_coverage(agg_abilities: dict[str, int], reachable_keys: set
                            CostRoute,
                            # Read at the damage / upgrade-defeat chokepoints (Ty
                            # Yorrick HMW_185, Vice Admiral Rampart HMW_60).
-                           AbilityDamageBonus, BaseUpgradeDefeatReplacement))
+                           AbilityDamageBonus, BaseUpgradeDefeatReplacement,
+                           # Read at the enter-play placement / play-cost seam
+                           # (Ritual Dragon HMW_234, Origin Tree Shyyyo HMW_145).
+                           UnitsEnterPlayReady, NthUnitPlayDiscount,
+                           # Read at the Ambush decision / the trait layer
+                           # (Fett's Firespray HMW_53, Zam Wesell HMW_134).
+                           AmbushCanAttackBases, CopyLeaderTraits))
             for s in specs)
         if count > 0:
             fired[key] = count

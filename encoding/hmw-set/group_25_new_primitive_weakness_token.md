@@ -3,7 +3,6 @@
 - **Group id (paste this):** `hmw-set:25`
 - **Kind:** ability
 - **Cards:** 7
-- **⚠ New primitives suspected:** weakness-token — see escalation rule; do NOT jam a core-resolution change into a card batch.
 
 ## Cards
 
@@ -32,9 +31,7 @@
 
 **Mechanical analysis:** trigger archetype `epic_action`; effect families ['token', 'ramp'].
 
-**Existing primitives that should suffice:** push_play_from_hand, CostReduction.
-
-**⚠ Suspected NEW primitive:** weakness-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** push_play_from_hand, CostReduction, weakness-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -50,7 +47,7 @@
 
 **Mechanical analysis:** trigger archetype `on_attack`; effect families ['token'].
 
-**⚠ Suspected NEW primitive:** weakness-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** weakness-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -66,9 +63,7 @@
 
 **Mechanical analysis:** trigger archetype `on_attack`; effect families ['damage', 'heal', 'token'].
 
-**Existing primitives that should suffice:** DealDamage, Heal.
-
-**⚠ Suspected NEW primitive:** weakness-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** DealDamage, Heal, weakness-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -83,7 +78,7 @@
 
 **Mechanical analysis:** trigger archetype `when_played`; effect families ['—'].
 
-**⚠ Suspected NEW primitive:** weakness-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** weakness-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -97,7 +92,7 @@
 
 **Mechanical analysis:** trigger archetype `when_defeated`; effect families ['token'].
 
-**⚠ Suspected NEW primitive:** weakness-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** weakness-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -112,7 +107,7 @@
 
 **Mechanical analysis:** trigger archetype `when_played`; effect families ['token'].
 
-**⚠ Suspected NEW primitive:** weakness-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** weakness-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 
@@ -127,7 +122,7 @@
 
 **Mechanical analysis:** trigger archetype `on_attack`; effect families ['token'].
 
-**⚠ Suspected NEW primitive:** weakness-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** weakness-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 

@@ -90,7 +90,7 @@ _PROMPTS: dict[str, str] = {
     "resolve_unique": "You control two copies of a unique card — choose which one to keep; the other is defeated.",
     "bottom_from_hand": "Put cards from your hand on the bottom (or, when offered, the top) of your deck — pick one at a time (pick order = bottom order).",
     "resource_from_hand": "You may resource cards from your hand — each enters your resource row ready. Pick one at a time, or stop.",
-    "discard_excess_from_hand": "Discard cards from your hand down to the required size — choose which to discard, one at a time.",
+    "discard_excess_from_hand": "Discard from your hand — choose which card(s) to discard, one at a time.",
     "name_and_discard": "Name a card in the opponent's revealed hand — one copy of it is discarded.",
     "may_discard": "An opponent's effect: discard a random card from your hand, or decline (and suffer the effect).",
     "disclose": "You may disclose — reveal cards from your hand bearing the required aspect icons for a bonus, or decline.",

@@ -460,9 +460,8 @@ _CHOOSE_KEYWORD_MODES = {
 # target instead of presenting a target step.  ``ready_resource`` qualifies — all
 # of a player's exhausted resources are identical; ``exhaust_unit`` does not (it
 # can hit any unit, friendly or enemy, and the choice matters).  K-2SO's two
-# modes each act on a single fixed card (the opponent's base / the first card of
-# their hand — the DiscardFromHand(chooser="opponent") simplification), so they
-# are fungible too.
+# modes need no target from the controller (the opponent's base; the opponent
+# then picks the card to discard), so they are fungible too.
 _MODAL_FUNGIBLE_MODES = {"ready_resource", "exhaust_resource", "kaytoo_damage_base", "kaytoo_discard",
                          "bomb_ground", "bomb_space", "exhaust_ground", "exhaust_space",
                          "create_clone_troopers_2", "create_battle_droids_3",
@@ -499,6 +498,22 @@ def _resolve_modal_mode(
             else:
                 from swu.engine.actions import push_name_and_discard
                 push_name_and_discard(s, src[1], optional=True, discarder_draws=True)
+        if not s.is_terminal() and not s.pending_decisions:
+            s.active_player_index = top.after_resolve_player_index
+        return s
+    if mode == "kaytoo_discard":
+        # "That player discards a card" (K-2SO SOR_145): THEY choose which.  The
+        # target is only the mode's availability proxy.  Pop first, then hand off.
+        s.pending_decisions.pop()
+        s.event_log.append(DecisionResolved(
+            deciding_player_id=top.deciding_player_id, kind="modal",
+            choice="an opponent discards a card"))
+        from swu.engine.actions import push_discard_of_choice
+        controller_id = top.context.get("controller_id", top.deciding_player_id)
+        opp = s.players[1 - s.player_index(controller_id)]
+        push_discard_of_choice(s, opp.player_id, 1,
+                               source_id=top.context.get("source_id", ""),
+                               after_idx=top.after_resolve_player_index)
         if not s.is_terminal() and not s.pending_decisions:
             s.active_player_index = top.after_resolve_player_index
         return s
@@ -599,14 +614,6 @@ def _resolve_modal_mode(
         from swu.abilities.resolver import _apply_deal_damage
         _apply_deal_damage(s, target.instance_id, 3)
         choice = "dealt 3 damage to a base"
-    elif mode == "kaytoo_discard":
-        for p in s.players:
-            if target in p.hand:
-                p.hand.remove(target)
-                target.zone = Zone.DISCARD
-                p.discard.append(target)
-                break
-        choice = "an opponent discarded a card"
     else:
         raise IllegalActionError(f"Unknown modal mode {mode!r}")
     s.pending_decisions.pop()
@@ -809,9 +816,8 @@ _REPEATED_MODAL_MODE_LABELS = {
 }
 
 # Modes that require the controller to pick a target.  ``opponent_discards`` has
-# no target (the opponent discards the first card of their hand, matching the
-# DiscardFromHand(chooser="opponent") simplification), so it resolves without a
-# target step.
+# no target for the CONTROLLER (the opponent picks the card in a follow-up
+# ``push_discard_of_choice``), so it resolves without a target step.
 _REPEATED_MODAL_TARGETED_MODES = {"deal_2_damage", "defeat_upgrade"}
 
 
@@ -979,13 +985,12 @@ def _apply_repeated_modal_option(
         if target_id is not None:
             _apply_defeat_unit(s, target_id)
     elif mode == "opponent_discards":
-        # The opponent of the controller discards the first card of their hand
-        # (matches DiscardFromHand(chooser="opponent")); fizzles on empty hand.
-        opp = s.players[1 - s.player_index(controller_id)]
-        if opp.hand:
-            ci = opp.hand.pop(0)
-            ci.zone = Zone.DISCARD
-            opp.discard.append(ci)
+        # The opponent of the controller discards a card of THEIR choice (the
+        # decision is pushed after this modal has popped); fizzles on empty hand.
+        from swu.engine.actions import push_discard_of_choice
+        opp_idx = 1 - s.player_index(controller_id)
+        push_discard_of_choice(s, s.players[opp_idx].player_id, 1,
+                               source_id="", after_idx=opp_idx)
 
 
 # ── choose_two_modal: "Choose two, in any order" aspect events ────────────────

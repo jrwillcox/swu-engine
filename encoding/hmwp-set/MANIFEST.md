@@ -1,6 +1,6 @@
 # Encoding manifest — `hmwp-set`
 
-Deck readiness: **13/20** cards playable. Encoding groups: **2/6** complete.
+Deck readiness: **18/20** cards playable. Encoding groups: **4/6** complete.
 
 Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py hmwp-set --group NN`.
 
@@ -10,10 +10,10 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 |--:|----------|------|-------|------:|----------|----------------|------------|
 | 1 | `hmwp-set:01` | ability | Direct damage & removal | 6 | 6/6 ✅ | — | — |
 | 2 | `hmwp-set:02` | ability | Card advantage & disruption | 1 | 1/1 ✅ | — | — |
-| 3 | `hmwp-set:03` | ability | Combat tricks, buffs & tempo | 4 | 2/4 | — | — |
-| 4 | `hmwp-set:04` | ability | Miscellaneous abilities | 3 | 0/3 | — | — |
-| 5 | `hmwp-set:05` | ability | New primitive: beast-token | 1 | 0/1 | beast-token | — |
-| 6 | `hmwp-set:06` | ability | New primitive: weakness-token | 1 | 0/1 | weakness-token | — |
+| 3 | `hmwp-set:03` | ability | Combat tricks, buffs & tempo | 4 | 4/4 ✅ | — | — |
+| 4 | `hmwp-set:04` | ability | Miscellaneous abilities | 3 | 3/3 ✅ | — | — |
+| 5 | `hmwp-set:05` | ability | New primitive: beast-token | 1 | 0/1 | — | — |
+| 6 | `hmwp-set:06` | ability | New primitive: weakness-token | 1 | 0/1 | — | — |
 
 ## Copy-paste entries
 
@@ -31,13 +31,13 @@ hmwp-set:02
 # Boga (HMWP_8)
 ```
 
-### `hmwp-set:03` — Combat tricks, buffs & tempo (2/4)
+### `hmwp-set:03` — Combat tricks, buffs & tempo (✅ done)
 ```
 hmwp-set:03
 # Batcher (HMWP_4), Gunga City Guard (HMWP_5), Invasion Lander (HMWP_7), Chief Chirpa (HMWP_13)
 ```
 
-### `hmwp-set:04` — Miscellaneous abilities (0/3)
+### `hmwp-set:04` — Miscellaneous abilities (✅ done)
 ```
 hmwp-set:04
 # Zam Wesell (HMWP_9), Teebo (HMWP_12), New Tactics (HMWP_18)

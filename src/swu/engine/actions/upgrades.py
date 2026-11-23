@@ -45,7 +45,7 @@ from swu.engine.actions.dispatch import (
     register_decisions,
 )
 from swu.engine.actions.costs import (
-    _exhaust_resources, _pay_play_cost, _play_upgrade_affordable, _play_upgrade_cost, _vehicle_has_pilot,
+    _exhaust_resources, _pay_play_cost, _play_upgrade_affordable, _play_upgrade_cost, _spend_play_discounts, _vehicle_has_pilot,
 )
 from swu.engine.actions.zones import (
     _attach_upgrade, _eligible_upgrade_targets, _is_fortify, _upgrade_target_spec, note_upgrade_attached,
@@ -948,6 +948,8 @@ class PlayUpgradeFromHand(Action):
                 break
         if cost:
             _pay_play_cost(s, ps, cost)
+        if not free:
+            _spend_play_discounts(s, upgrade_ci, ps, self.host_id)
         # Pop the decision BEFORE attaching, so the upgrade's own WhenPlayed
         # triggers land on a clean stack (the "pop, then act" gotcha).
         s.pending_decisions.pop()

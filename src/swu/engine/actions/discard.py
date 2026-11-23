@@ -1427,6 +1427,11 @@ class SelectExcessHandCardToDiscard(Action):
         for pid, n in ctx["discarded"].items():
             if n:
                 record_hand_discard(s, pid)
+        # "Discard a card, then draw a card" (push_discard_of_choice ``then_draw``):
+        # the draw follows the CHOICE, so the drawn card can't be the one discarded.
+        for pid, n in (ctx.get("then_draw") or {}).items():
+            if n:
+                _draw_cards(s, s.player_by_id(pid), int(n))
         if not s.is_terminal() and not s.pending_decisions:
             s.active_player_index = top.after_resolve_player_index
         return s
@@ -1498,6 +1503,53 @@ def push_discard_excess_from_hand(
         deciding_player_id=order[idx],
         kind="discard_excess_from_hand",
     ))
+
+
+def push_discard_of_choice(
+    s: GameState, player_id: str, count: int, *, source_id: str,
+    after_idx: int, then_draw: int = 0,
+) -> None:
+    """``player_id`` discards ``count`` cards of THEIR choice from their hand — "an
+    opponent discards a card" / "discard a card from your hand".
+
+    The ``discard_excess_from_hand`` walk with a one-player ``order`` and a pinned
+    ``keeps`` target, so the web prompt and the bot already handle it.  No prompt
+    when there is no choice: an empty hand does nothing, and a hand of ``count`` or
+    fewer cards is discarded whole, inline.  ``then_draw`` draws that many cards for
+    the same player AFTER the discard ("Discard a card, then draw a card").
+
+    Replaced the old first-card auto-discard (``DiscardFromHand``, K-2SO's and Poe's
+    modal discards), a known deviation fixed 2026-11-23."""
+    ps = s.player_by_id(player_id)
+    if not ps.hand or len(ps.hand) <= int(count):
+        gone = list(ps.hand)
+        for ci in gone:
+            ps.hand.remove(ci)
+            ci.zone = Zone.DISCARD
+            ps.discard.append(ci)
+            note_hand_or_deck_discard(s, ci)
+        if gone:
+            record_hand_discard(s, player_id)
+        if then_draw:
+            _draw_cards(s, ps, int(then_draw))
+        return
+    s.pending_decisions.append(PendingDecision(
+        deciding_player_id=player_id,
+        kind="discard_excess_from_hand",
+        context={
+            "source_id": source_id,
+            "order": [player_id],
+            "idx": 0,
+            "keep": 0,
+            "keeps": {player_id: len(ps.hand) - int(count)},
+            "discarded": {},
+            "then_draw": {player_id: int(then_draw)} if then_draw else {},
+        },
+        after_resolve_player_index=after_idx,
+    ))
+    s.active_player_index = s.player_index(player_id)
+    s.event_log.append(DecisionPushed(deciding_player_id=player_id,
+                                      kind="discard_excess_from_hand"))
 
 
 def _discard_excess_from_hand_actions(state: GameState, top) -> list["Action"]:

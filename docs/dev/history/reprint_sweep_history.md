@@ -1565,7 +1565,9 @@ pattern); `optional=True` carries "you may". Reuses `trigger_option`
 **KEY DESIGN: incrementing INSIDE `fire_triggered_abilities` (not at the ~10 CardPlayed
 emission sites) keeps the counter aligned with FIRING opportunities → the Nth *fired*
 play is exactly `count==N`, avoiding an off-by-one where a non-firing play advances the
-count past the threshold.** **DOCUMENTED LIMITATION:** the 4 EFFECT-driven plays
+count past the threshold.** **(FIXED 2026-11-23: every play path now fires through
+`shared._fire_card_played`; see seams_log "Ability-driven plays count".)**
+**DOCUMENTED LIMITATION (historical):** the 4 EFFECT-driven plays
 (PlayFromHand ability-play / ReplayReturnedUnit owner-replay / FinishSearch play-from-
 deck / Exploit-commit) append `CardPlayed` WITHOUT firing it through
 `fire_triggered_abilities`, so they don't count — matching every existing

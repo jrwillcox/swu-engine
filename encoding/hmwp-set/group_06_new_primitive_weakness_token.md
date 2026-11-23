@@ -3,7 +3,6 @@
 - **Group id (paste this):** `hmwp-set:06`
 - **Kind:** ability
 - **Cards:** 1
-- **⚠ New primitives suspected:** weakness-token — see escalation rule; do NOT jam a core-resolution change into a card batch.
 
 ## Cards
 
@@ -23,9 +22,7 @@
 
 **Mechanical analysis:** trigger archetype `when_played`; effect families ['damage', 'token'].
 
-**Existing primitives that should suffice:** DealDamage.
-
-**⚠ Suspected NEW primitive:** weakness-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** DealDamage, weakness-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 

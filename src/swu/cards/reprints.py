@@ -220,6 +220,23 @@ REPRINT_ALIASES: dict[tuple[str, str], tuple[str, str]] = {
     # hmw-set:11–13 mirrors (2026-11-23)
     ("HMWP", "4"): ("HMW", "83"),     # Batcher
     ("P26", "264"): ("HMW", "44"),    # Ima-Gun Di
+    # hmw-set:14–20 mirrors (2026-11-23)
+    ("HMWP", "7"): ("HMW", "111"),    # Invasion Lander
+    ("HMWP", "13"): ("HMW", "164"),   # Chief Chirpa
+    ("P26", "246"): ("HMW", "104"),   # Garnac
+    ("P26", "250"): ("HMW", "203"),   # Victor Squadron
+    ("P26", "251"): ("HMW", "208"),   # Luke Skywalker
+    ("P26", "271"): ("HMW", "124"),   # Luminara Unduli
+    ("P26", "275"): ("HMW", "117"),   # Chewbacca
+    # hmw-set:21–24 mirrors (2026-11-23)
+    ("HMWP", "9"): ("HMW", "134"),    # Zam Wesell
+    ("HMWP", "12"): ("HMW", "162"),   # Teebo
+    ("HMWP", "18"): ("HMW", "218"),   # New Tactics
+    ("P26", "32"): ("HMW", "53"),     # Fett's Firespray
+    ("P26", "241"): ("HMW", "53"),    # Fett's Firespray
+    ("P26", "272"): ("HMW", "225"),   # Boba Fett
+    # hmw-set:25 mirrors (2026-11-23)
+    ("P26", "265"): ("HMW", "62"),    # Nuvo Vindi
     # Victor Leader  ->  JTL_85
     ("P25", "154"): ("JTL", "85"),
     ("P25", "164"): ("JTL", "85"),

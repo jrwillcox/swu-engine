@@ -7048,15 +7048,16 @@ class TestCloneTwi116:
         assert "Clone" in copied.card_def.traits
         assert copied.card_def.is_unique is False
 
-    def test_TWI_116_declining_leaves_the_printed_body(self, repo):
-        from swu.engine.actions import compute_power
+    def test_TWI_116_declining_leaves_a_0_0_body_that_is_defeated(self, repo):
+        """Clone is printed 0/0.  Declining the copy leaves it at 0 HP, and a unit
+        with 0 HP is defeated (the compute_hp floor is 0, not 1)."""
         state = _make_state()
         clone = _place(state, "P0", _get_card(repo, "TWI", "116"), "ground")
         _place(state, "P1", _get_card(repo, "SOR", "46"), "ground")
         state = _decline(_fire_when_played(state, clone))
-        still = _find_instance(state, clone.instance_id)
-        assert still.card_def.name == "Clone"
-        assert compute_power(state, still) == 0
+        ps = state.player_by_id("P0")
+        assert all(u.instance_id != clone.instance_id for u in ps.ground_arena)
+        assert any(c.instance_id == clone.instance_id for c in ps.discard)
 
 
 class TestTheCloneWarsTwi125:

@@ -137,6 +137,10 @@ Then run the group's `VERIFY:` command, and the fast suite before committing.
 - **`state.find_instance` reaches the discard pile** but not a defeated token. Test
   "defeated this way" against the arena.
 - **`compute_power` floors at 0**, so a debuff can't be measured below zero.
+  `compute_hp` floors at 0 too, and 0 HP is lethal: an HP debuff (or a Weakness
+  token) kills an undamaged unit it reduces to 0.
+- **Don't `_place` a non-unit card into an arena in a test.** An event or upgrade
+  has no HP, so it reads as 0 HP and the state-based sweep removes it.
 - **Assert costs and ramp as deltas.** `_play_event_from_hand` gives resources, and
   `_make_state`'s bases have no aspects.
 

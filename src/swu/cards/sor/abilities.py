@@ -4627,9 +4627,8 @@ def _lothal_insurgent():
     ``CONTROLLER_PLAYED_OTHER_CARD_THIS_PHASE`` condition (controller's per-phase play
     counter ≥2 — the source's own play is already counted before trigger collection).
     Effects run in order: ``DrawCards(1, player="opponent")`` then
-    ``DiscardFromHand(1, chooser="opponent")`` — the latter uses the established
-    first-card = "random discard" simplification.  2-player: "each opponent" is the
-    one opponent."""
+    ``DiscardFromHand(1, chooser="opponent")`` — the opponent picks the card.
+    2-player: "each opponent" is the one opponent."""
     return TriggerAbility(
         trigger=WhenPlayed(),
         effects=[DrawCards(1, player="opponent"),

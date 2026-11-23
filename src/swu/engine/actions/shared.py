@@ -46,7 +46,7 @@ from swu.engine.actions.base import (
     Action, IllegalActionError,
 )
 from swu.engine.actions.costs import (
-    _affordable_with_credits, _consume_play_discount, _effective_cost, _exhaust_resources, _pay_play_cost, _play_cost,
+    _affordable_with_credits, _effective_cost, _exhaust_resources, _pay_play_cost, _play_cost, _spend_play_discounts,
 )
 from swu.engine.actions.zones import (
     _attach_upgrade, _eligible_upgrade_targets, _find_in_arenas, _put_unit_in_play, _resolve_event_ability, note_upgrade_attached,
@@ -54,6 +54,25 @@ from swu.engine.actions.zones import (
 from swu.engine.actions.flow import (
     _assert_phase, _switch_active_player,
 )
+
+
+def _fire_card_played(s: GameState, evt: CardPlayed, after_idx: int) -> None:
+    """Announce a play: fire ``CardPlayed`` on the keyword bus AND through the
+    trigger system.
+
+    The trigger fire is what makes a play count — it increments
+    ``cards_played_this_phase`` / ``non_units_played_this_phase``, records the
+    traits ledger, and runs every "when you / an opponent play(s) a card" observer.
+    Every play path must come through here (or make the same two calls, as
+    ``PlayCard`` does); a path that fired only the bus left ability-driven plays
+    (play-from-hand, deck-search plays, Exploit / cost-route commits, …) invisible
+    to all of those — the 2026-11-23 known-deviation fix.  ``played_card_id`` is
+    threaded exactly as ``PlayCard`` does (Dengar SHD_133 locates the played
+    upgrade's host through it)."""
+    get_bus().fire(s, evt)
+    from swu.abilities.resolver import fire_triggered_abilities
+    fire_triggered_abilities(s, evt, after_all_player_idx=after_idx,
+                             event_ctx={"played_card_id": evt.instance_id})
 
 
 # ── ACTION phase actions ──────────────────────────────────────────────────────
@@ -112,6 +131,8 @@ class PlayFromDiscard(Action):
                 if found is not None:
                     ci, holder = found, other
                     break
+        if ci is None:
+            raise IllegalActionError(f"{self.instance_id} is in no discard pile")
         holder.discard.remove(ci)
 
         if self.free:
@@ -124,11 +145,11 @@ class PlayFromDiscard(Action):
                     i for i in foreign[ps.player_id] if i != self.instance_id]
             cost = 0
         else:
-            cost = _play_cost(s, ci, ps, target_host_id=self.upgrade_target_id)
+            cost = _play_cost(s, ci, ps, target_host_id=self.upgrade_target_id,
+                              extra_reduction=int(self.discount or 0))
             if self.discount:
                 # Consume the one-shot discounted permission (Aid from the Innocent
                 # TWI_201) so the discount can't be spent twice.
-                cost = max(0, cost - int(self.discount))
                 s.game_memory.discard_play_discount_this_phase.pop(
                     self.instance_id, None)
             # Consume a cross-pile PAID permission (Obi-Wan Kenobi SEC_205), whose
@@ -138,6 +159,7 @@ class PlayFromDiscard(Action):
                 foreign_paid[ps.player_id] = [
                     i for i in foreign_paid[ps.player_id] if i != self.instance_id]
             _pay_play_cost(s, ps, cost)
+            _spend_play_discounts(s, ci, ps, self.upgrade_target_id)
 
         card_played_evt = CardPlayed(
             player_id=ps.player_id,
@@ -241,7 +263,7 @@ class PlotPlay(Action):
             raise IllegalActionError(
                 f"Insufficient resources: need {cost}, have {ps.available_resources}")
         _exhaust_resources(ps, cost)
-        _consume_play_discount(s, ci, ps, via_plot=True)
+        _spend_play_discounts(s, ci, ps, via_plot=True)
 
         # Replace the played card with the top of the deck (deterministic), as
         # Smuggle does, so the resource count is preserved.
@@ -557,15 +579,15 @@ def _enumerate_discard_play_actions(
                               - int(getattr(ci.card_def, "cost", None) or 0))
                 if isinstance(ci.card_def, Upgrade):
                     for target in _eligible_upgrade_targets(state, ci):
-                        cost = max(0, _play_cost(state, ci, ps,
-                                                 target_host_id=target.instance_id)
-                                   - penalty)
+                        cost = _play_cost(state, ci, ps,
+                                          target_host_id=target.instance_id,
+                                          extra_reduction=penalty)
                         if _affordable_with_credits(ps, cost, state):
                             out.append(PlayFromDiscard(
                                 ci.instance_id, target.instance_id,
                                 discount=penalty))
                 else:
-                    cost = max(0, _play_cost(state, ci, ps) - penalty)
+                    cost = _play_cost(state, ci, ps, extra_reduction=penalty)
                     if _affordable_with_credits(ps, cost, state):
                         out.append(PlayFromDiscard(ci.instance_id, discount=penalty))
     # (c) Cards granted a DISCOUNTED per-phase play from the discard pile (Aid from
@@ -579,13 +601,13 @@ def _enumerate_discard_play_actions(
             continue
         if isinstance(ci.card_def, Upgrade):
             for target in _eligible_upgrade_targets(state, ci):
-                cost = max(0, _play_cost(state, ci, ps,
-                                         target_host_id=target.instance_id) - red)
+                cost = _play_cost(state, ci, ps, target_host_id=target.instance_id,
+                                  extra_reduction=red)
                 if _affordable_with_credits(ps, cost, state):
                     out.append(PlayFromDiscard(ci.instance_id, target.instance_id,
                                                discount=red))
         else:
-            cost = max(0, _play_cost(state, ci, ps) - red)
+            cost = _play_cost(state, ci, ps, extra_reduction=red)
             if _affordable_with_credits(ps, cost, state):
                 out.append(PlayFromDiscard(ci.instance_id, discount=red))
     return out

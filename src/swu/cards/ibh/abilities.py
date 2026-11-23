@@ -121,9 +121,7 @@ def _improvised_detonation():
 def _i_want_proof_not_leads():
     """Draw 2 cards, then discard a card from your hand.
 
-    DEVIATION (documented): the controller discard uses the established
-    first-card simplification (K-2SO SOR_145 / J-Type Nubian Starship LOF_194) —
-    the forced downside itself is faithful, only *which* card is not chosen."""
+    The controller picks the discard from the hand they hold after drawing."""
     return EventAbility(effects=[
         DrawCards(count=2),
         DiscardFromHand(count=1, chooser="controller"),

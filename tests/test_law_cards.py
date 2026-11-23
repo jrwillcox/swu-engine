@@ -7386,7 +7386,9 @@ class TestAllianceOutpostLAW19:
         state = _make_state()
         base = _set_base_law07(state, repo, "LAW", "19", "P0")
         host = _place(state, "P0", _get_card(repo, "SOR", "46"), "ground")
-        other = _place(state, "P0", _get_card(repo, "SOR", "203"), "ground")
+        # A real unit (SOR_95 Battlefield Marine).  This used to be SOR_203, an
+        # EVENT placed into the arena — HP-less, so the 0-HP floor now sweeps it.
+        other = _place(state, "P0", _get_card(repo, "SOR", "95"), "ground")
         exp = attach_token(state, state.player_by_id("P0"), host, "Experience")
         state.active_player_index = 0
 

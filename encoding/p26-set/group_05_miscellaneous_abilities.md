@@ -25,9 +25,7 @@
 
 **Mechanical analysis:** trigger archetype `when_played`; effect families ['—'].
 
-**Existing primitives that should suffice:** control-change.
-
-**⚠ Suspected NEW primitive:** weakness-token. If implementing it touches core resolution / the trigger / decision machinery, STOP and flag for a dedicated framework session.
+**Existing primitives that should suffice:** control-change, weakness-token.
 
 **Acceptance criteria:** one focused test named for the card asserting the behaviour through public engine interfaces (`legal_actions`/`apply`), and the card classifies as `implemented` (or better) in the deck audit.
 

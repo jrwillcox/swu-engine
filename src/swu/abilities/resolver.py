@@ -317,8 +317,11 @@ def _trigger_matches(
         # another permanent, so — unlike WhenDeployed — the instance ids are NOT
         # compared; the gate is that the deploying player is the source's controller.
         from swu.engine.events import LeaderDeployed
-        return (isinstance(event, LeaderDeployed)
-                and event.player_id == source_ci.owner_id)
+        if not isinstance(event, LeaderDeployed):
+            return False
+        if getattr(trigger, "opponent", False):
+            return event.player_id != source_ci.owner_id
+        return event.player_id == source_ci.owner_id
 
     if isinstance(trigger, WhenDefeated):
         return (
@@ -1380,6 +1383,21 @@ def _leader_unit_grant_keys() -> set:
     return _LEADER_UNIT_GRANT_KEYS
 
 
+def _acting_player_id(state: "GameState", source_ci: "CardInstance",
+                      event_ctx: Optional[dict] = None) -> str:
+    """Whose perspective an ability resolves from: the source's CONTROLLER.
+
+    A source that has just left play (a When Defeated / bounty resolving from limbo)
+    uses its controller at the moment of defeat, which ``_defeat_unit`` records as
+    ``defeated_controller_id`` — last-known information."""
+    from swu.engine.state import controller_id
+    ctx = event_ctx or {}
+    if (ctx.get("defeated_id") == source_ci.instance_id
+            and ctx.get("defeated_controller_id")):
+        return str(ctx["defeated_controller_id"])
+    return controller_id(state, source_ci)
+
+
 def _spec_matches_ci(
     spec: TargetSpec,
     candidate: "CardInstance",
@@ -1408,17 +1426,26 @@ def _spec_matches_ci(
     if spec.fixed == SELF:
         return candidate.instance_id == source_ci.instance_id
 
-    # Controller filter
-    if spec.controller == "friendly":
-        if candidate.owner_id != source_ci.owner_id:
-            return False
-    elif spec.controller == "enemy":
-        if candidate.owner_id == source_ci.owner_id:
+    # Controller filter — by CONTROL, not ownership (a stolen unit is friendly to
+    # the thief and an enemy to its owner).
+    if spec.controller in ("friendly", "enemy"):
+        from swu.engine.state import controller_id
+        same = (controller_id(state, candidate)
+                == _acting_player_id(state, source_ci, event_ctx))
+        if same != (spec.controller == "friendly"):
             return False
 
     # Kind filter
     if spec.kind == "unit":
         if candidate.zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
+            return False
+    elif spec.kind == "unit_or_leader":
+        # An arena unit, or an undeployed leader in its base zone — "General
+        # Grievous (leader or unit)" (Soulless One TWI_179).
+        from swu.cards.models import Leader as _Leader
+        if candidate.zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA) and not (
+                candidate.zone == Zone.BASE_ZONE
+                and isinstance(candidate.card_def, _Leader)):
             return False
     elif spec.kind == "base":
         from swu.cards.models import Base
@@ -2150,11 +2177,9 @@ def _spec_matches_ci(
         if pred == "droid_or_general_grievous":
             # "a friendly Droid unit or General Grievous" (Soulless One TWI_179):
             # the candidate must either carry the Droid trait or be named General
-            # Grievous (his deployed leader-unit form, since the leader is not a
-            # Droid).  Combined with controller="friendly"/kind="unit", so only
-            # arena units qualify.  LIMITATION: the undeployed leader (in base_zone)
-            # is not an arena unit and so is not offered — exhausting the undeployed
-            # leader form is the unexercised edge of "(leader or unit)".
+            # Grievous (his leader card, deployed or not — the leader is not a
+            # Droid).  Pair it with kind="unit_or_leader" so the UNDEPLOYED leader
+            # is offered too ("(leader or unit)").
             from swu.engine.traits import has_trait
             name = getattr(candidate.card_def, "name", None) or ""
             if not (has_trait(state, candidate, "Droid")
@@ -2266,6 +2291,65 @@ def _spec_matches_ci(
             if not getattr(state.player_by_id(source_ci.owner_id),
                            "has_force_token", False):
                 return False
+        if pred.startswith("controller_has_planet_base:"):
+            # BOARD gate: "If you control a Kashyyyk base, <targeted effect>"
+            # (Overgrowth HMW_151) — the ``controller_has_force_token`` shape, the
+            # planet riding after the colon.
+            from swu.cards.base_planets import controls_planet_base
+            if not controls_planet_base(state.player_by_id(source_ci.owner_id),
+                                        pred.split(":", 1)[1]):
+                return False
+        if pred == "controller_nonleader_shares_leader_trait":
+            # BOARD gate: "If a friendly non-leader unit shares a Trait with a
+            # friendly leader, <targeted effect>" (Resonate HMW_98).  Effective
+            # traits, the ``shares_trait_with_friendly_leader`` reading.
+            from swu.cards.models import Leader as _LeaderCard
+            from swu.engine.traits import get_traits
+            ctrl = state.player_by_id(source_ci.owner_id)
+            leader = ctrl.leader_instance
+            if leader is None:
+                return False
+            lt = set(get_traits(state, leader))
+            if not any(set(get_traits(state, u)) & lt
+                       for u in ctrl.ground_arena + ctrl.space_arena
+                       if not isinstance(u.card_def, _LeaderCard)):
+                return False
+        if pred.startswith("lacks_token:"):
+            # "a unit without a Weakness token on it" (Doctor Hemlock HMW_3).
+            want = pred.split(":", 1)[1]
+            if any(getattr(u.card_def, "name", None) == want
+                   for u in candidate.attached_upgrades or ()):
+                return False
+        if pred.startswith("had_token:"):
+            # "When an enemy unit WITH a Weakness token on it is defeated" (Nuvo
+            # Vindi HMW_62).  By the time the defeat observer runs the unit's
+            # upgrades are already gone; ``_defeat_unit`` stashes them in
+            # ``event_ctx["defeated_upgrades"]``, so read those for the dying unit.
+            want = pred.split(":", 1)[1]
+            dying = event_ctx.get("defeated_ci")
+            had: list = list(
+                event_ctx.get("defeated_upgrades") or ()
+                if dying is not None and dying.instance_id == candidate.instance_id
+                else candidate.attached_upgrades or ())
+            if not any(getattr(u.card_def, "name", None) == want for u in had):
+                return False
+        if pred == "has_token_upgrade":
+            # "a token upgrade attached to another unit" (Boss Lyonie HMW_57).
+            from swu.cards.models import TokenUpgrade as _TokUp
+            if not any(isinstance(u.card_def, _TokUp)
+                       for u in candidate.attached_upgrades or ()):
+                return False
+        if pred == "no_abilities":
+            # "Friendly units with no abilities" (Rex HMW_141): a unit that has lost
+            # all abilities, or one printing no text that has no keyword from any
+            # source.  The LIGHTWEIGHT keyword read (``has_any_keyword``), because
+            # this is consulted from inside a stat-aura target.
+            from swu.engine.state import ability_suppressed
+            if not ability_suppressed(state, candidate):
+                from swu.engine.keywords import has_any_keyword
+                if ((getattr(candidate.card_def, "text", None) or "").strip()
+                        or has_any_keyword(state, candidate)):
+                    return False
         if pred.startswith("controller_has_trait_card_in_hand:"):
             # BOARD gate: "Discard a <Trait> card from your hand.  If you do,
             # <targeted effect>" (Lightsaber Throw LOF_176).  The trait rides in the
@@ -2567,9 +2651,15 @@ def _gather_legal_targets(
     # Gather candidates based on kind
     candidates: list["CardInstance"] = []
     for ps in state.players:
-        if spec.kind in ("unit", "unit_or_base", "unit_or_unit_upgrade"):
+        if spec.kind in ("unit", "unit_or_base", "unit_or_unit_upgrade",
+                         "unit_or_leader"):
             candidates.extend(ps.ground_arena)
             candidates.extend(ps.space_arena)
+        if spec.kind == "unit_or_leader":
+            # "<X> (leader or unit)": the UNDEPLOYED leader too (Soulless One TWI_179).
+            from swu.cards.models import Leader as _Leader
+            candidates.extend(b for b in ps.base_zone
+                              if isinstance(b.card_def, _Leader) and not b.deployed)
         if spec.kind in ("base", "unit_or_base"):
             if ps.base_instance is not None:
                 candidates.append(ps.base_instance)
@@ -2720,7 +2810,9 @@ def execute_effect(
 
     _note_effect_efficacy(source_ci, effect, len(target_ids))
 
-    owner_ps = state.player_by_id(source_ci.owner_id)
+    # The source's CONTROLLER (named owner_ps for history): who draws, makes the
+    # tokens, records the discount …  — a stolen unit acts for its thief.
+    owner_ps = state.player_by_id(_acting_player_id(state, source_ci, event_ctx))
 
     if isinstance(effect, DealDamage):
         source_name = source_ci.card_def.display_name
@@ -2857,28 +2949,21 @@ def execute_effect(
         if effect.player in ("controller", "each"):
             _draw_cards(state, owner_ps, effect.count)
         if effect.player in ("opponent", "each"):
-            opp_ps = state.players[1 - state.player_index(source_ci.owner_id)]
+            opp_ps = state.players[1 - state.player_index(owner_ps.player_id)]
             _draw_cards(state, opp_ps, effect.count)
         return state
 
     if isinstance(effect, DiscardFromHand):
-        # Simple auto-discard: discard the first N cards from the choosing player's hand
-        from swu.engine.state import Zone
-        choosing_ps = owner_ps if effect.chooser == "controller" else state.players[1 - state.player_index(source_ci.owner_id)]
-        discarded = 0
-        for _ in range(min(effect.count, len(choosing_ps.hand))):
-            if choosing_ps.hand:
-                ci = choosing_ps.hand.pop(0)
-                ci.zone = Zone.DISCARD
-                choosing_ps.discard.append(ci)
-                from swu.engine.actions import note_hand_or_deck_discard
-                note_hand_or_deck_discard(state, ci)
-                discarded += 1
-        if discarded:
-            # Record the "discard 1+ cards from your hand" observer instruction
-            # (Padmé Amidala SEC_16) — once per effect, for the player who discarded.
-            from swu.engine.actions import record_hand_discard
-            record_hand_discard(state, choosing_ps.player_id)
+        # The discarding player picks which cards (push_discard_of_choice — a
+        # decision only when there is a real choice).  Was a first-card auto-discard.
+        from swu.engine.actions import push_discard_of_choice
+        me_idx = state.player_index(owner_ps.player_id)
+        choosing_ps = owner_ps if effect.chooser == "controller" else state.players[1 - me_idx]
+        push_discard_of_choice(
+            state, choosing_ps.player_id, effect.count,
+            source_id=source_ci.instance_id,
+            after_idx=1 - me_idx,
+            then_draw=int(getattr(effect, "then_draw", 0) or 0))
         return state
 
     if isinstance(effect, ReturnToHand):
@@ -3671,6 +3756,9 @@ def _apply_return_to_hand(state: "GameState", target_id: str) -> "GameState":
     ci.zone = Zone.HAND
     owner_ps = state.player_by_id(ci.owner_id)
     owner_ps.hand.append(ci)
+    # It left play: release its captives and revert any control it took.
+    from swu.engine.actions.zones import _unit_left_play
+    _unit_left_play(state, ci)
     # A returned card no longer sources any "while this unit is in play" permanent
     # modifier it may have granted (Huyang TWI_110) — drop them for hygiene (the
     # compute-time source-in-play guard already makes them inert).

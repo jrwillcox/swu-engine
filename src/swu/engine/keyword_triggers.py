@@ -96,9 +96,14 @@ def _ambush_listener(state: "GameState", event: "GameEvent") -> "GameState":
         sentinels = [u for u in enemy_arena if has_keyword(state, u, KW.SENTINEL)]
         targets = sentinels if sentinels else list(enemy_arena)
 
-    # Only push decision if there's at least one legal unit target
+    # Only push decision if there's at least one legal unit target — or, with
+    # Fett's Firespray HMW_53 in play, an empty enemy arena leaves the base open.
     if not targets:
-        return state
+        from swu.engine.actions.combat import _ambush_can_attack_bases, _cannot_attack_bases
+        if (enemy_ps.base_instance is None
+                or not _ambush_can_attack_bases(state, owner_ps)
+                or _cannot_attack_bases(state, unit_ci)):
+            return state
 
     opponent_idx = 1 - owner_idx
     decision = PendingDecision(

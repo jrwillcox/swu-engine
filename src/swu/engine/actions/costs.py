@@ -588,6 +588,35 @@ def _standing_play_discount(state: GameState, ci: CardInstance, ps: PlayerState,
             ):
                 total += spec.amount
                 break
+    return total + _nth_unit_play_discount(state, ci, ps)
+
+
+def _nth_unit_play_discount(state: GameState, ci: CardInstance,
+                            ps: PlayerState) -> int:
+    """Origin Tree Shyyyo HMW_145's escalating discount (``NthUnitPlayDiscount``):
+    ``amounts[k]`` off the controller's (k+1)-th unit this round.  ``k`` is units
+    already played — total plays less non-unit plays, both counted after payment —
+    so the read and the real payment agree with nothing to consume."""
+    if not isinstance(ci.card_def, Unit):
+        return 0
+    from swu.abilities.registry import get_abilities, NthUnitPlayDiscount
+    from swu.engine.state import ability_suppressed
+    gm = state.game_memory
+    k = (int(gm.cards_played_this_phase.get(ps.player_id, 0) or 0)
+         - int(gm.non_units_played_this_phase.get(ps.player_id, 0) or 0))
+    total = 0
+    for src in ps.ground_arena + ps.space_arena:
+        if ability_suppressed(state, src):
+            continue
+        sc = getattr(src.card_def, "set_code", None) or ""
+        cn = getattr(src.card_def, "card_number", None) or ""
+        if not sc or not cn:
+            continue
+        for spec in get_abilities(sc, cn):
+            if (isinstance(spec, NthUnitPlayDiscount) and 0 <= k < len(spec.amounts)
+                    and (spec.condition is None
+                         or spec.condition.evaluate(state, src))):
+                total += int(spec.amounts[k])
     return total
 
 
@@ -655,7 +684,8 @@ def resource_cost_for(state: GameState, ps: PlayerState, n: int) -> int:
 
 
 def _play_cost(state: GameState, ci: CardInstance, ps: PlayerState,
-               target_host_id: Optional[str] = None, via_plot: bool = False) -> int:
+               target_host_id: Optional[str] = None, via_plot: bool = False,
+               extra_reduction: int = 0) -> int:
     """Effective resource cost to play ``ci`` from hand: aspect-adjusted cost
     minus any active card-level cost reductions, any applicable pending
     "next <trait> unit costs N less" discount (Khetanna LAW_158), and any
@@ -665,7 +695,15 @@ def _play_cost(state: GameState, ci: CardInstance, ps: PlayerState,
     two never diverge.  ``target_host_id`` (an upgrade's chosen host) lets a
     host-conditional reduction apply (Grievous's Wheel Bike TWI_236).  ``via_plot``
     (set only by the Plot play path) lets a plot_only "next card you play using
-    Plot" discount apply (Chancellor Palpatine SEC_1)."""
+    Plot" discount apply (Chancellor Palpatine SEC_1).
+
+    ``extra_reduction`` is the PLAYING ability's own "it costs N less" (Admiral Ozzel
+    SOR_129, Kelleran Beq, Bib Fortuna …).  Every ability-driven play prices through
+    here with it, so the card's own reductions, pending and standing discounts,
+    opponent taxes and The Starhawk's halving apply to those plays exactly as to a
+    hand play — they used to pay a raw ``_effective_cost`` less the reduction (the
+    "Khetanna scope" known deviation, fixed 2026-11-23).  A play "for free" does not
+    come here at all: it costs 0."""
     base = _effective_cost(ci.card_def, ps, state)
     reduction = (_play_cost_reduction(state, ci, target_host_id)
                  + _pending_play_discount(state, ci, ps, via_plot)
@@ -676,7 +714,8 @@ def _play_cost(state: GameState, ci: CardInstance, ps: PlayerState,
                  + max(_host_waives_aspect_penalty(state, ci, ps, target_host_id),
                        _controller_waives_aspect_penalty(state, ci, ps)))
     tax = _opponent_play_tax(state, ci, ps)
-    return resource_cost_for(state, ps, max(0, base - reduction + tax))
+    return resource_cost_for(
+        state, ps, max(0, base - reduction - int(extra_reduction or 0) + tax))
 
 
 def _host_waives_aspect_penalty(state: GameState, ci: CardInstance, ps: PlayerState,
@@ -1009,11 +1048,12 @@ def _play_upgrade_cost(state: GameState, ctx: dict, upgrade_ci: CardInstance,
     A Fine Addition TWI_40; the General Grievous TWI_34 full-waiver reading, not
     the single-pip Daimyo's Palace LAW_20 one).  Floored at 0."""
     ps = state.player_by_id(ctx["controller_id"])
-    cost = _play_cost(state, upgrade_ci, ps, target_host_id=host_id)
+    extra = int(ctx.get("cost_reduction", 0) or 0)
     if ctx.get("ignore_aspect_penalty"):
         aspects = tuple(a.name for a in (getattr(upgrade_ci.card_def, "aspects", None) or ()))
-        cost -= _aspect_penalty(aspects, ps, state)
-    return max(0, cost - int(ctx.get("cost_reduction", 0) or 0))
+        extra += _aspect_penalty(aspects, ps, state)
+    return _play_cost(state, upgrade_ci, ps, target_host_id=host_id,
+                      extra_reduction=extra)
 
 
 def _play_upgrade_affordable(state: GameState, ctx: dict,
@@ -1066,6 +1106,17 @@ def _consume_standing_discount(state: GameState, ci: CardInstance, ps: PlayerSta
             ):
                 used.add(_standing_discount_key(src, ps))
                 break
+
+
+def _spend_play_discounts(state: GameState, ci: CardInstance, ps: PlayerState,
+                          target_host_id: Optional[str] = None,
+                          via_plot: bool = False) -> None:
+    """Spend the discounts ``_play_cost`` counted for playing ``ci``: the first
+    matching pending "next play" discount and every once-per-round standing one.
+    Call it once at each PAID play site, right after paying (never for a play "for
+    free", which used no discount)."""
+    _consume_play_discount(state, ci, ps, via_plot)
+    _consume_standing_discount(state, ci, ps, target_host_id)
 
 
 #: Aspect-penalty pips a "ignore 1 aspect penalty" waiver may waive — Daimyo's

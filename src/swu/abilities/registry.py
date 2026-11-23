@@ -991,6 +991,57 @@ class Condition(Enum):
                                       # reentrancy guard (_KEYWORD_SCAN_EVALUATING):
                                       # two such units would otherwise ask each other
                                       # forever.
+    ENEMY_HAS_UNIQUE_UNIT = "enemy_has_unique_unit"
+                                      # an OPPONENT controls an arena unit printing the
+                                      # <uq> symbol — "While an opponent controls a
+                                      # <uq> unit, this unit gains Hidden" (Garnac
+                                      # HMW_104).  The across-the-table mirror of
+                                      # CONTROLLER_HAS_UNIQUE_UNIT.
+    CONTROLLER_HAS_OTHER_UNIT_COST = "controller_has_other_unit_cost"
+                                      # param=("min"|"max", N): ANOTHER friendly arena
+                                      # unit whose PRINTED cost is ≥N / ≤N — "While you
+                                      # control another unit that costs 3 or more"
+                                      # (Stormtrooper Patrol HMW_107) / "… 3 or less"
+                                      # (Ewok Archers HMW_257).  A leader unit prints
+                                      # no play cost, so it never counts (the
+                                      # CONTROLLER_HAS_UNIT_COST_MAX reading).
+    CONTROLLER_ALL_RESOURCES_EXHAUSTED = "controller_all_resources_exhausted"
+                                      # every resource the controller controls is
+                                      # exhausted — "While each resource you control is
+                                      # exhausted, this unit gains Overwhelm"
+                                      # (Chewbacca HMW_117).  Vacuously true with no
+                                      # resources, as "each" reads.
+    CONTROLLER_ASPECT_ICONS_MIN = "controller_aspect_icons_min"
+                                      # param=(aspect, N): ≥N icons of that aspect
+                                      # among friendly UNITS and the UPGRADES the
+                                      # controller controls (on any host, base
+                                      # included), duplicates counted — "While there
+                                      # are 3 or more Command aspect icons among
+                                      # friendly units (including this one) and
+                                      # upgrades" (Commander Gree HMW_138).
+    CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_POWER_MAX = \
+        "controller_can_play_unit_from_hand_power_max"
+                                      # param=(power_max, extra_cost): ≥1 hand unit
+                                      # with PRINTED power ≤ power_max that is still
+                                      # affordable after paying ``extra_cost`` more
+                                      # (the ability's own resource cost, not yet paid
+                                      # when the gate is read) — "Action [1 resource,
+                                      # Exhaust]: Play a unit with 3 or less power from
+                                      # your hand" (The Warrior HMW_18).
+    ANY_UNIT_LACKS_TOKEN = "any_unit_lacks_token"
+                                      # param=<token name>: some arena unit (either
+                                      # side) carries no such token — gates "Give a
+                                      # Weakness token to a unit without a Weakness
+                                      # token on it" (Doctor Hemlock HMW_3) so the
+                                      # Action is never offered as a no-op.
+    OPPONENT_CARDS_PLAYED_THIS_PHASE_MIN = "opponent_cards_played_this_phase_min"
+                                      # param=N: an opponent has played ≥N cards this
+                                      # phase (``cards_played_this_phase``) — "If an
+                                      # opponent played 2 or more cards this phase"
+                                      # (Talzin's Shuttle HMW_40).
+    FIRST_ROUND = "first_round"       # it is the first round of the game ("While it's
+                                      # the first round of the game, this unit enters
+                                      # play ready" — Luke Skywalker HMW_208).
 
 
 # Instance ids whose SOURCE_POWER_MIN condition is mid-evaluation.  See the
@@ -1013,7 +1064,11 @@ class ConditionCheck:
     param: Any = None
 
     def evaluate(self, state: "GameState", source_ci: "CardInstance") -> bool:
-        ps = state.player_by_id(source_ci.owner_id)
+        # The source's CONTROLLER ("you" on the card) — a stolen unit's conditions
+        # read the thief's board (control fix 2026-11-23).
+        from swu.engine.state import controller_id
+        _me = controller_id(state, source_ci)
+        ps = state.player_by_id(_me)
         c = self.condition
         if c == Condition.ALL_OF:
             # Conjunction of sub-checks, evaluated against the same source.  Empty
@@ -1079,11 +1134,11 @@ class ConditionCheck:
         if c == Condition.CONTROLLER_ASPECT_UNIT_DEFEATED_THIS_PHASE:
             gm = getattr(state, "game_memory", None)
             by_controller = getattr(gm, "defeated_aspects_this_round", None) or {}
-            return self.param in (by_controller.get(source_ci.owner_id) or ())
+            return self.param in (by_controller.get(_me) or ())
         if c == Condition.CONTROLLER_TRAIT_UNIT_DEFEATED_THIS_PHASE:
             gm = getattr(state, "game_memory", None)
             by_controller = getattr(gm, "defeated_traits_this_round", None) or {}
-            return self.param in (by_controller.get(source_ci.owner_id) or ())
+            return self.param in (by_controller.get(_me) or ())
         if c in (Condition.SOURCE_LEADER_FLIPPED, Condition.SOURCE_LEADER_NOT_FLIPPED):
             gm = getattr(state, "game_memory", None)
             flipped = source_ci.instance_id in (
@@ -1193,7 +1248,7 @@ class ConditionCheck:
         if c == Condition.SOURCE_IN_SPACE_ARENA:
             return any(source_ci is ci for ci in ps.space_arena)
         if c == Condition.CONTROLLER_HAS_INITIATIVE:
-            return state.initiative_holder == state.player_index(source_ci.owner_id)
+            return state.initiative_holder == state.player_index(_me)
         if c == Condition.CONTROLLER_N_PLUS_UNITS:
             # Units the controller has in play = both arenas (a deployed leader is
             # a unit in its arena and counts; an undeployed leader in base_zone
@@ -1203,7 +1258,7 @@ class ConditionCheck:
             # Units in play = both arenas (deployed leaders included), the same
             # count basis as CONTROLLER_N_PLUS_UNITS.  "more than an opponent" is
             # strictly greater (2-player: the one opponent).
-            opp_idx = 1 - state.player_index(source_ci.owner_id)
+            opp_idx = 1 - state.player_index(_me)
             opp = state.players[opp_idx]
             mine = len(ps.ground_arena) + len(ps.space_arena)
             theirs = len(opp.ground_arena) + len(opp.space_arena)
@@ -1211,7 +1266,7 @@ class ConditionCheck:
         if c == Condition.OPPONENT_MORE_UNITS_THAN_CONTROLLER:
             # The mirror of the above (Old Access Codes TWI_168), same count basis.
             # Not the negation: equal counts satisfy neither.
-            opp_idx = 1 - state.player_index(source_ci.owner_id)
+            opp_idx = 1 - state.player_index(_me)
             opp = state.players[opp_idx]
             mine = len(ps.ground_arena) + len(ps.space_arena)
             theirs = len(opp.ground_arena) + len(opp.space_arena)
@@ -1219,7 +1274,7 @@ class ConditionCheck:
         if c == Condition.OPPONENT_MORE_SPACE_UNITS_THAN_CONTROLLER:
             # The space-arena-only sibling (Special Forces TIE Fighter JTL_135).
             # Strictly greater, so equal counts do not satisfy it.
-            opp_idx = 1 - state.player_index(source_ci.owner_id)
+            opp_idx = 1 - state.player_index(_me)
             opp = state.players[opp_idx]
             return len(opp.space_arena) > len(ps.space_arena)
         if c == Condition.CONTROLLER_HAS_GROUND_AND_SPACE_UNIT:
@@ -1235,7 +1290,7 @@ class ConditionCheck:
             # Decimator of Dissidents JTL_138 — read off the phase-scoped ledger
             # fed at the indirect-damage settle point.  ``source_ci`` is the card in
             # HAND here (a play-cost read), so only ``owner_id`` is consulted.
-            return source_ci.owner_id in getattr(
+            return _me in getattr(
                 state.game_memory, "indirect_dealers_this_phase", set())
         if c == Condition.CONTROLLER_N_PLUS_TRAIT_UNITS:
             # param=(trait, N) — "If you control N or more <trait> units"
@@ -1259,7 +1314,7 @@ class ConditionCheck:
         if c == Condition.OPPONENT_N_PLUS_UNITS:
             # The enemy-side mirror of CONTROLLER_N_PLUS_UNITS (Duchess's Champion
             # TWI_54), same both-arenas basis; 2-player, so the one opponent.
-            opp_idx = 1 - state.player_index(source_ci.owner_id)
+            opp_idx = 1 - state.player_index(_me)
             opp = state.players[opp_idx]
             return (len(opp.ground_arena) + len(opp.space_arena)) >= (self.param or 0)
         if c == Condition.CONTROLLER_HAS_TRAIT_CARD_IN_PLAY:
@@ -1299,13 +1354,13 @@ class ConditionCheck:
         if c == Condition.CONTROLLER_N_PLUS_READY_RESOURCES:
             return ps.available_resources >= (self.param or 0)
         if c == Condition.OPPONENT_NO_READY_RESOURCES:
-            opp = state.players[1 - state.player_index(source_ci.owner_id)]
+            opp = state.players[1 - state.player_index(_me)]
             return opp.available_resources == 0
         if c == Condition.OPPONENT_MORE_RESOURCES_THAN_CONTROLLER:
             # Cham Syndulla JTL_164: "If an opponent controls more resources than
             # you".  Total resources (exhausted ones are still controlled), and ANY
             # opponent qualifies — with two players that is the single opponent.
-            own_idx = state.player_index(source_ci.owner_id)
+            own_idx = state.player_index(_me)
             return any(p.total_resources > ps.total_resources
                        for i, p in enumerate(state.players) if i != own_idx)
         if c == Condition.CONTROLLER_HAS_TRAIT_UNIT:
@@ -1437,13 +1492,13 @@ class ConditionCheck:
         if c == Condition.CONTROLLER_FRIENDLY_ATTACKER_DEFEATED_THIS_PHASE:
             gm = getattr(state, "game_memory", None)
             defeated = getattr(gm, "attackers_defeated_this_round", None) or set()
-            return source_ci.owner_id in defeated
+            return _me in defeated
         if c == Condition.ENEMY_UNIT_DEFEATED_THIS_PHASE:
             # Any unit whose controller-at-death was an OPPONENT of the source's
             # controller (2-player: the one opponent) was defeated this phase.
             gm = getattr(state, "game_memory", None)
             controllers = getattr(gm, "defeated_controllers_this_round", None) or []
-            return any(pid != source_ci.owner_id for pid in controllers)
+            return any(pid != _me for pid in controllers)
         if c == Condition.ANY_UNIT_DEFEATED_THIS_PHASE:
             # Any unit at all was defeated this phase, whoever controlled it —
             # "If a unit left play this phase" (Yoda TWI_4).  One entry per defeat
@@ -1456,7 +1511,7 @@ class ConditionCheck:
             # source's controller controlled died this phase (Wat Tambor TWI_6).
             gm = getattr(state, "game_memory", None)
             controllers = getattr(gm, "defeated_controllers_this_round", None) or []
-            return any(pid == source_ci.owner_id for pid in controllers)
+            return any(pid == _me for pid in controllers)
         if c == Condition.CONTROLLER_N_UNITS_DEFEATED_THIS_PHASE:
             # "If 2 or more friendly units were defeated this phase" (Nute Gunray
             # TWI_2).  One entry per defeat is appended to the ledger, so counting
@@ -1464,12 +1519,12 @@ class ConditionCheck:
             gm = getattr(state, "game_memory", None)
             controllers = getattr(gm, "defeated_controllers_this_round", None) or []
             need = int(self.param if self.param is not None else 1)
-            return sum(1 for pid in controllers if pid == source_ci.owner_id) >= need
+            return sum(1 for pid in controllers if pid == _me) >= need
         if c == Condition.CONTROLLER_HAS_DAMAGED_UNIT:
             # The friendly mirror of ENEMY_HAS_DAMAGED_UNIT: the source's controller
             # has ≥1 damaged unit in an arena (Trade Federation Shuttle TWI_60).  The
             # source counts itself if it is damaged — the card says "a damaged unit".
-            ps = state.players[state.player_index(source_ci.owner_id)]
+            ps = state.players[state.player_index(_me)]
             for arena in (ps.ground_arena, ps.space_arena):
                 for ci in arena:
                     if ci.damage > 0:
@@ -1482,7 +1537,7 @@ class ConditionCheck:
             # attacking exhausts him, so without the exclusion the clause would
             # always be satisfied by himself.
             exclude_self = (c == Condition.CONTROLLER_HAS_OTHER_EXHAUSTED_UNIT)
-            ps = state.players[state.player_index(source_ci.owner_id)]
+            ps = state.players[state.player_index(_me)]
             for arena in (ps.ground_arena, ps.space_arena):
                 for ci in arena:
                     if exclude_self and ci.instance_id == source_ci.instance_id:
@@ -1499,7 +1554,7 @@ class ConditionCheck:
                                "units_attacked_this_round", set()) or set()
             for iid in attacked:
                 res = state.find_instance(iid)
-                if res is not None and res[1].owner_id == source_ci.owner_id:
+                if res is not None and res[1].owner_id == _me:
                     return True
             return False
         if c == Condition.CONTROLLER_ATTACKED_NON_TOKEN_TRAIT_UNIT_THIS_PHASE:
@@ -1519,7 +1574,7 @@ class ConditionCheck:
                 if res is None:
                     continue
                 ci = res[1]
-                if ci.owner_id != source_ci.owner_id:
+                if ci.owner_id != _me:
                     continue
                 if isinstance(ci.card_def, TokenUnit):
                     continue
@@ -1550,7 +1605,7 @@ class ConditionCheck:
             # this-round == this-phase (the units_attacked_this_round precedent).
             gm = getattr(state, "game_memory", None)
             players = getattr(gm, "events_played_this_round", None) or set()
-            return source_ci.owner_id in players
+            return _me in players
         if c == Condition.SELF_DISCARDED_THIS_PHASE:
             gm = getattr(state, "game_memory", None)
             discarded = getattr(gm, "cards_discarded_this_phase", None) or set()
@@ -1608,7 +1663,7 @@ class ConditionCheck:
             # Any arena unit controlled by the source's opponent carries ≥1 attached
             # upgrade (Shield/Experience tokens count — they are upgrades, per the
             # Protector SHD_247 note).  Mirrors ENEMY_HAS_DAMAGED_UNIT's enemy-arena scan.
-            opp = state.players[1 - state.player_index(source_ci.owner_id)]
+            opp = state.players[1 - state.player_index(_me)]
             for arena in (opp.ground_arena, opp.space_arena):
                 for ci in arena:
                     if getattr(ci, "attached_upgrades", None):
@@ -1619,41 +1674,41 @@ class ConditionCheck:
             # an opponent's Villainy play must not satisfy the source's condition.
             gm = getattr(state, "game_memory", None)
             players = getattr(gm, "villainy_players_this_phase", None) or set()
-            return source_ci.owner_id in players
+            return _me in players
         if c == Condition.CONTROLLER_PLAYED_OTHER_CARD_THIS_PHASE:
             # ≥2 cards played by the controller this phase = "another card besides
             # this one" (the source's own play is already counted).  Lothal
             # Insurgent SOR_190.
             gm = getattr(state, "game_memory", None)
             played = getattr(gm, "cards_played_this_phase", None) or {}
-            return played.get(source_ci.owner_id, 0) >= 2
+            return played.get(_me, 0) >= 2
         if c == Condition.CONTROLLER_PLAYED_TRAIT_CARD_THIS_PHASE:
             # "If you played a First Order card this phase" (Captain Phasma JTL_10),
             # over the per-phase trait ledger fed at the CardPlayed chokepoint.
             gm = getattr(state, "game_memory", None)
             seen = getattr(gm, "traits_played_this_phase", None) or {}
-            return (self.param or "") in seen.get(source_ci.owner_id, ())
+            return (self.param or "") in seen.get(_me, ())
         if c == Condition.CONTROLLER_PLAYED_NON_UNIT_TRAIT_CARD_THIS_PHASE:
             # "If you played a non-unit Force card this phase" (Rey LOF_12) — the
             # non-unit slice of the same per-phase trait ledger.
             gm = getattr(state, "game_memory", None)
             seen = getattr(gm, "non_unit_traits_played_this_phase", None) or {}
-            return (self.param or "") in seen.get(source_ci.owner_id, ())
+            return (self.param or "") in seen.get(_me, ())
         if c == Condition.CONTROLLER_DEALT_N_BASE_DAMAGE_THIS_PHASE:
             gm = getattr(state, "game_memory", None)
             dealt = getattr(gm, "base_damage_dealt_this_phase", None) or {}
-            return dealt.get(source_ci.owner_id, 0) >= (self.param or 0)
+            return dealt.get(_me, 0) >= (self.param or 0)
         if c == Condition.CONTROLLER_CAN_PLAY_DISCOUNTED_UNIT:
             # Any unit in hand affordable after a `param`-resource discount.
             # Lazy import avoids an actions <-> registry import cycle.
-            from swu.engine.actions import _effective_cost
+            from swu.engine.actions.costs import _play_cost
             from swu.cards.models import Unit
             discount = self.param or 0
             for ci in ps.hand:
                 cd = ci.card_def
                 if not isinstance(cd, Unit):
                     continue
-                if max(0, _effective_cost(cd, ps, state) - discount) <= ps.available_resources:
+                if _play_cost(state, ci, ps, extra_reduction=discount) <= ps.available_resources:
                     return True
             return False
         if c == Condition.CONTROLLER_CAN_PLAY_UNIT_FROM_HAND:
@@ -1768,6 +1823,60 @@ class ConditionCheck:
                         and cost <= cap):
                     return True
             return False
+        if c == Condition.ENEMY_HAS_UNIQUE_UNIT:
+            return any(getattr(ci.card_def, "is_unique", False)
+                       for p in state.players if p.player_id != ps.player_id
+                       for ci in p.ground_arena + p.space_arena)
+        if c == Condition.CONTROLLER_HAS_OTHER_UNIT_COST:
+            # HMW_107 / HMW_257.  Printed cost; a leader unit has none.
+            from swu.cards.models import Leader
+            mode, n = self.param
+            for ci in ps.ground_arena + ps.space_arena:
+                if ci.instance_id == source_ci.instance_id:
+                    continue
+                cost = getattr(ci.card_def, "cost", None)
+                if isinstance(ci.card_def, Leader) or cost is None:
+                    continue
+                if (cost >= n) if mode == "min" else (cost <= n):
+                    return True
+            return False
+        if c == Condition.CONTROLLER_ALL_RESOURCES_EXHAUSTED:
+            return all(r.exhausted for r in ps.resources)
+        if c == Condition.CONTROLLER_ASPECT_ICONS_MIN:
+            # Commander Gree HMW_138: icons on friendly units, plus icons on every
+            # upgrade the controller controls wherever it sits (an upgrade's
+            # controller is its owner_id; base-hosted Fortify upgrades included).
+            aspect, need = self.param
+            n = 0
+            for ci in ps.ground_arena + ps.space_arena:
+                n += sum(1 for a in (getattr(ci.card_def, "aspects", None) or ())
+                         if a.name == aspect)
+            for p in state.players:
+                for host in p.upgrade_hosts():
+                    for up in host.attached_upgrades:
+                        if up.owner_id != ps.player_id:
+                            continue
+                        n += sum(1 for a in (getattr(up.card_def, "aspects", None) or ())
+                                 if a.name == aspect)
+            return n >= int(need)
+        if c == Condition.CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_POWER_MAX:
+            # The Warrior HMW_18.  A negative reduction prices in the unpaid cost.
+            from swu.engine.actions import _playable_units_from_hand
+            power_max, extra = self.param
+            return any(int(getattr(ci.card_def, "power", 0) or 0) <= power_max
+                       for ci in _playable_units_from_hand(state, ps, None,
+                                                           -int(extra or 0)))
+        if c == Condition.FIRST_ROUND:
+            return int(getattr(state, "round_number", 1) or 1) == 1
+        if c == Condition.ANY_UNIT_LACKS_TOKEN:
+            name = self.param
+            return any(not any(getattr(u.card_def, "name", None) == name
+                               for u in ci.attached_upgrades)
+                       for p in state.players for ci in p.ground_arena + p.space_arena)
+        if c == Condition.OPPONENT_CARDS_PLAYED_THIS_PHASE_MIN:
+            played = state.game_memory.cards_played_this_phase
+            return any(int(played.get(p.player_id, 0) or 0) >= int(self.param or 0)
+                       for p in state.players if p.player_id != ps.player_id)
         if c == Condition.CONTROLLER_OTHER_UNIT_ENTERED_THIS_PHASE:
             # Disposable B1 HMW_103.  ``find_instance`` reaches the discard, so a unit
             # that entered and has since been defeated still counts (a defeated
@@ -1888,7 +1997,7 @@ class ConditionCheck:
             return aspects.isdisjoint(wanted)
         if c == Condition.ENEMY_HAS_DAMAGED_UNIT:
             # The source's opponent controls ≥1 damaged unit in an arena.
-            opp_idx = 1 - state.player_index(source_ci.owner_id)
+            opp_idx = 1 - state.player_index(_me)
             opp = state.players[opp_idx]
             for arena in (opp.ground_arena, opp.space_arena):
                 for ci in arena:
@@ -1924,7 +2033,7 @@ class ConditionCheck:
         if c == Condition.ANOTHER_PLAYER_N_PLUS_EXHAUSTED_UNITS:
             # Blade Squadron B-Wing JTL_199.  "Another player" excludes the source's
             # own controller, so a wall of exhausted friendlies never satisfies it.
-            own_idx = state.player_index(source_ci.owner_id)
+            own_idx = state.player_index(_me)
             need = self.param or 0
             for i, p in enumerate(state.players):
                 if i == own_idx:
@@ -1942,13 +2051,13 @@ class ConditionCheck:
         if c == Condition.CONTROLLER_MORE_CARDS_IN_HAND_THAN_OPPONENT:
             # Dedra Meero SEC_10 deployed.  Strictly more than SOME opponent (in
             # two-player, the one opponent) — the units mirror's hand-size twin.
-            own_idx = state.player_index(source_ci.owner_id)
+            own_idx = state.player_index(_me)
             mine = len(state.players[own_idx].hand)
             return any(mine > len(p.hand)
                        for i, p in enumerate(state.players) if i != own_idx)
         if c == Condition.OPPONENT_MORE_CARDS_IN_HAND_THAN_CONTROLLER:
             # Broken Horn LAW_83 — the exact mirror of the atom above.
-            own_idx = state.player_index(source_ci.owner_id)
+            own_idx = state.player_index(_me)
             mine = len(state.players[own_idx].hand)
             return any(len(p.hand) > mine
                        for i, p in enumerate(state.players) if i != own_idx)
@@ -1978,7 +2087,7 @@ class ConditionCheck:
             # flag resets at the round rollover, so "this phase" ≡ this round.
             return not getattr(state, "initiative_claimed_this_round", False)
         if c == Condition.ENEMY_CONTROLS_NO_GROUND_UNITS:
-            opp_idx = 1 - state.player_index(source_ci.owner_id)
+            opp_idx = 1 - state.player_index(_me)
             return len(state.players[opp_idx].ground_arena) == 0
         if c == Condition.CONTROLLER_HAS_EVENT_IN_HAND:
             from swu.cards.models import Event
@@ -2006,7 +2115,7 @@ class ConditionCheck:
                         return True
             return False
         if c == Condition.ENEMY_N_PLUS_SPACE_UNITS:
-            opp_idx = 1 - state.player_index(source_ci.owner_id)
+            opp_idx = 1 - state.player_index(_me)
             return len(state.players[opp_idx].space_arena) >= (self.param or 0)
         if c == Condition.CONTROLLER_HAS_ASPECT_LEADER_OR_BASE:
             aspect = self.param or ""
@@ -2070,7 +2179,7 @@ class ConditionCheck:
             # An enemy unit currently carries a Bounty (printed, granted, or a
             # while-condition bounty) — reuses the resolver's has_bounty check.
             from swu.abilities.resolver import _unit_has_bounty
-            opp_idx = 1 - state.player_index(source_ci.owner_id)
+            opp_idx = 1 - state.player_index(_me)
             opp = state.players[opp_idx]
             return any(_unit_has_bounty(state, u)
                        for u in (opp.ground_arena + opp.space_arena))
@@ -2083,6 +2192,8 @@ class TargetSpec:
     controller: str = "any"           # "friendly" | "enemy" | "any"
     kind: str = "unit"                # "unit" | "base" | "unit_or_base" | "upgrade"
                                       # | "unit_upgrade" | "unit_or_unit_upgrade"
+                                      # | "unit_or_leader" (an arena unit, or an
+                                      # undeployed leader — "(leader or unit)")
     arena: Optional[str] = None       # "ground" | "space" | None (either)
     traits: tuple = ()                # card must have ALL listed traits
     traits_any: tuple = ()            # card must have AT LEAST ONE listed trait —
@@ -2334,8 +2445,13 @@ class DrawCards:
 
 @dataclass(frozen=True)
 class DiscardFromHand:
+    """The ``chooser`` ("controller" | "opponent") discards ``count`` cards of THEIR
+    choice from their own hand (``push_discard_of_choice``; no prompt when the hand
+    has ``count`` or fewer cards).  ``then_draw`` draws for the same player after the
+    choice — "Discard a card from your hand, then draw a card"."""
     count: int
-    chooser: str = "controller"  # who chooses which card to discard
+    chooser: str = "controller"  # whose hand — and who picks the cards
+    then_draw: int = 0
 
 @dataclass(frozen=True)
 class ReturnToHand:
@@ -2748,7 +2864,12 @@ class WhenYouDeployLeader:
     deploy and the deploy-as-a-Pilot-upgrade path both fire ``LeaderDeployed``), so
     it needs no new firing point; a Base source is reached by the ``base_zone``
     branch of ``resolver._collect_triggers``.
+
+    ``opponent=True`` flips the gate to an OPPONENT's deploy — "When an enemy leader
+    deploys: Its controller may pay 2 resources.  If they don't, exhaust that
+    leader" (Phee Genoa HMW_214).
     """
+    opponent: bool = False
 
 @dataclass(frozen=True)
 class WhenDefeated:
@@ -3540,6 +3661,12 @@ class ConstantAbility:
                                     # unit being attacked; compute_power passes
                                     # ``is_defending`` when computing the defender's
                                     # power so the debuff lands only mid-combat.
+    while_target_attacking: bool = False  # the StatBonus applies to its target ONLY
+                                    # while that target is itself attacking (a unit
+                                    # OR a base) — "Enemy ground units get −1/−0
+                                    # while attacking" (Blockade Ship HMW_251).
+                                    # compute_power threads ``is_attacking``;
+                                    # compute_hp skips it (combat-only).
     while_attacking: bool = False   # attacker-SCOPED variant of
                                     # ``while_target_defending``: the StatBonus
                                     # applies to its target ONLY while the *source*
@@ -3952,6 +4079,69 @@ class TokensEnterPlayReady:
     per-effect version of the same thing; this is the board-wide one.  Purely a read
     there: no trigger, no decision.  Mirrors ``CannotAttackBases``."""
     pass
+
+
+@dataclass(frozen=True)
+class AmbushCanAttackBases:
+    """Constant marker: while this unit is in play, its controller's units may
+    attack a BASE while using Ambush — "Friendly units can attack bases while using
+    Ambush" (Fett's Firespray HMW_53).
+
+    Read by the Ambush listener (``keyword_triggers._ambush_listener``, which then
+    pushes the decision even with no enemy unit to hit) and the ``ambush`` decision's
+    options (``combat._ambush_actions``), which add ``UseAmbush(unit, <enemy base>)``
+    unless a Sentinel blocks it; ``UseAmbush.apply`` routes that to the base-attack
+    pipeline.  Helper: ``combat._ambush_can_attack_bases``."""
+    pass
+
+
+@dataclass(frozen=True)
+class CopyLeaderTraits:
+    """Constant marker: this card gains each friendly leader's traits except those
+    in ``exclude``, in every zone — "This unit gains each friendly leader's traits
+    except Force, even while she's not in play" (Zam Wesell HMW_134).
+
+    Read by the trait query layer (``traits.get_traits`` / ``has_trait``) off the
+    card's own registry key (a cached index), so a hand or deck copy has the traits
+    too.  The leader's PRINTED traits are copied (no re-entry into the grant
+    layer); a suppressed card copies nothing."""
+    exclude: tuple = ()
+
+
+@dataclass(frozen=True)
+class UnitsEnterPlayReady:
+    """Constant marker: while ``condition`` holds, every unit entering play under
+    this card's controller enters READY — "While you control a Tatooine base,
+    friendly units enter play ready (including this one)" (Ritual Dragon HMW_234).
+
+    Read at the single enter-play placement (``zones._enters_play_ready``, called
+    from ``_put_unit_in_play``), which every entry route passes through — played,
+    put into play by an ability, or a created token — so "friendly units" needs no
+    per-route wiring.  The entering unit's own specs are read too, which is the
+    "(including this one)".  The board-wide sibling of ``TokensEnterPlayReady``
+    (tokens only) and ``EntersPlayReady`` (the card itself only)."""
+    condition: Optional[ConditionCheck] = None
+
+
+@dataclass(frozen=True)
+class NthUnitPlayDiscount:
+    """Constant marker: while ``condition`` holds, the controller's first, second,
+    third … UNIT played each round costs ``amounts[0]``, ``amounts[1]``, … less —
+    "While you control a Kashyyyk base, the first, second, and third units you play
+    each round cost 1 resource less, 2 resources less, and 3 resources less,
+    respectively" (Origin Tree Shyyyo HMW_145).
+
+    Read at the play-cost seam beside ``StandingPlayDiscount``
+    (``costs._standing_play_discount``).  The index is the number of units the
+    controller has already played — ``cards_played_this_phase`` less
+    ``non_units_played_this_phase``, both written AFTER the cost is paid.  Those are
+    phase counters, but cards are only played in the action phase and a round has
+    one, so this phase's plays ARE this round's.  Nothing to consume: the next play
+    simply reads a higher index.  Units played before this card arrived still count
+    toward the index ("the first unit you play each round" is a fact about the
+    round, not about this card)."""
+    amounts: tuple = (1, 2, 3)
+    condition: Optional[ConditionCheck] = None
 
 
 @dataclass(frozen=True)
