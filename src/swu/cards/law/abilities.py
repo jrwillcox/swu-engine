@@ -1027,11 +1027,9 @@ def _khetanna():
     triggers stack as two separate "next unit" discounts (each applies to a
     different subsequent Underworld unit).  The discount lifts at the phase rollover.
 
-    LIMITATION (documented): the discount is applied/consumed only on the normal
-    hand-play path (``PlayCard``) and its affordability gates, not on the
-    ability-driven play-from-hand subsystem (which pays the raw effective cost, like
-    Exploit), so a Khetanna discount does not stack onto an Underworld unit played by
-    Jabba the Hutt's deployed action.  This is the common, faithful case."""
+    Every paid play path applies and spends it, ability-driven plays included (Jabba
+    the Hutt's deployed action stacks with it) — the 2026-11-23 fix of the old
+    hand-play-only limitation."""
     return [
         TriggerAbility(trigger=WhenPlayed(),
                        effects=[NextPlayDiscount("Underworld", 1)]),
@@ -1306,11 +1304,9 @@ def _double_cross():
     required (the exchange is all-or-nothing): with no friendly OR no enemy
     non-leader unit the second effect no-ops.
 
-    SCOPE/LIMITATION (the documented control-change convention): "friendly"/"enemy"
-    resolve by ``owner_id`` in the target matcher, which equals the controller in
-    every normal case — only a unit whose control was ALREADY changed by an earlier
-    effect would diverge (the same limitation noted on ``actions.change_control``).
-    Costs use the units' printed ``card_def.cost`` (the Credit-token convention)."""
+    "Friendly"/"enemy" resolve by CONTROL (``state.controller_id``), so a unit
+    whose control an earlier effect changed is judged correctly.  Costs use the
+    units' printed ``card_def.cost`` (the Credit-token convention)."""
     return EventAbility(effects=[
         CustomEffect(
             fn=_double_cross_record_friendly,
@@ -5415,7 +5411,7 @@ def _phantom_heroism_units_in_hand(state, source_ci, event_ctx):
     """Availability gate for LAW_144: at least one affordable Heroism UNIT in the
     controller's hand, so the optional trigger is never a dead prompt."""
     from swu.cards.models import Unit
-    from swu.engine.actions import _effective_cost
+    from swu.engine.actions.costs import _play_cost
     ps = state.player_by_id(source_ci.owner_id)
     budget = ps.available_resources + len(ps.credits)
     for c in ps.hand:
@@ -5424,7 +5420,7 @@ def _phantom_heroism_units_in_hand(state, source_ci, event_ctx):
             continue
         if "Heroism" not in {a.name for a in (getattr(cd, "aspects", None) or ())}:
             continue
-        if _effective_cost(cd, ps, state) <= budget:
+        if _play_cost(state, c, ps) <= budget:
             return True
     return False
 
@@ -6556,9 +6552,8 @@ def _every_day_more_lies():
     """LAW_204 — Every Day, More Lies (Event, Innate, cost 1): "Each player
     discards a card from their hand."
 
-    Two ``DiscardFromHand`` effects, one per chooser — the first-card
-    simplification each already uses (K-2SO SOR_145).  A player with an empty hand
-    simply discards nothing."""
+    Two ``DiscardFromHand`` effects, one per player — each picks their own card.
+    A player with an empty hand simply discards nothing."""
     return EventAbility(effects=[
         DiscardFromHand(count=1, chooser="controller"),
         DiscardFromHand(count=1, chooser="opponent"),

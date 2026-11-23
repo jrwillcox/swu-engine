@@ -156,9 +156,9 @@ class GameMemory:
     # "an opponent plays their Nth card each phase" observer (Ki-Adi-Mundi TWI_64).
     # Incremented at the CardPlayed firing chokepoint (resolver.fire_triggered_
     # abilities) so the count stays aligned with the firing opportunities — the Nth
-    # *fired* play is exactly when the count reaches N (effect-driven plays that
-    # append CardPlayed without firing it do not count, matching every other
-    # WhenYouPlayCard observer's coverage).  Cleared at the phase rollover.
+    # *fired* play is exactly when the count reaches N.  Every play path, including
+    # ability-driven ones, fires it (``shared._fire_card_played``).  Cleared at the
+    # phase rollover.
     cards_played_this_phase: dict = field(default_factory=dict)  # player_id -> int
     # The effective TRAITS of every card each player has played this phase, fed at
     # the same CardPlayed chokepoint as the counter above — "If you played a First
@@ -1071,7 +1071,7 @@ class CardInstance:
         base = getattr(self.card_def, "hp", 0) or 0
         for u in self.attached_upgrades:
             base += getattr(u.card_def, "upgrade_hp", 0) or 0
-        return max(1, base)
+        return max(0, base)   # 0 HP is lethal (see compute_hp)
 
     def is_defeated(self) -> bool:
         return self.damage >= self.effective_hp()
@@ -1364,6 +1364,50 @@ class GameState:
     def view_for(self, player_id: str) -> "PlayerView":
         from swu.engine.views import build_view
         return build_view(self, player_id)
+
+
+# ── Control ───────────────────────────────────────────────────────────────────
+
+def controller_id(state: "GameState", ci: "CardInstance") -> str:
+    """The player who CONTROLS ``ci`` right now.
+
+    Control is implicit in this engine: a unit is controlled by the player whose
+    arena holds it (``change_control`` moves it; ``owner_id`` never changes), an
+    attached upgrade by its host's controller, a resource by the player whose
+    resource row holds it.  Everything else — hand, deck, discard, base zone, a card
+    in limbo — is controlled by its owner.  "Friendly" and "enemy" are judged by
+    this, never by ``owner_id`` (the known-deviation fix of 2026-11-23).
+
+    Hot path (condition checks inside ``compute_power``): a card outside the arenas
+    and resource rows answers immediately, and the owner's side is checked first."""
+    zone = ci.zone
+    if zone in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
+        # A unit, or an upgrade (which carries its host's zone).
+        players = state.players
+        if players and players[0].player_id != ci.owner_id:
+            players = list(reversed(players))
+        iid = ci.instance_id
+        for p in players:
+            for u in p.ground_arena:
+                if u is ci or u.instance_id == iid:
+                    return p.player_id
+                for up in u.attached_upgrades:
+                    if up is ci or up.instance_id == iid:
+                        return p.player_id
+            for u in p.space_arena:
+                if u is ci or u.instance_id == iid:
+                    return p.player_id
+                for up in u.attached_upgrades:
+                    if up is ci or up.instance_id == iid:
+                        return p.player_id
+        return ci.owner_id
+    if zone == Zone.RESOURCES:
+        iid = ci.instance_id
+        for p in state.players:
+            for r in p.resources:
+                if r is ci or r.instance_id == iid:
+                    return p.player_id
+    return ci.owner_id
 
 
 # ── Name-based ability suppression (Galen Erso P25_31) ────────────────────────

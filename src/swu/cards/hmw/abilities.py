@@ -43,16 +43,18 @@ from swu.abilities.registry import (
     WhenPlayed, WhenUnitDefeated, WhenYouPlayCard, WhenYouPlayOrCreateUnit,
     PhaseStartTrigger, OnAttack, WhenDefeated, WhenDamageDealt, WhenYouDraw,
     WhenUnitAttacks, WhenDeployed,
-    DealDamage, Heal, DrawCards, ExhaustCard, ModifyStats, CustomEffect, DefeatUnit,
-    ReturnToHand,
+    WhenOpponentPlaysCard, WhenAttackEnds, WhenYouDeployLeader, WhenUnitEntersPlay,
+    RevokeKeyword, DamagePrevention, AmbushCanAttackBases, CopyLeaderTraits,
+    DealDamage, Heal, DrawCards, ExhaustCard, ReadyCard, ModifyStats, CustomEffect,
+    DefeatUnit, ReturnToHand,
     DiscardFromHand, GiveToken, GrantKeyword,
     KeywordGrant, StatBonus,
     IgnoreAspectPenaltyForPlays, BaseDamageShieldUpgrade, BasesCannotHeal,
     NextPlayDiscount, CostRoute, AbilityDamageBonus, BaseUpgradeDefeatReplacement,
-    CostReduction,
+    CostReduction, EntersPlayReady, UnitsEnterPlayReady, NthUnitPlayDiscount,
     DefeatSelf, DiscardCardCost, ExhaustSelf, PayResources,
     ConditionCheck, Condition, Duration,
-    TargetSpec, SELF, EACH_ENEMY,
+    TargetSpec, SELF, EACH_ENEMY, EACH_FRIENDLY,
 )
 
 
@@ -1127,7 +1129,7 @@ def _giant_gorax():
 
     Luke Skywalker LAW_80's opponent-decided ``choose_two_modal`` (``pick=1``).  The
     option specs are ``EventAbility`` so a unit never trigger-collects them.  The
-    discard is the documented first-card ``DiscardFromHand(chooser="opponent")``;
+    discard is ``DiscardFromHand(chooser="opponent")`` (they pick the card);
     the resource is auto-picked (resources are fungible face-down cards)."""
     return [
         TriggerAbility(trigger=OnAttack(),
@@ -2414,3 +2416,1263 @@ def _batcher():
         effects=[StatBonus(power=1, hp=0)],
         while_target_defending=True,
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:14–20 — Combat tricks, buffs & tempo
+#
+# Mostly composition.  The small new pieces (all self-contained reads, no
+# decision kind): Conditions ENEMY_HAS_UNIQUE_UNIT, CONTROLLER_HAS_OTHER_UNIT_COST,
+# CONTROLLER_ALL_RESOURCES_EXHAUSTED, CONTROLLER_ASPECT_ICONS_MIN, FIRST_ROUND;
+# predicates ``no_abilities`` and the board gates
+# ``controller_has_planet_base:<P>`` / ``controller_nonleader_shares_leader_trait``;
+# ``KeywordGrant.value_count`` now falls back to every ``StatBonus.count`` source;
+# ``WhenYouDeployLeader(opponent=)``; ``push_granted_attack(then_attack_again=)``;
+# markers ``UnitsEnterPlayReady`` and ``NthUnitPlayDiscount``.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_KASHYYYK_BASE = ConditionCheck(Condition.CONTROLLER_HAS_PLANET_BASE, "Kashyyyk")
+_TATOOINE_BASE = ConditionCheck(Condition.CONTROLLER_HAS_PLANET_BASE, "Tatooine")
+
+
+def _self_grant(*keywords, condition=None):
+    """"While <condition>, this unit gains <keywords>" — the conditional self-grant
+    (Hunting Nexu SHD_168); the sanitiser strips the mistagged printed keyword."""
+    return ConstantAbility(target=TargetSpec(kind="unit", fixed=SELF),
+                           effects=[KeywordGrant(k) for k in keywords],
+                           condition=condition)
+
+
+def _self_buff(power, condition):
+    return ConstantAbility(target=TargetSpec(kind="unit", fixed=SELF),
+                           effects=[StatBonus(power=power, hp=0)],
+                           condition=condition)
+
+
+def _resource_deck_top(state, ps, ready=False):
+    """Resource the top card of ``ps``'s deck.  An ability-made resource enters
+    EXHAUSTED (Resupply SOR_126's ruling; Chewbacca's Bowcaster HMW_127 prints it)
+    unless the card says to ready it.  Returns True if a card moved."""
+    from swu.engine.actions.shared import _resource_top_of_deck
+    before = len(ps.resources)
+    _resource_top_of_deck(state, ps)
+    if len(ps.resources) == before:
+        return False
+    ps.resources[-1].exhausted = not ready
+    return True
+
+
+def _ramp_one(state, source_ci, target_id, event_ctx):
+    _resource_deck_top(state, state.player_by_id(source_ci.owner_id))
+    return state
+
+
+def _deck_not_empty(state, source_ci, event_ctx):
+    return bool(state.player_by_id(source_ci.owner_id).deck)
+
+
+def _ready_a_resource(state, source_ci, target_id, event_ctx):
+    """"Ready a (friendly) resource" — fungible, never adverse, so inline (the
+    Coruscant Dissident SHD_199 helper)."""
+    from swu.cards.shd.abilities import _coruscant_dissident_attack
+    return _coruscant_dissident_attack(state, source_ci, target_id, event_ctx)
+
+
+# ── hmw-set:14 ────────────────────────────────────────────────────────────────
+
+
+@card_ability("HMW", "91")
+def _pelta_relief_frigate():
+    """HMW_91 — Pelta Relief Frigate (Unit, 5/4): "When Played: Heal 2 damage from a
+    friendly base and 2 damage from a friendly unit."  One ability per clause (the
+    JTL_250 rule); the unit heal picks a damaged unit, so an all-healthy board
+    fizzles without a prompt."""
+    return [
+        TriggerAbility(trigger=WhenPlayed(),
+                       effects=[Heal(2, TargetSpec(controller="friendly", kind="base"))]),
+        TriggerAbility(trigger=WhenPlayed(),
+                       effects=[Heal(2, TargetSpec(controller="friendly", kind="unit",
+                                                   predicates=("damaged",)))]),
+    ]
+
+
+@card_ability("HMW", "92")
+def _starlit_purrgil():
+    """HMW_92 — Starlit Purrgil (Unit, Creature, 4/5; Restore 2): "When Played: You
+    may exhaust a unit."  ``ready`` is the don't-offer-a-no-op filter."""
+    return TriggerAbility(
+        trigger=WhenPlayed(),
+        effects=[ExhaustCard(TargetSpec(controller="any", kind="unit",
+                                        predicates=("ready",)))],
+        optional=True,
+    )
+
+
+@card_ability("HMW", "98")
+def _resonate():
+    """HMW_98 — Resonate (Event, Innate, 1): "If a friendly non-leader unit shares a
+    Trait with a friendly leader, heal 4 damage from a unit or base."  The new
+    ``controller_nonleader_shares_leader_trait`` BOARD gate (an EventAbility has no
+    condition; the event fizzles unprompted when it fails)."""
+    return EventAbility(effects=[Heal(4, TargetSpec(
+        controller="any", kind="unit_or_base",
+        predicates=("controller_nonleader_shares_leader_trait",)))])
+
+
+def _garnac_attack_again(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import push_granted_attack
+    push_granted_attack(state, source_ci, optional=True, exclude_source=True)
+    return state
+
+
+@card_ability("HMW", "104")
+def _garnac():
+    """HMW_104 — Garnac (Unit, Underworld, 3/1): "While an opponent controls a <uq>
+    unit, this unit gains Hidden.  When Attack Ends: You may attack with another
+    unit."  The trigger stays mandatory; the granted attack's decline IS the "may"."""
+    return [
+        _self_grant("Hidden",
+                    condition=ConditionCheck(Condition.ENEMY_HAS_UNIQUE_UNIT)),
+        TriggerAbility(trigger=WhenAttackEnds(),
+                       effects=[CustomEffect(fn=_garnac_attack_again)]),
+    ]
+
+
+@card_ability("HMW", "107")
+def _stormtrooper_patrol():
+    """HMW_107 — Stormtrooper Patrol (Unit, 2/4; Sentinel): "While you control another
+    unit that costs 3 or more, this unit gets +2/+0." """
+    return _self_buff(2, ConditionCheck(Condition.CONTROLLER_HAS_OTHER_UNIT_COST,
+                                        ("min", 3)))
+
+
+@card_ability("HMW", "111")
+def _invasion_lander():
+    """HMW_111 — Invasion Lander (Unit, 3/7): "When Played: Give each other friendly
+    unit +2/+2 for this phase." """
+    return TriggerAbility(trigger=WhenPlayed(), effects=[ModifyStats(
+        2, 2, TargetSpec(controller="friendly", kind="unit", predicates=("not_self",),
+                         fixed=EACH_FRIENDLY),
+        Duration.THIS_PHASE)])
+
+
+# ── hmw-set:15 ────────────────────────────────────────────────────────────────
+
+
+@card_ability("HMW", "115")
+def _leia_organa_hmw():
+    """HMW_115 — Leia Organa (Unit, Official/Rebel, 2/3): "When you play another unit
+    that costs 3 or less: Heal 1 damage from your base." """
+    return TriggerAbility(
+        trigger=WhenYouPlayCard(card_type="unit", cost_max=3),
+        effects=[Heal(1, TargetSpec(controller="friendly", kind="base"))],
+    )
+
+
+@card_ability("HMW", "117")
+def _chewbacca_hmw_117():
+    """HMW_117 — Chewbacca (Unit, Wookiee, 0/5): "This unit gains Raid 1 for each
+    exhausted resource you control.  While each resource you control is exhausted,
+    this unit gains Overwhelm."  Raid via ``KeywordGrant.value_count`` (now any
+    ``StatBonus.count`` source)."""
+    return [
+        ConstantAbility(target=TargetSpec(kind="unit", fixed=SELF),
+                        effects=[KeywordGrant("Raid", 1,
+                                              value_count="controller_exhausted_resources")]),
+        _self_grant("Overwhelm",
+                    condition=ConditionCheck(Condition.CONTROLLER_ALL_RESOURCES_EXHAUSTED)),
+    ]
+
+
+@card_ability("HMW", "118")
+def _ryyk_blademaster():
+    """HMW_118 — Ryyk Blademaster (Unit, Wookiee, 5/4): "While you control 6 or more
+    resources, this unit gains Ambush and Overwhelm." """
+    return _self_grant("Ambush", "Overwhelm",
+                       condition=ConditionCheck(Condition.CONTROLLER_N_PLUS_RESOURCES, 6))
+
+
+@card_ability("HMW", "119")
+def _saw_gerrera_hmw():
+    """HMW_119 — Saw Gerrera (Unit, Rebel, 3/6): "When an opponent plays an event:
+    Resource the top card of your deck."  Enters exhausted."""
+    return TriggerAbility(trigger=WhenOpponentPlaysCard(card_type="event"),
+                          effects=[CustomEffect(fn=_ramp_one)])
+
+
+def _no_ready_next_regroup(state, source_ci, target_id, event_ctx):
+    """"This unit doesn't ready during the next regroup phase" — the Carbonite
+    Chamber HMW_95 flag (``cannot_ready_this_round``)."""
+    res = state.find_instance(source_ci.instance_id)
+    if res is not None:
+        res[1].cannot_ready_this_round = True
+    return state
+
+
+@card_ability("HMW", "121")
+def _hijacked_at_st():
+    """HMW_121 — Hijacked AT-ST (Unit, 7/7; Overwhelm): "When Played: This unit
+    doesn't ready during the next regroup phase." """
+    return TriggerAbility(trigger=WhenPlayed(),
+                          effects=[CustomEffect(fn=_no_ready_next_regroup)])
+
+
+def _grakchawwaa_ramp(state, source_ci, target_id, event_ctx):
+    """One READY resource per other friendly Wookiee unit, counted now."""
+    from swu.engine.traits import has_trait
+    ps = state.player_by_id(source_ci.owner_id)
+    n = sum(1 for u in ps.ground_arena + ps.space_arena
+            if u.instance_id != source_ci.instance_id and has_trait(state, u, "Wookiee"))
+    for _ in range(n):
+        if not _resource_deck_top(state, ps, ready=True):
+            break
+    return state
+
+
+@card_ability("HMW", "123")
+def _king_grakchawwaa():
+    """HMW_123 — King Grakchawwaa (Unit, Official/Wookiee, 6/6): "When Played: For
+    each other friendly Wookiee unit, resource the top card of your deck.  Ready each
+    card resourced this way." """
+    return TriggerAbility(trigger=WhenPlayed(),
+                          effects=[CustomEffect(fn=_grakchawwaa_ramp)])
+
+
+def _luminara_attack(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import push_granted_attack
+    push_granted_attack(state, source_ci, power_bonus=2, optional=True)
+    return state
+
+
+@card_ability("HMW", "124")
+def _luminara_unduli_hmw():
+    """HMW_124 — Luminara Unduli (Unit, Force/Jedi/Republic, 7/7): "When you play a
+    unit (including this one): You may attack with a unit.  It gets +2/+0 for this
+    attack."  ``exclude_self=False`` is the "(including this one)"."""
+    return TriggerAbility(
+        trigger=WhenYouPlayCard(card_type="unit", exclude_self=False),
+        effects=[CustomEffect(fn=_luminara_attack)],
+    )
+
+
+# ── hmw-set:16 ────────────────────────────────────────────────────────────────
+
+
+@card_ability("HMW", "127")
+def _chewbaccas_bowcaster():
+    """HMW_127 — Chewbacca's Bowcaster (Upgrade, Item/Weapon, 3): "Attach to a
+    non-Vehicle unit.  When Played: If attached unit is Chewbacca, resource the top
+    card of your deck.  (It enters play exhausted.)"  The attach restriction is
+    parsed from the text (``_upgrade_target_spec``)."""
+    return TriggerAbility(
+        trigger=WhenPlayed(),
+        effects=[CustomEffect(fn=_ramp_one)],
+        condition=ConditionCheck(Condition.ATTACHED_HOST_NAMED, "Chewbacca"),
+    )
+
+
+@card_ability("HMW", "129")
+def _child_of_dathomir():
+    """HMW_129 — Child of Dathomir (Unit, Night, 1/2): "While you control 3 or more
+    units (including this one), this unit gets +2/+0." """
+    return _self_buff(2, ConditionCheck(Condition.CONTROLLER_N_PLUS_UNITS, 3))
+
+
+@card_ability("HMW", "131")
+def _soaring_can_cell():
+    """HMW_131 — Soaring Can-Cell (Unit, Creature, 1/4; Raid 1): "While you control a
+    Kashyyyk base, this unit gains Ambush." """
+    return _self_grant("Ambush", condition=_KASHYYYK_BASE)
+
+
+@card_ability("HMW", "133")
+def _wroshyr_rebel():
+    """HMW_133 — Wroshyr Rebel (Unit, Rebel/Wookiee, 0/4): "This unit gets +1/+0 for
+    every 2 resources you control." """
+    return ConstantAbility(target=TargetSpec(kind="unit", fixed=SELF),
+                           effects=[StatBonus(power=1, hp=0,
+                                              count="controller_resources_per_2")])
+
+
+@card_ability("HMW", "136")
+def _lifetree_caravan():
+    """HMW_136 — Lifetree Caravan (Unit, Ewok, 2/1): "When Played: If you control 3 or
+    more units (including this one), you may resource the top card of your deck." """
+    return TriggerAbility(
+        trigger=WhenPlayed(),
+        effects=[CustomEffect(fn=_ramp_one, available_fn=_deck_not_empty)],
+        optional=True,
+        condition=ConditionCheck(Condition.CONTROLLER_N_PLUS_UNITS, 3),
+    )
+
+
+@card_ability("HMW", "137")
+def _v19_skirmisher():
+    """HMW_137 — V-19 Skirmisher (Unit, 3/3): "While you control 3 or more units, this
+    unit gains Sentinel." """
+    return _self_grant("Sentinel",
+                       condition=ConditionCheck(Condition.CONTROLLER_N_PLUS_UNITS, 3))
+
+
+@card_ability("HMW", "138")
+def _commander_gree():
+    """HMW_138 — Commander Gree (Unit, Clone/Republic/Trooper, 3/6): "While there are
+    3 or more Command aspect icons among friendly units (including this one) and
+    upgrades, this unit gains Raid 4." """
+    return ConstantAbility(
+        target=TargetSpec(kind="unit", fixed=SELF),
+        effects=[KeywordGrant("Raid", 4)],
+        condition=ConditionCheck(Condition.CONTROLLER_ASPECT_ICONS_MIN, ("Command", 3)),
+    )
+
+
+# ── hmw-set:17 ────────────────────────────────────────────────────────────────
+
+
+@card_ability("HMW", "141")
+def _rex_hmw():
+    """HMW_141 — Rex (Unit, Clone/Fringe, 5/6): "Friendly units with no abilities get
+    +1/+1."  The new ``no_abilities`` predicate: a unit that lost all abilities, or
+    one printing no text and having no keyword (``has_any_keyword``, which counts
+    aura-granted keywords too since 2026-11-23)."""
+    return ConstantAbility(
+        target=TargetSpec(controller="friendly", kind="unit", predicates=("no_abilities",)),
+        effects=[StatBonus(power=1, hp=1)],
+    )
+
+
+@card_ability("HMW", "142")
+def _wookiee_rangers():
+    """HMW_142 — Wookiee Rangers (Unit, Wookiee, 5/6): "While you control another
+    Wookiee unit or a Kashyyyk base, this unit gains Sentinel." """
+    return _self_grant("Sentinel", condition=ConditionCheck(Condition.ANY_OF, (
+        ConditionCheck(Condition.CONTROLLER_HAS_OTHER_TRAIT_UNIT, "Wookiee"),
+        _KASHYYYK_BASE,
+    )))
+
+
+@card_ability("HMW", "145")
+def _origin_tree_shyyyo():
+    """HMW_145 — Origin Tree Shyyyo (Unit, Creature, 4/8; Restore 1): "While you
+    control a Kashyyyk base, the first, second, and third units you play each round
+    cost 1 resource less, 2 resources less, and 3 resources less, respectively."
+    The new ``NthUnitPlayDiscount`` marker."""
+    return NthUnitPlayDiscount(amounts=(1, 2, 3), condition=_KASHYYYK_BASE)
+
+
+def _log_trap_attack(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import push_granted_attack
+    push_granted_attack(state, source_ci, then_attack_again=True)
+    return state
+
+
+@card_ability("HMW", "149")
+def _log_trap():
+    """HMW_149 — Log Trap (Event, Trick, 2): "Attack with a friendly unit.  Then
+    attack with it again, even if it's exhausted.  It can't attack bases for the
+    second attack."  The new ``then_attack_again`` rider."""
+    return EventAbility(effects=[CustomEffect(fn=_log_trap_attack)])
+
+
+def _overgrowth_resource_self(state, source_ci, target_id, event_ctx):
+    """"Resource this card" — the played event, now in its owner's discard, goes
+    face down and exhausted into the resource row (Resupply SOR_126)."""
+    from swu.engine.state import Zone
+    ps = state.player_by_id(source_ci.owner_id)
+    for i, ci in enumerate(ps.discard):
+        if ci.instance_id == source_ci.instance_id:
+            ps.discard.pop(i)
+            ci.zone = Zone.RESOURCES
+            ci.face_down = True
+            ci.exhausted = True
+            ps.resources.append(ci)
+            break
+    return state
+
+
+@card_ability("HMW", "151")
+def _overgrowth():
+    """HMW_151 — Overgrowth (Event, Disaster, 5): "If you control a Kashyyyk base, a
+    friendly unit deals damage equal to its power to an enemy unit.  Resource this
+    card."  The Director Krennic LAW_8 shooter/victim chain behind the
+    ``controller_has_planet_base:Kashyyyk`` board gate; the resource clause is
+    unconditional and untargeted, so it comes last."""
+    from swu.cards.law.abilities import _krennic_pick_shooter, _krennic_fire
+    return EventAbility(effects=[
+        CustomEffect(fn=_krennic_pick_shooter,
+                     target=TargetSpec(controller="friendly", kind="unit",
+                                       predicates=("controller_has_planet_base:Kashyyyk",))),
+        CustomEffect(fn=_krennic_fire,
+                     target=TargetSpec(controller="enemy", kind="unit",
+                                       predicates=("requires_prior_target",))),
+        CustomEffect(fn=_overgrowth_resource_self),
+    ])
+
+
+@card_ability("HMW", "164")
+def _chief_chirpa():
+    """HMW_164 — Chief Chirpa (Unit, Ewok, 1/5): "This unit gets +1/+0 for each other
+    friendly Ewok unit." """
+    return ConstantAbility(target=TargetSpec(kind="unit", fixed=SELF),
+                           effects=[StatBonus(power=1, hp=0,
+                                              count="other_controller_trait_units_Ewok")])
+
+
+@card_ability("HMW", "165")
+def _commandeered_tour_shuttle():
+    """HMW_165 — Commandeered Tour Shuttle (Unit, 2/2): "When Played: You may ready
+    another unit with 3 or less power."  ``exhausted`` keeps it from offering a
+    no-op."""
+    return TriggerAbility(
+        trigger=WhenPlayed(),
+        effects=[ReadyCard(TargetSpec(controller="any", kind="unit", power_max=3,
+                                      predicates=("not_self", "exhausted")))],
+        optional=True,
+    )
+
+
+# ── hmw-set:18 ────────────────────────────────────────────────────────────────
+
+
+@card_ability("HMW", "170")
+def _han_solo_hmw():
+    """HMW_170 — Han Solo (Unit, Official/Rebel, 4/7): "Action [Exhaust]: Ready
+    another unit."  Offered only while some unit is exhausted (Han himself is ready
+    to pay the cost, so every exhausted unit is "another")."""
+    return ActivatedAbility(
+        costs=[ExhaustSelf()],
+        effects=[ReadyCard(TargetSpec(controller="any", kind="unit",
+                                      predicates=("not_self", "exhausted")))],
+        title="Ready another unit",
+        condition=ConditionCheck(Condition.N_PLUS_EXHAUSTED_UNITS_IN_PLAY, 1),
+    )
+
+
+@card_ability("HMW", "176")
+def _village_troublemaker():
+    """HMW_176 — Village Troublemaker (Unit, Ewok, 2/2): "While you control an Endor
+    base, this unit gains Hidden and Saboteur." """
+    return _self_grant("Hidden", "Saboteur", condition=_ENDOR_BASE)
+
+
+@card_ability("HMW", "184")
+def _aggrocrab():
+    """HMW_184 — Aggrocrab (Unit, Creature, 6/4): "While you have the initiative, this
+    unit costs 1 resource less to play." """
+    return CostReduction(1, condition=ConditionCheck(Condition.CONTROLLER_HAS_INITIATIVE))
+
+
+@card_ability("HMW", "190")
+def _enraged():
+    """HMW_190 — Enraged (Upgrade, Innate, 2): "Attached unit gains Raid 2."  The
+    upgrade-SELF grant the attached-upgrade keyword scan confers on the host."""
+    return ConstantAbility(target=TargetSpec(fixed=SELF),
+                           effects=[KeywordGrant("Raid", 2)])
+
+
+@card_ability("HMW", "191")
+def _hunters_instinct():
+    """HMW_191 — Hunter's Instinct (Upgrade, Innate, 3): "If attached unit is a
+    Creature, it gains Grit."  The attached-upgrade scan evaluates the condition
+    against the HOST, so ``SOURCE_HAS_TRAIT`` reads the attached unit."""
+    return ConstantAbility(target=TargetSpec(fixed=SELF),
+                           effects=[KeywordGrant("Grit")],
+                           condition=ConditionCheck(Condition.SOURCE_HAS_TRAIT, "Creature"))
+
+
+@card_ability("HMW", "203")
+def _victor_squadron():
+    """HMW_203 — Victor Squadron (Unit, 5/5): "This unit enters play ready." """
+    return EntersPlayReady()
+
+
+@card_ability("HMW", "208")
+def _luke_skywalker_hmw():
+    """HMW_208 — Luke Skywalker (Unit, Force/Fringe, 1/3; Raid 1): "While it's the
+    first round of the game, this unit enters play ready." """
+    return EntersPlayReady(condition=ConditionCheck(Condition.FIRST_ROUND))
+
+
+# ── hmw-set:19 ────────────────────────────────────────────────────────────────
+
+
+@card_ability("HMW", "209")
+def _corona_squadron_x_wing():
+    """HMW_209 — Corona Squadron X-Wing (Unit, 2/2): "On Attack: You may ready a
+    resource."  Coruscant Dissident SHD_199's text exactly (a different name, so not
+    a reprint alias)."""
+    return TriggerAbility(trigger=OnAttack(), effects=[CustomEffect(fn=_ready_a_resource)])
+
+
+@card_ability("HMW", "210")
+def _sol():
+    """HMW_210 — Sol (Unit, Force/Jedi, 2/2; Shielded): "On Attack: This unit gains
+    Sentinel for this phase." """
+    return TriggerAbility(trigger=OnAttack(), effects=[GrantKeyword(
+        "Sentinel", 0, TargetSpec(kind="unit", fixed=SELF), Duration.THIS_PHASE)])
+
+
+@card_ability("HMW", "212")
+def _the_chieftain():
+    """HMW_212 — The Chieftain (Unit, Tusken, 2/5): "This unit gains Raid 1 for each
+    other friendly Tusken unit.  While a friendly Tusken unit is defending, it gets
+    +1/+0 for each Raid it has."  The second clause is ``while_target_defending``
+    over friendly Tuskens with the new ``target_raid`` count."""
+    return [
+        ConstantAbility(target=TargetSpec(kind="unit", fixed=SELF),
+                        effects=[KeywordGrant(
+                            "Raid", 1, value_count="other_controller_trait_units_Tusken")]),
+        ConstantAbility(target=TargetSpec(controller="friendly", kind="unit",
+                                          traits=("Tusken",)),
+                        effects=[StatBonus(power=1, hp=0, count="target_raid")],
+                        while_target_defending=True),
+    ]
+
+
+def _phee_tax(state, source_ci, target_id, event_ctx):
+    """"Its controller may pay 2 resources.  If they don't, exhaust that leader" —
+    ``push_pay_or_exhaust`` (Look the Other Way SHD_227), decided by the deploying
+    player.  A leader deployed as a Pilot upgrade is not a unit to exhaust."""
+    from swu.engine.actions.scheduling import push_pay_or_exhaust
+    for p in state.players:
+        if p.player_id == source_ci.owner_id:
+            continue
+        ldr = p.leader_instance
+        if ldr is not None and any(u.instance_id == ldr.instance_id
+                                   for u in p.ground_arena + p.space_arena):
+            push_pay_or_exhaust(state, ldr.instance_id, pay_amount=2)
+    return state
+
+
+@card_ability("HMW", "214")
+def _phee_genoa():
+    """HMW_214 — Phee Genoa (Unit, Underworld, 5/4; Hidden): "When an enemy leader
+    deploys: Its controller may pay 2 resources.  If they don't, exhaust that
+    leader."  ``WhenYouDeployLeader(opponent=True)``."""
+    return TriggerAbility(trigger=WhenYouDeployLeader(opponent=True),
+                          effects=[CustomEffect(fn=_phee_tax)])
+
+
+@card_ability("HMW", "228")
+def _lakeside_shaaks():
+    """HMW_228 — Lakeside Shaaks (Unit, Creature, 4/4): "When Played: Ready a friendly
+    resource." """
+    return TriggerAbility(trigger=WhenPlayed(), effects=[CustomEffect(fn=_ready_a_resource)])
+
+
+@card_ability("HMW", "230")
+def _raiding_party():
+    """HMW_230 — Raiding Party (Unit, Tusken, 0/6; Raid 6): "When Played: If you
+    control another Tusken unit or a Tatooine base, you may exhaust a ground unit." """
+    return TriggerAbility(
+        trigger=WhenPlayed(),
+        effects=[ExhaustCard(TargetSpec(controller="any", kind="unit", arena="ground",
+                                        predicates=("ready",)))],
+        optional=True,
+        condition=ConditionCheck(Condition.ANY_OF, (
+            ConditionCheck(Condition.CONTROLLER_HAS_OTHER_TRAIT_UNIT, "Tusken"),
+            _TATOOINE_BASE,
+        )),
+    )
+
+
+# ── hmw-set:20 ────────────────────────────────────────────────────────────────
+
+
+@card_ability("HMW", "234")
+def _ritual_dragon():
+    """HMW_234 — Ritual Dragon (Unit, Creature, 6/9; Saboteur): "While you control a
+    Tatooine base, friendly units enter play ready (including this one)."  The new
+    ``UnitsEnterPlayReady`` marker."""
+    return UnitsEnterPlayReady(condition=_TATOOINE_BASE)
+
+
+@card_ability("HMW", "255")
+def _c3po_hmw():
+    """HMW_255 — C-3PO (Unit, Droid/Rebel, 2/3): "When Played: You may give an Ewok
+    unit +2/+2 for this phase.  You may give a Rebel unit +2/+2 for this phase."
+    Two independent optional clauses = two abilities (the Bossk LAW_31 rule)."""
+    return [
+        TriggerAbility(trigger=WhenPlayed(), optional=True, effects=[ModifyStats(
+            2, 2, TargetSpec(controller="any", kind="unit", traits=(trait,)),
+            Duration.THIS_PHASE)])
+        for trait in ("Ewok", "Rebel")
+    ]
+
+
+@card_ability("HMW", "256")
+def _jedi_interceptor():
+    """HMW_256 — Jedi Interceptor (Unit, 2/2): "While you control 6 or more
+    resources, this unit gets +2/+0." """
+    return _self_buff(2, ConditionCheck(Condition.CONTROLLER_N_PLUS_RESOURCES, 6))
+
+
+@card_ability("HMW", "257")
+def _ewok_archers():
+    """HMW_257 — Ewok Archers (Unit, Ewok, 2/5): "While you control another unit that
+    costs 3 or less, this unit gains Ambush." """
+    return _self_grant("Ambush", condition=ConditionCheck(
+        Condition.CONTROLLER_HAS_OTHER_UNIT_COST, ("max", 3)))
+
+
+@card_ability("HMW", "259")
+def _pack_guardian():
+    """HMW_259 — Pack Guardian (Unit, Creature, 5/4): "While this unit is ready, it
+    gains Sentinel." """
+    return _self_grant("Sentinel", condition=ConditionCheck(Condition.SOURCE_READY))
+
+
+@card_ability("HMW", "261")
+def _ben_kenobi_hmw():
+    """HMW_261 — Ben Kenobi (Unit, Force/Fringe/Jedi, 5/5): "When Played: You may
+    exhaust a unit with 3 or less power.  On Attack: You may heal 3 damage from
+    another unit." """
+    return [
+        TriggerAbility(trigger=WhenPlayed(), optional=True, effects=[ExhaustCard(
+            TargetSpec(controller="any", kind="unit", power_max=3, predicates=("ready",)))]),
+        TriggerAbility(trigger=OnAttack(), optional=True, effects=[Heal(
+            3, TargetSpec(controller="any", kind="unit",
+                          predicates=("not_self", "damaged")))]),
+    ]
+
+
+def _shield_attached_host(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions.zones import _find_upgrade_host
+    from swu.engine.tokens import attach_token
+    host = _find_upgrade_host(state, source_ci.instance_id)
+    if host is not None:
+        attach_token(state, state.player_by_id(host.owner_id), host, "Shield")
+    return state
+
+
+@card_ability("HMW", "264")
+def _heroic_bravery():
+    """HMW_264 — Heroic Bravery (Upgrade, Innate, 2): "When Played: If attached unit
+    is a Heroism unit, give a Shield token to it."  The Villainous Ambition HMW_252
+    gate; the Shield goes on the host found from the upgrade."""
+    return TriggerAbility(
+        trigger=WhenPlayed(),
+        effects=[CustomEffect(fn=_shield_attached_host)],
+        condition=ConditionCheck(Condition.ATTACHED_HOST_HAS_ASPECT, "Heroism"),
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:21–24 — the last combat tricks + miscellaneous abilities
+#
+# New small pieces: ``push_granted_attack(bonus_if_shares_trait_with_friendly=)``;
+# ``AmbushCanAttackBases`` (the ``ambush`` decision gains an enemy-base option);
+# ``CopyLeaderTraits`` (trait layer); ``ConstantAbility.while_target_attacking``;
+# Condition ``CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_POWER_MAX``; predicate
+# ``has_token_upgrade``; ``name_a_card`` payoff ``revoke_trait_enemy_phase``.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _familiar_strategem_attack(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import push_granted_attack
+    push_granted_attack(state, source_ci, power_bonus=2,
+                        bonus_if_shares_trait_with_friendly=True)
+    return state
+
+
+@card_ability("HMW", "266")
+def _familiar_strategem():
+    """HMW_266 — Familiar Strategem (Event, Tactic, 1): "Attack with a unit.  If it
+    shares a Trait with another friendly unit, it gets +2/+0 for this attack." """
+    return EventAbility(effects=[CustomEffect(fn=_familiar_strategem_attack)])
+
+
+def _heal_own_base_3(state, source_ci, target_id, event_ctx):
+    from swu.abilities.resolver import _apply_heal
+    base = state.player_by_id(source_ci.owner_id).base_instance
+    if base is not None:
+        state = _apply_heal(state, source_ci, base.instance_id, 3)
+    return state
+
+
+@card_ability("HMW", "267")
+def _renew():
+    """HMW_267 — Renew (Event, Innate, 2): "You may defeat a Condition upgrade.  Heal 3
+    damage from your base."  Targeted (optional) first, the fixed heal second — the
+    one-prompt rule; the heal goes through ``_apply_heal`` so heal bookkeeping holds."""
+    return EventAbility(effects=[
+        DefeatUnit(TargetSpec(controller="any", kind="upgrade", traits=("Condition",),
+                              optional=True)),
+        CustomEffect(fn=_heal_own_base_3),
+    ])
+
+
+# ── hmw-set:22 ────────────────────────────────────────────────────────────────
+
+
+_WARRIOR_CAN_PLAY = ConditionCheck(Condition.CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_POWER_MAX,
+                                   (3, 1))
+
+
+def _warrior_play(state, source_ci, target_id, event_ctx):
+    """Play a unit with 3 or less PRINTED power (it is in hand, nothing has buffed
+    it) from hand, paying its cost, with Ambush for this phase."""
+    from swu.engine.actions import push_play_from_hand, _playable_units_from_hand
+    ps = state.player_by_id(source_ci.owner_id)
+    ids = frozenset(ci.instance_id for ci in _playable_units_from_hand(state, ps, None)
+                    if int(getattr(ci.card_def, "power", 0) or 0) <= 3)
+    if ids:
+        push_play_from_hand(state, source_ci, eligible_ids=ids, grant_keyword="Ambush")
+    return state
+
+
+@card_ability("HMW", "18")
+def _the_warrior():
+    """HMW_18 — The Warrior (Leader, Tusken, 3/6).
+
+    Undeployed: "Action [1 resource, Exhaust]: Play a unit with 3 or less power from
+    your hand (paying its cost) and give it Ambush for this phase."  Deployed: Ambush,
+    Raid 1 (the deploy box — keyword layer).  Gated by the new
+    ``CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_POWER_MAX((3, 1))``, which prices in the
+    Action's own 1-resource cost, so it is never offered when nothing is playable."""
+    return ActivatedAbility(
+        costs=[PayResources(1), ExhaustSelf()],
+        effects=[CustomEffect(fn=_warrior_play)],
+        title="Play a unit with 3 or less power (gains Ambush)",
+        undeployed_only=True,
+        condition=_WARRIOR_CAN_PLAY,
+    )
+
+
+@card_ability("HMW", "53")
+def _fetts_firespray_hmw():
+    """HMW_53 — Fett's Firespray (Unit, 6/6; Ambush): "Friendly units can attack bases
+    while using Ambush."  The new ``AmbushCanAttackBases`` marker."""
+    return AmbushCanAttackBases()
+
+
+def _lyonie_copy_token(state, source_ci, target_id, event_ctx):
+    """Give the chosen unit another copy of one of its token upgrades.  Which token
+    is a choice when it carries several kinds; the controller's obvious pick is made
+    for them (a documented simplification): on a friendly unit the most useful
+    (Experience, then Shield, then Advantage), on an enemy unit a Weakness."""
+    from swu.cards.models import TokenUpgrade
+    from swu.engine.tokens import attach_token
+    if target_id is None:
+        return state
+    res = state.find_instance(target_id)
+    if res is None:
+        return state
+    holder, unit = res
+    kinds = [u.card_def.name for u in unit.attached_upgrades
+             if isinstance(u.card_def, TokenUpgrade)]
+    if not kinds:
+        return state
+    prefs: tuple[str, ...] = (("Experience", "Shield", "Advantage")
+                              if unit.owner_id == source_ci.owner_id
+                              else ("Weakness",))
+    pick = next((k for k in prefs if k in kinds), kinds[0])
+    attach_token(state, holder, unit, pick)
+    return state
+
+
+@card_ability("HMW", "57")
+def _boss_lyonie():
+    """HMW_57 — Boss Lyonie (Unit, Gungan/Official, 5/5): "When Played/On Attack: You
+    may choose a token upgrade attached to another unit.  Give another one of those
+    tokens to that unit."  The new ``has_token_upgrade`` predicate picks the unit."""
+    eff = CustomEffect(fn=_lyonie_copy_token, target=TargetSpec(
+        controller="any", kind="unit", predicates=("not_self", "has_token_upgrade")))
+    return [
+        TriggerAbility(trigger=WhenPlayed(), optional=True, effects=[eff]),
+        TriggerAbility(trigger=OnAttack(), optional=True, effects=[eff]),
+    ]
+
+
+@card_ability("HMW", "88")
+def _numa():
+    """HMW_88 — Numa (Unit, Rebel/Twi'lek, 4/4; Restore 1): "If this unit would be
+    dealt damage, prevent 1 of that damage."  ``DamagePrevention(on_self=True)``."""
+    return DamagePrevention(amount=1, on_self=True)
+
+
+def _nute_volley(state, source_ci, target_id, event_ctx):
+    """"Each friendly unit (including this one) deals 1 damage to a different enemy
+    unit" — ``select_damage`` over enemy units, capped at the friendly unit count.
+    Documented simplifications: the picks are "up to" (taking fewer is never better
+    here), and the damage is dealt by Nute's ability rather than per friendly unit."""
+    from swu.engine.actions import push_select_damage
+    ps = state.player_by_id(source_ci.owner_id)
+    n = len(ps.ground_arena) + len(ps.space_arena)
+    if n:
+        push_select_damage(state, source_ci, max_targets=n, enemy_only=True)
+    return state
+
+
+@card_ability("HMW", "105")
+def _nute_gunray_hmw():
+    """HMW_105 — Nute Gunray (Unit, Official/Separatist, 2/2): "When Played: Each
+    friendly unit (including this one) deals 1 damage to a different enemy unit." """
+    return TriggerAbility(trigger=WhenPlayed(), effects=[CustomEffect(fn=_nute_volley)])
+
+
+def _first_legion_trait_names(state, controller_id):
+    """Traits on the opponent's PUBLIC cards (units, their upgrades, leader, base,
+    discard) — naming a trait no visible card carries is never the better pick, and
+    offering the hidden zones' traits would leak them."""
+    opp = next(p for p in state.players if p.player_id != controller_id)
+    names: set = set()
+    for zone in (opp.ground_arena, opp.space_arena, opp.base_zone, opp.discard):
+        for ci in zone:
+            names.update(getattr(ci.card_def, "traits", None) or ())
+            for u in getattr(ci, "attached_upgrades", ()) or ():
+                names.update(getattr(u.card_def, "traits", None) or ())
+    return sorted(names)
+
+
+def _first_legion_name(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import push_name_a_card
+    names = _first_legion_trait_names(state, source_ci.owner_id)
+    if names:
+        push_name_a_card(state, source_ci, names=names,
+                         then_payoff="revoke_trait_enemy_phase")
+    return state
+
+
+@card_ability("HMW", "108")
+def _the_first_legion():
+    """HMW_108 — The First Legion (Unit, Imperial/Trooper, 5/5): "On Attack: Name a
+    trait.  Enemy cards, including those not in play, lose that trait for this
+    phase."  The ``name_a_card`` decision over trait names (the opponent's public
+    cards' traits), with the new ``revoke_trait_enemy_phase`` payoff: a this_phase
+    ``trait_revoke`` on every enemy card in every zone."""
+    return TriggerAbility(trigger=OnAttack(), effects=[CustomEffect(fn=_first_legion_name)])
+
+
+@card_ability("HMW", "134")
+def _zam_wesell_hmw():
+    """HMW_134 — Zam Wesell (Unit, Bounty Hunter/Underworld, 2/4; Hidden): "This unit
+    gains each friendly leader's traits except Force, even while she's not in play."
+    The new ``CopyLeaderTraits`` marker, read by the trait layer in every zone."""
+    return CopyLeaderTraits(exclude=("Force",))
+
+
+# ── hmw-set:23 ────────────────────────────────────────────────────────────────
+
+
+@card_ability("HMW", "154")
+def _dookus_solar_sailer():
+    """HMW_154 — Dooku's Solar Sailer (Unit, 3/3): "When Played: If you control a unit
+    that costs 1 or less, each opponent discards a card from their hand."  The
+    opponent picks the card (``DiscardFromHand``)."""
+    return TriggerAbility(
+        trigger=WhenPlayed(),
+        effects=[DiscardFromHand(1, chooser="opponent")],
+        condition=ConditionCheck(Condition.CONTROLLER_HAS_UNIT_COST_MAX, 1),
+    )
+
+
+def _raze_to_ruin_fn(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import push_discard_excess_from_hand
+    push_discard_excess_from_hand(state, source_ci, keep=3)
+    return state
+
+
+@card_ability("HMW", "161")
+def _raze_to_ruin():
+    """HMW_161 — Raze to Ruin (Event, Disaster/Plan, 2): "Each player discards all but
+    3 cards from their hand."  Smoke and Cinders SOR_174's decision at keep=3."""
+    return EventAbility(effects=[CustomEffect(fn=_raze_to_ruin_fn)])
+
+
+@card_ability("HMW", "162")
+def _teebo():
+    """HMW_162 — Teebo (Unit, Ewok, 3/1; Hidden): "Other friendly Ewok units gain
+    Hidden." """
+    return ConstantAbility(
+        target=TargetSpec(controller="friendly", kind="unit", traits=("Ewok",),
+                          predicates=("not_self",)),
+        effects=[KeywordGrant("Hidden")],
+    )
+
+
+def _volley_pick_shooter(state, source_ci, target_id, event_ctx):
+    """Record the chosen friendly unit and its Raid (read now)."""
+    if target_id is None:
+        return state
+    res = state.find_instance(target_id)
+    if res is None:
+        return state
+    from swu.engine.keywords import keyword_value, Keyword
+    event_ctx["prior_target_id"] = target_id
+    event_ctx["krennic_damage"] = keyword_value(state, res[1], Keyword.RAID)
+    return state
+
+
+@card_ability("HMW", "192")
+def _volley_fire():
+    """HMW_192 — Volley Fire (Event, Tactic, 1): "A friendly unit deals damage equal
+    to its Raid to an enemy unit."  The Krennic LAW_8 shooter/victim chain with the
+    shooter's Raid as the amount; only units with Raid are offered as shooters."""
+    from swu.cards.law.abilities import _krennic_fire
+    return EventAbility(effects=[
+        CustomEffect(fn=_volley_pick_shooter,
+                     target=TargetSpec(controller="friendly", kind="unit",
+                                       predicates=("has_keyword_raid",))),
+        CustomEffect(fn=_krennic_fire,
+                     target=TargetSpec(controller="enemy", kind="unit",
+                                       predicates=("requires_prior_target",))),
+    ])
+
+
+def _new_tactics_fn(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import push_put_on_deck
+    if target_id is not None:
+        push_put_on_deck(state, source_ci, target_id)
+    return state
+
+
+@card_ability("HMW", "218")
+def _new_tactics():
+    """HMW_218 — New Tactics (Event, Learned/Tactic, 5): "Choose a non-leader unit.
+    Its owner puts it on the top or bottom of their deck."  Qui-Gon Jinn LOF_200's
+    ``push_put_on_deck`` (the owner decides top vs bottom)."""
+    return EventAbility(effects=[CustomEffect(
+        fn=_new_tactics_fn,
+        target=TargetSpec(controller="any", kind="unit", predicates=("non_leader",)))])
+
+
+def _teeka_choose(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import push_choose_modal
+    push_choose_modal(state, source_ci, option_indices=[1, 2], pick=1)
+    return state
+
+
+@card_ability("HMW", "221")
+def _teeka():
+    """HMW_221 — Teeka (Unit, Jawa, 2/2; Sentinel): "When Played: Choose one: Give a
+    unit Sentinel for this phase. / A unit loses Sentinel for this phase."  The
+    ``choose_two_modal`` selector at pick=1, options as ``EventAbility`` (the Hunter
+    HMW_35 shape) so a unit's options are never trigger-collected."""
+    return [
+        TriggerAbility(trigger=WhenPlayed(), effects=[CustomEffect(fn=_teeka_choose)]),
+        EventAbility(effects=[GrantKeyword("Sentinel", 0,
+                                           TargetSpec(controller="any", kind="unit"),
+                                           Duration.THIS_PHASE)]),
+        EventAbility(effects=[RevokeKeyword("Sentinel",
+                                            TargetSpec(controller="any", kind="unit",
+                                                       predicates=("has_sentinel",)),
+                                            Duration.THIS_PHASE)]),
+    ]
+
+
+def _therm_reveal(state, source_ci, target_id, event_ctx):
+    """Look at (reveal) the top card of each deck — the controller's and the
+    opponent's — and take −2/−2 for this phase per card costing 3 or more."""
+    from swu.engine.state import Modifier
+    hits = 0
+    for p in state.players:
+        if p.deck and int(getattr(p.deck[0].card_def, "cost", 0) or 0) >= 3:
+            hits += 1
+    if hits:
+        state.modifiers.append(Modifier(
+            modifier_id=state.alloc_modifier_id(),
+            source_instance_id=source_ci.instance_id,
+            target_instance_id=source_ci.instance_id,
+            kind="stats",
+            value={"power": -2 * hits, "hp": -2 * hits},
+            duration="this_phase",
+        ))
+    return state
+
+
+@card_ability("HMW", "223")
+def _therm_scissorpunch():
+    """HMW_223 — Therm Scissorpunch (Unit, Underworld, 5/5): "When the action phase
+    starts: Reveal the top card of your deck and an opponent's deck.  For each card
+    that costs 3 or more revealed this way, this unit gets –2/–2 for this phase." """
+    return TriggerAbility(trigger=PhaseStartTrigger("action"),
+                          effects=[CustomEffect(fn=_therm_reveal)])
+
+
+# ── hmw-set:24 ────────────────────────────────────────────────────────────────
+
+
+def _boba_arm_ambusher(state, source_ci, target_id, event_ctx):
+    """"Give it Raid 1 and Saboteur for this phase" — the unit that just entered
+    (``event_ctx["source_id"]``), before its Ambush decision (Phase-3 triggers resolve
+    above the keyword bus)."""
+    from swu.engine.state import Modifier
+    uid = event_ctx.get("source_id")
+    if not uid or state.find_instance(uid) is None:
+        return state
+    for kw, val in (("Raid", 1), ("Saboteur", 0)):
+        state.modifiers.append(Modifier(
+            modifier_id=state.alloc_modifier_id(),
+            source_instance_id=source_ci.instance_id,
+            target_instance_id=uid,
+            kind="keyword_grant",
+            value={"keyword": kw, "value": val},
+            duration="this_phase",
+        ))
+    return state
+
+
+@card_ability("HMW", "225")
+def _boba_fett_hmw():
+    """HMW_225 — Boba Fett (Unit, Tusken, 1/5; Ambush): "When a friendly unit with
+    Ambush enters play: Give it Raid 1 and Saboteur for this phase."  Boba himself
+    counts.  A deployed leader enters by deploying, not entering play from a card, so
+    it is not covered (documented)."""
+    return TriggerAbility(
+        trigger=WhenUnitEntersPlay(filter=TargetSpec(
+            controller="friendly", kind="unit", predicates=("has_keyword_ambush",))),
+        effects=[CustomEffect(fn=_boba_arm_ambusher, grants_keywords=("Raid", "Saboteur"))],
+    )
+
+
+@card_ability("HMW", "233")
+def _awakened_exogorth():
+    """HMW_233 — Awakened Exogorth (Unit, Creature, 7/7; Hidden): "While this unit is
+    attacking, the defending unit gets –3/–0."  Strafing Gunship SOR_212's
+    ``while_attacking``."""
+    return ConstantAbility(target=TargetSpec(controller="enemy", kind="unit"),
+                           effects=[StatBonus(power=-3, hp=0)],
+                           while_attacking=True)
+
+
+@card_ability("HMW", "243")
+def _sun_fac():
+    """HMW_243 — Sun Fac (Unit, Separatist, 2/3): "When Played: Give a unit Grit for
+    this phase." """
+    return TriggerAbility(trigger=WhenPlayed(), effects=[GrantKeyword(
+        "Grit", 0, TargetSpec(controller="any", kind="unit"), Duration.THIS_PHASE)])
+
+
+@card_ability("HMW", "246")
+def _pyke_sarisa():
+    """HMW_246 — Pyke Sarisa (Unit, 4/3; Sentinel): "When Played: Give a unit Sentinel
+    for this phase." """
+    return TriggerAbility(trigger=WhenPlayed(), effects=[GrantKeyword(
+        "Sentinel", 0, TargetSpec(controller="any", kind="unit"), Duration.THIS_PHASE)])
+
+
+@card_ability("HMW", "251")
+def _blockade_ship():
+    """HMW_251 — Blockade Ship (Unit, 5/8; Sentinel): "Enemy ground units get –1/–0
+    while attacking."  The new ``while_target_attacking`` flag."""
+    return ConstantAbility(target=TargetSpec(controller="enemy", kind="unit",
+                                             arena="ground"),
+                           effects=[StatBonus(power=-1, hp=0)],
+                           while_target_attacking=True)
+
+
+@card_ability("HMW", "260")
+def _queen_amidala_hmw():
+    """HMW_260 — Queen Amidala (Unit, Naboo/Official, 4/4; Restore 2): "If you control
+    an upgraded base, this unit costs 2 resources less to play." """
+    return CostReduction(2, condition=ConditionCheck(Condition.CONTROLLER_BASE_UPGRADED))
+
+
+def _kalikori_search(state, source_ci, target_id, event_ctx):
+    from swu.cards.models import Unit
+    from swu.engine.actions import push_search_and_play_multiple
+    push_search_and_play_multiple(
+        state, source_ci, window=8, budget=5,
+        eligible=lambda cd: isinstance(cd, Unit)
+        and "Twi'lek" in (getattr(cd, "traits", ()) or ()))
+    return state
+
+
+@card_ability("HMW", "265")
+def _twilek_kalikori():
+    """HMW_265 — Twi'lek Kalikori (Upgrade, Item, 4): "When Played: If attached unit
+    is a Twi'lek, search the top 8 cards of your deck for any number of Twi'lek units
+    with combined cost 5 or less and play each of them for free."  L3-37 LAW_63's
+    ``push_search_and_play_multiple``."""
+    return TriggerAbility(
+        trigger=WhenPlayed(),
+        effects=[CustomEffect(fn=_kalikori_search)],
+        condition=ConditionCheck(Condition.ATTACHED_HOST_HAS_TRAIT, "Twi'lek"),
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:25 — the first Weakness-token cards
+#
+# The Weakness token is a TokenUpgrade DB row (−1/−1, no text), so
+# ``GiveToken("Weakness", …)`` / ``attach_token`` need no machinery.  The framework
+# session behind it fixed ``compute_hp``'s floor (1 → 0, so 0 HP is lethal) and the
+# bot's GiveToken / select_token polarity — see tests/test_weakness_token.py.
+# HMW_2 (Maz) shares its number with the Weakness token and HMW_3 (Hemlock) with
+# the Beast token: both register only token-safe spec kinds (module docstring).
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _weakness_to(target):
+    return GiveToken("Weakness", target)
+
+
+_ANY_UNIT = TargetSpec(controller="any", kind="unit")
+
+_MAZ_CAN_PLAY = ConditionCheck(Condition.ANY_OF, (
+    ConditionCheck(Condition.CONTROLLER_CAN_PLAY_UNIT_FROM_HAND, ("Fringe", 1)),
+    ConditionCheck(Condition.CONTROLLER_CAN_PLAY_UNIT_FROM_HAND, ("Underworld", 1)),
+))
+
+
+def _maz_play(state, source_ci, target_id, event_ctx):
+    """"Play a Fringe or Underworld unit from your hand.  It costs 1 resource less.
+    Give a Weakness token to it." — ``push_play_from_hand`` with the either-trait
+    pool as ``eligible_ids`` and the token as ``then_tokens`` (Three Lessons
+    LOF_225's rider: it lands on the played unit)."""
+    from swu.engine.actions import push_play_from_hand, _playable_units_from_hand
+    from swu.engine.traits import has_trait
+    ps = state.player_by_id(source_ci.owner_id)
+    ids = frozenset(ci.instance_id for ci in _playable_units_from_hand(state, ps, None, 1)
+                    if has_trait(state, ci, "Fringe") or has_trait(state, ci, "Underworld"))
+    if ids:
+        push_play_from_hand(state, source_ci, eligible_ids=ids, cost_reduction=1,
+                            then_tokens=["Weakness"])
+    return state
+
+
+@card_ability("HMW", "2")
+def _maz_kanata_hmw():
+    """HMW_2 — Maz Kanata (Leader, Underworld, 4/4).
+
+    Undeployed: "Action [Exhaust]: Play a Fringe or Underworld unit from your hand.
+    It costs 1 resource less.  Give a Weakness token to it."  Deployed: "Hidden.
+    Action: <the same>."  Both gated so they are never offered with nothing to
+    play.  ⚠ HMW_2 is also the Weakness token's number: only ActivatedAbility specs
+    (an attached token offers no plain Action), each side-gated."""
+    return [
+        ActivatedAbility(costs=[ExhaustSelf()], effects=[CustomEffect(fn=_maz_play)],
+                         title="Play a Fringe or Underworld unit (1 less, Weakness)",
+                         undeployed_only=True, condition=_MAZ_CAN_PLAY),
+        ActivatedAbility(costs=[], effects=[CustomEffect(fn=_maz_play)],
+                         title="Play a Fringe or Underworld unit (1 less, Weakness)",
+                         deployed_only=True, condition=_MAZ_CAN_PLAY),
+    ]
+
+
+@card_ability("HMW", "3")
+def _doctor_hemlock():
+    """HMW_3 — Doctor Hemlock (Leader, Imperial/Official, 3/6).
+
+    Undeployed: "Action [1 resource, Exhaust]: Give a Weakness token to a unit
+    without a Weakness token on it."  Deployed: "On Attack: You may give a Weakness
+    token to a unit."  ⚠ HMW_3 is also the Beast token's number: an
+    ``undeployed_only`` Action and a ``deployed_only`` trigger only."""
+    return [
+        ActivatedAbility(
+            costs=[PayResources(1), ExhaustSelf()],
+            effects=[_weakness_to(TargetSpec(controller="any", kind="unit",
+                                             predicates=("lacks_token:Weakness",)))],
+            title="Give a Weakness token to a unit without one",
+            undeployed_only=True,
+            condition=ConditionCheck(Condition.ANY_UNIT_LACKS_TOKEN, "Weakness"),
+        ),
+        TriggerAbility(trigger=OnAttack(), optional=True, deployed_only=True,
+                       effects=[_weakness_to(_ANY_UNIT)]),
+    ]
+
+
+def _bossk_heal_and_weaken(state, source_ci, target_id, event_ctx):
+    """"Heal 1 damage from a damaged enemy unit and give a Weakness token to it" —
+    one target, both halves (so they can never split across two units)."""
+    from swu.abilities.resolver import _apply_heal
+    from swu.engine.tokens import attach_token
+    if target_id is None:
+        return state
+    state = _apply_heal(state, source_ci, target_id, 1)
+    res = state.find_instance(target_id)
+    if res is not None:
+        attach_token(state, res[0], res[1], "Weakness")
+    return state
+
+
+@card_ability("HMW", "15")
+def _bossk_hmw():
+    """HMW_15 — Bossk (Leader, Bounty Hunter/Underworld, 4/5).
+
+    Undeployed: "Action [Exhaust]: Heal 1 damage from a damaged enemy unit and give a
+    Weakness token to it."  Deployed: "On Attack: You may deal 2 damage to a unit
+    with a token upgrade on it."  (``has_token_upgrade``, Boss Lyonie HMW_57.)"""
+    return [
+        ActivatedAbility(
+            costs=[ExhaustSelf()],
+            effects=[CustomEffect(fn=_bossk_heal_and_weaken,
+                                  target=TargetSpec(controller="enemy", kind="unit",
+                                                    predicates=("damaged",)))],
+            title="Heal 1 from a damaged enemy unit; give it a Weakness token",
+            undeployed_only=True,
+            condition=ConditionCheck(Condition.ENEMY_HAS_DAMAGED_UNIT),
+        ),
+        TriggerAbility(trigger=OnAttack(), optional=True, deployed_only=True,
+                       effects=[DealDamage(2, TargetSpec(controller="any", kind="unit",
+                                                         predicates=("has_token_upgrade",)))]),
+    ]
+
+
+@card_ability("HMW", "40")
+def _talzins_shuttle():
+    """HMW_40 — Talzin's Shuttle (Unit, Night/Transport/Vehicle, 2/4; Raid 1): "When
+    Played: If an opponent played 2 or more cards this phase, you may give 2 Weakness
+    tokens to a unit." """
+    return TriggerAbility(
+        trigger=WhenPlayed(), optional=True,
+        effects=[GiveToken("Weakness", _ANY_UNIT, count=2)],
+        condition=ConditionCheck(Condition.OPPONENT_CARDS_PLAYED_THIS_PHASE_MIN, 2),
+    )
+
+
+@card_ability("HMW", "59")
+def _clone_x_assassin():
+    """HMW_59 — Clone X Assassin (Unit, Clone/Imperial/Trooper, 1/3): "When Defeated:
+    You may give a Weakness token to a unit." """
+    return TriggerAbility(trigger=WhenDefeated(), optional=True,
+                          effects=[_weakness_to(_ANY_UNIT)])
+
+
+def _nuvo_weaken_once(state, source_ci, target_id, event_ctx):
+    """Give the Weakness and spend the once-per-round charge on USE (the Dengar
+    LAW_53 / Toro Calican SHD_239 ``{iid}:trig`` marker), so a decline costs nothing."""
+    from swu.engine.tokens import attach_token
+    state.game_memory.activated_abilities_used_this_round.add(
+        f"{source_ci.instance_id}:trig")
+    if target_id is None:
+        return state
+    res = state.find_instance(target_id)
+    if res is not None:
+        attach_token(state, res[0], res[1], "Weakness")
+    return state
+
+
+@card_ability("HMW", "62")
+def _nuvo_vindi():
+    """HMW_62 — Nuvo Vindi (Unit, Separatist, 1/4): "When Played: You may give a
+    Weakness token to a unit.  When an enemy unit with a Weakness token on it is
+    defeated: You may give a Weakness token to a unit.  Use this ability only once
+    each round."  The defeated unit's tokens are read off
+    ``event_ctx["defeated_upgrades"]`` by the new ``had_token:<Name>`` predicate."""
+    return [
+        TriggerAbility(trigger=WhenPlayed(), optional=True,
+                       effects=[_weakness_to(_ANY_UNIT)]),
+        TriggerAbility(
+            trigger=WhenUnitDefeated(filter=TargetSpec(
+                controller="enemy", kind="unit", predicates=("had_token:Weakness",))),
+            optional=True,
+            effects=[CustomEffect(fn=_nuvo_weaken_once, target=_ANY_UNIT)],
+            condition=ConditionCheck(Condition.SOURCE_ONCE_PER_ROUND_TRIGGER_AVAILABLE),
+        ),
+    ]
+
+
+@card_ability("HMW", "65")
+def _clone_of_the_zillo_beast():
+    """HMW_65 — Clone of the Zillo Beast (Unit, Clone/Creature, 6/6): "Other friendly
+    units get –2/–2.  On Attack: You may give a Weakness token to a unit."  With the
+    0-HP floor, the aura really defeats a friendly 2-HP unit, as printed."""
+    return [
+        ConstantAbility(target=TargetSpec(controller="friendly", kind="unit",
+                                          predicates=("not_self",)),
+                        effects=[StatBonus(power=-2, hp=-2)]),
+        TriggerAbility(trigger=OnAttack(), optional=True,
+                       effects=[_weakness_to(_ANY_UNIT)]),
+    ]

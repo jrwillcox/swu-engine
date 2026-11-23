@@ -281,6 +281,25 @@ def _cartel_turncoat():
 # resolve INLINE during _put_unit_in_play / _defeat_unit — no new decision kind,
 # no change to the trigger/decision machinery.
 
+def _announce_bounty_replay(state, ps, ci, put_in_play) -> None:
+    """A bounty that PLAYS the defeated unit (Stolen Landspeeder SHD_161, Unrefusable
+    Offer SHD_226) is a real play: log ``CardPlayed`` before the
+    unit enters play and fire it after, exactly as every other play path does, so
+    it counts toward per-phase play counts and "when you play a card" observers.
+    The after-index is the collector's opponent, as ``_put_unit_in_play``'s own
+    When Played fire uses."""
+    from swu.engine.actions.shared import _fire_card_played
+    from swu.engine.events import CardPlayed
+    evt = CardPlayed(player_id=ps.player_id, instance_id=ci.instance_id,
+                     card_name=ci.card_def.display_name, cost_paid=0)
+    state.event_log.append(evt)
+    if "Villainy" in {a.name for a in (getattr(ci.card_def, "aspects", None) or ())}:
+        state.game_memory.villainy_players_this_phase.add(ps.player_id)
+    put_in_play()
+    if state.find_instance(ci.instance_id) is not None:
+        _fire_card_played(state, evt, 1 - state.player_index(ps.player_id))
+
+
 def _stolen_landspeeder_steal(state, source_ci, target_id, event_ctx):
     """When Played (hand only): the opponent of the controller takes control."""
     from swu.engine.actions import change_control
@@ -324,7 +343,9 @@ def _stolen_landspeeder_bounty(state, source_ci, target_id, event_ctx):
     ]
     # Play from discard "for free", under the OWNER's control.  play_source
     # "discard" keeps the When Played control-change from firing again.
-    _put_unit_in_play(state, collector_ps, ci, play_source="discard")
+    _announce_bounty_replay(state, collector_ps, ci,
+                            lambda: _put_unit_in_play(state, collector_ps, ci,
+                                                      play_source="discard"))
     tokens.attach_token(state, collector_ps, ci, "Experience")
     # Tell _defeat_unit the card is back in play — skip discard placement.
     event_ctx["relocated_by_trigger"] = True
@@ -3347,8 +3368,11 @@ def _unrefusable_offer_bounty(state, source_ci, target_id, event_ctx):
     # the OWNER's discard).  play_source "discard" keeps any hand-gated When Played
     # (Stolen Landspeeder's control-steal) from firing on this replay; a normal
     # When Played still fires, as playing a unit should.
-    _put_unit_in_play(state, collector_ps, ci, enters_ready=True,
-                      play_source="discard", defeat_at_regroup=True)
+    _announce_bounty_replay(state, collector_ps, ci,
+                            lambda: _put_unit_in_play(state, collector_ps, ci,
+                                                      enters_ready=True,
+                                                      play_source="discard",
+                                                      defeat_at_regroup=True))
     # Tell _defeat_unit the card is back in play — skip discard placement.
     event_ctx["relocated_by_trigger"] = True
     return state
@@ -4159,9 +4183,8 @@ def _pillage():
     """Pillage (SHD_181) — Event, cost 4, Tactic.
 
     "Choose a player.  They discard 2 cards from their hand."  A controller would
-    always choose the opponent, so this collapses to the opponent discarding 2 (the
-    ``DiscardFromHand(chooser="opponent")`` first-card simplification, ×2 — a
-    documented deviation from a look-and-pick decision)."""
+    always choose the opponent, so this collapses to the opponent discarding 2 of
+    their choice (``DiscardFromHand(chooser="opponent")``)."""
     return EventAbility(effects=[DiscardFromHand(count=2, chooser="opponent")])
 
 
@@ -4556,9 +4579,8 @@ def _altering_the_deal_card():
 @card_ability("SHD", "244")
 def _no_bargain():
     """SHD_244 — No Bargain (Event, Trick, cost 3): "Each opponent discards a card
-    from their hand. Draw a card."  DiscardFromHand(chooser="opponent") drops the
-    opponent's first card (the K-2SO SOR_145 first-card simplification), then the
-    controller draws 1."""
+    from their hand. Draw a card."  DiscardFromHand(chooser="opponent") — the
+    opponent picks the card — then the controller draws 1."""
     return EventAbility(effects=[
         DiscardFromHand(count=1, chooser="opponent"),
         DrawCards(count=1, player="controller"),

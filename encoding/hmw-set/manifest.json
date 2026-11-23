@@ -5,7 +5,7 @@
     "set_code": "HMW"
   },
   "total_deck_cards": 272,
-  "playable_deck_cards": 161,
+  "playable_deck_cards": 238,
   "groups": [
     {
       "gid": "hmw-set:01",
@@ -15,9 +15,7 @@
       "keyword": "Fortify",
       "file": "group_01_fortify_keyword.md",
       "depends_on": [],
-      "new_primitives": [
-        "beast-token"
-      ],
+      "new_primitives": [],
       "cards": [
         "HMW_4",
         "HMW_37",
@@ -307,7 +305,7 @@
         "HMW_107",
         "HMW_111"
       ],
-      "done": 1,
+      "done": 7,
       "total": 7
     },
     {
@@ -328,7 +326,7 @@
         "HMW_123",
         "HMW_124"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -349,7 +347,7 @@
         "HMW_137",
         "HMW_138"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -370,7 +368,7 @@
         "HMW_164",
         "HMW_165"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -391,7 +389,7 @@
         "HMW_203",
         "HMW_208"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -412,7 +410,7 @@
         "HMW_228",
         "HMW_230"
       ],
-      "done": 1,
+      "done": 7,
       "total": 7
     },
     {
@@ -433,7 +431,7 @@
         "HMW_261",
         "HMW_264"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -449,7 +447,7 @@
         "HMW_266",
         "HMW_267"
       ],
-      "done": 0,
+      "done": 2,
       "total": 2
     },
     {
@@ -470,7 +468,7 @@
         "HMW_108",
         "HMW_134"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -491,7 +489,7 @@
         "HMW_221",
         "HMW_223"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -512,7 +510,7 @@
         "HMW_260",
         "HMW_265"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -523,9 +521,7 @@
       "keyword": "",
       "file": "group_25_new_primitive_weakness_token.md",
       "depends_on": [],
-      "new_primitives": [
-        "weakness-token"
-      ],
+      "new_primitives": [],
       "cards": [
         "HMW_2",
         "HMW_3",
@@ -535,7 +531,7 @@
         "HMW_62",
         "HMW_65"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {
@@ -546,10 +542,7 @@
       "keyword": "",
       "file": "group_26_new_primitive_weakness_token.md",
       "depends_on": [],
-      "new_primitives": [
-        "weakness-token",
-        "beast-token"
-      ],
+      "new_primitives": [],
       "cards": [
         "HMW_67",
         "HMW_71",
@@ -570,10 +563,7 @@
       "keyword": "",
       "file": "group_27_new_primitive_weakness_token.md",
       "depends_on": [],
-      "new_primitives": [
-        "weakness-token",
-        "beast-token"
-      ],
+      "new_primitives": [],
       "cards": [
         "HMW_196",
         "HMW_197",
@@ -594,9 +584,7 @@
       "keyword": "",
       "file": "group_28_new_primitive_weakness_token.md",
       "depends_on": [],
-      "new_primitives": [
-        "weakness-token"
-      ],
+      "new_primitives": [],
       "cards": [
         "HMW_240",
         "HMW_242",
@@ -613,9 +601,7 @@
       "keyword": "",
       "file": "group_29_new_primitive_beast_token.md",
       "depends_on": [],
-      "new_primitives": [
-        "beast-token"
-      ],
+      "new_primitives": [],
       "cards": [
         "HMW_10",
         "HMW_12",
@@ -636,9 +622,7 @@
       "keyword": "",
       "file": "group_30_new_primitive_beast_token.md",
       "depends_on": [],
-      "new_primitives": [
-        "beast-token"
-      ],
+      "new_primitives": [],
       "cards": [
         "HMW_150",
         "HMW_152",
@@ -659,9 +643,7 @@
       "keyword": "",
       "file": "group_31_new_primitive_beast_token.md",
       "depends_on": [],
-      "new_primitives": [
-        "beast-token"
-      ],
+      "new_primitives": [],
       "cards": [
         "HMW_250",
         "HMW_262",

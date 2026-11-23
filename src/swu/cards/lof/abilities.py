@@ -193,11 +193,8 @@ def _luminous_beings():
 def _j_type_nubian_starship():
     """When Played: Draw a card.  When Defeated: Discard a card from your hand.
 
-    Two plain triggers.  DEVIATION (documented): the When Defeated discard uses
-    ``DiscardFromHand(chooser="controller")``, which discards the FIRST card in
-    hand rather than letting the controller choose which to ditch (the established
-    first-card discard simplification — K-2SO SOR_145 / Garindan SEC_186) — the
-    only loss is *which* card; the downside itself is faithfully forced.
+    Two plain triggers; the When Defeated discard is
+    ``DiscardFromHand(chooser="controller")`` — the controller picks the card.
     """
     return [
         TriggerAbility(trigger=WhenPlayed(), effects=[DrawCards(1)]),
@@ -3081,9 +3078,8 @@ def _battle_fury_lof_139():
     Attack: Discard a card from your hand.'"
 
     A ``GrantedAbility`` wrapping the trigger, so it matches and resolves with the
-    HOST as source (Armed to the Teeth SHD_175).  Mandatory, and a first-card
-    discard (the K-2SO SOR_145 convention) — an empty hand simply discards
-    nothing."""
+    HOST as source (Armed to the Teeth SHD_175).  Mandatory; the host's controller
+    picks the card — an empty hand simply discards nothing."""
     return GrantedAbility(TriggerAbility(
         trigger=OnAttack(),
         effects=[DiscardFromHand(1)],

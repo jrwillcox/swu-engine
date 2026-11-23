@@ -37,7 +37,6 @@ from swu.engine.events import (
     CardPlayed, DecisionPushed, DecisionResolved, UnitDefeated,
 )
 from swu.engine.state import CardInstance, GameState, Zone
-from swu.engine.triggers import get_bus
 
 from swu.engine.actions.base import (
     Action, IllegalActionError,
@@ -49,14 +48,14 @@ from swu.engine.actions.stats import (
     compute_hp, compute_power,
 )
 from swu.engine.actions.costs import (
-    _affordable_with_credits, _consume_play_discount, _consume_standing_discount,
+    _affordable_with_credits, _spend_play_discounts,
     _exhaust_resources, _pay_play_cost, _play_cost,
 )
 from swu.engine.actions.zones import (
     _apply_capture, _attach_upgrade, _create_token_units, _defeat_unit, _find_in_arenas, _put_unit_in_play, _resolve_event_ability,
 )
 from swu.engine.actions.shared import (
-    _candidate_card_views, _resource_top_of_deck, _sacrifice_damage_targets,
+    _candidate_card_views, _fire_card_played, _resource_top_of_deck, _sacrifice_damage_targets,
 )
 from swu.engine.actions.combat import (
     note_hand_or_deck_discard, record_hand_discard,
@@ -572,8 +571,13 @@ def _exploit_actions(state: GameState, top: PendingDecision) -> list[Action]:
     # gated affordable — so this never leaves the action list empty.
     if deciding_ps.play_buffer:
         buffered = deciding_ps.play_buffer[0]
-        cost_now = max(0, _play_cost(state, buffered, deciding_ps)
-                       - 2 * len(sacrificed))
+        cost_now = (0 if (top.context.get("resume") or {}).get(
+                        "decision", {}).get("context", {}).get("free")
+                    else _play_cost(
+                        state, buffered, deciding_ps,
+                        target_host_id=top.context.get("upgrade_target_id"),
+                        extra_reduction=2 * len(sacrificed)
+                        + int(top.context.get("extra_reduction", 0) or 0)))
         if deciding_ps.available_resources >= cost_now:
             acts.append(ExploitCommit())
     else:
@@ -623,13 +627,16 @@ def _resolve_exploit_commit(s: GameState) -> GameState:
     # Retrieve the card from play_buffer
     if not deciding_ps.play_buffer:
         raise IllegalActionError("Exploit commit: no card in play buffer")
+    if top_d.context.get("resume"):
+        return _resume_play_after_exploit(s, top_d, deciding_ps)
     ci = deciding_ps.play_buffer.pop(0)
     ci.zone = Zone.HAND  # temporary; will be set by put-in-play or discard below
 
     sacrificed_count = len(top_d.context["sacrificed_ids"])
     exploited_powers = list(top_d.context.get("sacrificed_powers", []))
-    base_cost = _play_cost(s, ci, deciding_ps)
-    actual_cost = max(0, base_cost - 2 * sacrificed_count)
+    upgrade_target_id = top_d.context.get("upgrade_target_id")
+    actual_cost = _play_cost(s, ci, deciding_ps, target_host_id=upgrade_target_id,
+                             extra_reduction=2 * sacrificed_count)
 
     if deciding_ps.available_resources < actual_cost:
         raise IllegalActionError(
@@ -637,10 +644,54 @@ def _resolve_exploit_commit(s: GameState) -> GameState:
             f"have {deciding_ps.available_resources}"
         )
     _exhaust_resources(deciding_ps, actual_cost)
+    # The discounts ``_play_cost`` counted are spent here — an Exploit play used to
+    # read a pending / once-per-round discount without ever spending it.
+    _spend_play_discounts(s, ci, deciding_ps, upgrade_target_id)
 
     return _play_buffered_card(s, top_d, deciding_ps, ci, actual_cost,
                                choice=f"sacrificed {sacrificed_count}",
                                exploited_powers=exploited_powers)
+
+
+def _resume_play_after_exploit(s: GameState, top_d: PendingDecision,
+                               deciding_ps) -> GameState:
+    """Finish an Exploit taken on an ABILITY-driven play (``hand._divert_to_exploit``):
+    put the card back where it came from, re-push the original play decision with
+    the Exploit discount and the exploited units' powers, and replay the play
+    action — so that path's own cost and riders apply exactly as without Exploit."""
+    from swu.engine.actions.deck import PlayTopCard
+    from swu.engine.actions.hand import PlayFromHand
+    ctx = top_d.context
+    resume = ctx["resume"]
+    ci = deciding_ps.play_buffer.pop(0)
+    origin = resume.get("origin")
+    if origin == "deck_top":
+        ci.zone = Zone.DECK
+        deciding_ps.deck.insert(0, ci)
+    elif origin == "discard":
+        ci.zone = Zone.DISCARD
+        deciding_ps.discard.append(ci)
+    else:
+        ci.zone = Zone.HAND
+        deciding_ps.hand.append(ci)
+    s.event_log.append(DecisionResolved(
+        deciding_player_id=top_d.deciding_player_id, kind="exploit",
+        choice=f"sacrificed {len(ctx['sacrificed_ids'])}"))
+    s.pending_decisions.remove(top_d)
+    d = resume["decision"]
+    play_ctx = dict(d["context"])
+    play_ctx["exploit_resolved"] = True
+    play_ctx["exploit_discount"] = 2 * len(ctx["sacrificed_ids"])
+    play_ctx["exploited_powers"] = list(ctx.get("sacrificed_powers") or [])
+    s.pending_decisions.append(PendingDecision(
+        deciding_player_id=d["deciding_player_id"], kind=d["kind"],
+        context=play_ctx,
+        after_resolve_player_index=d["after_resolve_player_index"]))
+    replay = resume["replay"]
+    action: Action = (PlayTopCard(replay.get("upgrade_target_id"))
+                      if replay.get("action") == "PlayTopCard"
+                      else PlayFromHand(replay["instance_id"]))
+    return action.apply(s)
 
 
 def _play_buffered_card(s: GameState, top_d: PendingDecision, deciding_ps,
@@ -695,7 +746,7 @@ def _play_buffered_card(s: GameState, top_d: PendingDecision, deciding_ps,
 
     # Ambush / WhenPlayed triggers from the Exploit-played unit (above) push their
     # own decisions onto the now-clean stack.
-    get_bus().fire(s, card_played_evt)
+    _fire_card_played(s, card_played_evt, after_idx)
 
     return s
 
@@ -732,8 +783,8 @@ def _cost_route_price(state: GameState, ps, ctx: dict) -> int:
     """The buffered card's price after the picks made so far."""
     if not ps.play_buffer:
         return 0
-    base = _play_cost(state, ps.play_buffer[0], ps)
-    return max(0, base - int(ctx["discount"]) * len(ctx["picks"]))
+    return _play_cost(state, ps.play_buffer[0], ps,
+                      extra_reduction=int(ctx["discount"]) * len(ctx["picks"]))
 
 
 def push_cost_route(s: GameState, ps, ci: CardInstance, route) -> None:
@@ -828,8 +879,7 @@ class CommitCostRoute(Action):
         ci = ps.play_buffer.pop(0)
         ci.zone = Zone.HAND  # temporary; put-in-play sets the real zone
         _pay_play_cost(s, ps, price)
-        _consume_play_discount(s, ci, ps)
-        _consume_standing_discount(s, ci, ps, None)
+        _spend_play_discounts(s, ci, ps)
         return _play_buffered_card(s, top, ps, ci, price,
                                    choice=f"paid {len(top.context['picks'])} step(s)")
 

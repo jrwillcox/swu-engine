@@ -704,6 +704,9 @@ class TestAbandonedTheOrderTS26_37:
         jedi = _place(state, "P0", _get_card(repo, "TS26", "19"), "ground")  # Jedi
         assert has_trait(state, jedi, "Jedi")
         upgrade = _place(state, "P0", _get_card(repo, "TS26", "37"), "ground")
+        # Attached ONLY — not also left standing in the arena as a phantom HP-less
+        # "unit", which the 0-HP floor would now (rightly) sweep.
+        state.player_by_id("P0").ground_arena.remove(upgrade)
         jedi.attached_upgrades.append(upgrade)
         state = _fire_upgrade_played(state, upgrade, jedi)
         # DECLINE the separate optional bounce — accepting it would return the very

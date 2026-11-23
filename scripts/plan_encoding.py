@@ -298,13 +298,13 @@ _CAPABILITIES: list[tuple[str, re.Pattern, str]] = [
     # (Desperate Attack SHD_179).
     ("granted-attack-restricted-attacker",
      re.compile(r"attack with a (damaged|exhausted|ready) ", re.I), "existing"),
-    # ── HMW (2026-11) new tokens. NOT YET IMPLEMENTED → escalation groups, ordered
-    #    last. Both are small and self-contained (the escalation rule lets them land
-    #    with the group's first card). Once one lands, flip its status to
-    #    "existing" so its remaining cards re-plan into ordinary ability groups.
+    # ── HMW (2026-11) new tokens — both LANDED.
     # Weakness: a -1/-1 token UPGRADE with no text (HMW_2 token) — a third
-    # GiveToken kind beside Shield/Experience.
-    ("weakness-token",    re.compile(r"\bWeakness\b"), "new"),
+    # GiveToken kind beside Shield/Experience.  LANDED 2026-11-23: the DB row makes
+    # attach_token / GiveToken("Weakness") work as-is; the session fixed
+    # compute_hp's floor (1 → 0, so 0 HP is lethal) and the bot's GiveToken
+    # polarity (tests/test_weakness_token.py).
+    ("weakness-token",    re.compile(r"\bWeakness\b"), "existing"),
     # Beast: a vanilla 3/3 token UNIT (HMW_3..5 tokens).  LANDED with Beast Lair
     # HMW_147 (hmw-set:01): the DB TokenUnit row makes CreateTokenUnit("Beast") /
     # _create_token_units work with no new machinery.
@@ -312,6 +312,10 @@ _CAPABILITIES: list[tuple[str, re.Pattern, str]] = [
 ]
 
 _CAPABILITIES_BY_LABEL = {label: pat for label, pat, _ in _CAPABILITIES}
+# Labels whose primitive has LANDED.  A persisted group keeps its id and theme on
+# re-plan, but a primitive in this set no longer makes it an escalation.
+_LANDED_CAPABILITIES = {label for label, _, status in _CAPABILITIES
+                        if status == "existing"}
 
 
 @dataclass
@@ -813,7 +817,11 @@ def _reconcile_with_prior(groups, prior, slug, db_path, registered, escape_hatch
         out.append(Group(
             gid=pg["gid"], seq=pg["seq"], kind=pg["kind"], theme=pg["theme"],
             keyword=pg.get("keyword", ""), cards=cards,
-            new_primitives=pg.get("new_primitives", []),
+            # Ids and themes are frozen, but a primitive that has since landed
+            # (flipped to "existing") no longer flags the group as an escalation —
+            # otherwise the walker would keep isolating it (Beast, Weakness — HMW).
+            new_primitives=[np for np in pg.get("new_primitives", [])
+                            if np not in _LANDED_CAPABILITIES],
             depends_on=pg.get("depends_on", []),
         ))
     # Append new groups for gap cards not previously tracked.

@@ -526,20 +526,46 @@ def has_keyword(state: "GameState", unit_ci: "CardInstance", keyword: Keyword) -
     return False
 
 
+#: Units whose full keyword scan is in progress (per state object).  A keyword
+#: aura whose TARGET asks "does this unit have a keyword?" (Boba Fett SHD_8) would
+#: otherwise recurse: ``has_keyword`` → the aura's target check → ``has_any_keyword``
+#: → ``has_keyword`` …  Re-entry answers from the printed/modifier keywords only.
+_FULL_KEYWORD_SCAN: set = set()
+
+
+def _aura_keyword_names(state: "GameState", unit_ci: "CardInstance") -> set:
+    """Every keyword ``unit_ci`` has through ``has_keyword`` (so AURA grants count),
+    guarded against the self-referential recursion above (re-entry → empty set)."""
+    key = (id(state), unit_ci.instance_id)
+    if key in _FULL_KEYWORD_SCAN:
+        return set()
+    _FULL_KEYWORD_SCAN.add(key)
+    try:
+        return {kw.value for kw in Keyword if has_keyword(state, unit_ci, kw)}
+    finally:
+        _FULL_KEYWORD_SCAN.discard(key)
+
+
 def has_any_keyword(state: "GameState", unit_ci: "CardInstance") -> bool:
     """True if ``unit_ci`` has at least one keyword — "a unit that has 1 or more
     keywords" (Boba Fett SHD_8).
 
-    Deliberately a LIGHTWEIGHT check (printed keywords minus revokes, plus modifier
-    ``keyword_grant`` grants) rather than iterating ``has_keyword`` over the
-    ``Keyword`` enum: this predicate is consulted from inside a ConstantAbility aura
-    target (Boba's deployed aura), and ``has_keyword``'s own constant-ability scan
-    would call back into ``_spec_matches_ci`` on that same aura target — an infinite
-    recursion.  So a keyword granted ONLY by another card's aura is not counted here
-    (a documented simplification; every SHD_8-relevant unit carries a printed
-    keyword).  Ability / name suppression zero it out, matching ``has_keyword``."""
+    The cheap check first (printed keywords minus revokes, plus ``keyword_grant``
+    modifiers); only when that finds nothing does it scan every keyword through
+    ``has_keyword``, so a keyword granted ONLY by another card's aura counts too
+    (it used not to — fixed 2026-11-23).  That scan is re-entrancy guarded
+    (``_FULL_KEYWORD_SCAN``): asked again about the same unit from inside its own
+    aura evaluation, it answers from the cheap check.  Ability / name suppression
+    zero it out, matching ``has_keyword``."""
     if ability_suppressed(state, unit_ci):
         return False
+    if _cheap_has_keyword(state, unit_ci):
+        return True
+    return bool(_aura_keyword_names(state, unit_ci))
+
+
+def _cheap_has_keyword(state: "GameState", unit_ci: "CardInstance") -> bool:
+    """Printed keywords minus revokes, plus ``keyword_grant`` modifiers."""
     revoked = {
         mod.value.get("keyword")
         for mod in getattr(state, "modifiers", [])
@@ -571,13 +597,10 @@ def distinct_keyword_names(state: "GameState", unit_ci: "CardInstance") -> set:
     several units — "If there are 4 or more different keywords among friendly units"
     (The Darksaber TS26_22), which a per-unit count cannot answer.
 
-    The counting sibling of ``has_any_keyword``, and lightweight for the same
-    reason: it is consulted from inside a ConstantAbility aura target, so iterating
-    ``has_keyword`` over the ``Keyword`` enum would recurse through the very scans
-    that evaluate that aura.  Printed keywords minus revokes, plus ``keyword_grant``
-    modifier grants; a keyword granted ONLY by another card's aura is not counted
-    (the documented ``has_any_keyword`` simplification).  Ability / name suppression
-    zeroes it out, matching ``has_keyword``."""
+    The counting sibling of ``has_any_keyword``: printed keywords minus revokes,
+    plus ``keyword_grant`` modifiers, plus (since 2026-11-23) every keyword an aura
+    grants, via the same re-entrancy-guarded ``_aura_keyword_names`` scan.  Ability /
+    name suppression zeroes it out, matching ``has_keyword``."""
     if ability_suppressed(state, unit_ci):
         return set()
     revoked = {
@@ -601,7 +624,7 @@ def distinct_keyword_names(state: "GameState", unit_ci: "CardInstance") -> set:
             granted = str(mod.value.get("keyword") or "").split(" ")[0]
             if granted and granted not in revoked:
                 names.add(granted)
-    return names
+    return names | _aura_keyword_names(state, unit_ci)
 
 
 def _keyword_grant_value(state: "GameState", eff, source_ci) -> int:
@@ -624,7 +647,12 @@ def _keyword_grant_value(state: "GameState", eff, source_ci) -> int:
         # Spike HMW_66) — the stat count's own helper, so the two halves agree.
         from swu.engine.actions.stats import _upgrades_on_controller_base
         return _upgrades_on_controller_base(state, source_ci)
-    return 0
+    # Every other name is a ``StatBonus.count`` source, so the two "for each"
+    # vocabularies stay one: "gains Raid 1 for each exhausted resource you control"
+    # (Chewbacca HMW_117), "… for each other friendly Tusken unit" (The Chieftain
+    # HMW_212).  An unknown name still contributes nothing.
+    from swu.engine.actions.stats import _stat_bonus_count
+    return _stat_bonus_count(state, source_ci, count)
 
 
 def keyword_value(state: "GameState", unit_ci: "CardInstance", keyword: Keyword) -> int:

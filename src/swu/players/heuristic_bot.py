@@ -331,6 +331,8 @@ class HeuristicBot:
             return self._choose_distinct_discard(view, legal)
         if "SelectHandCardToBottom" in kinds:
             return self._choose_bottom_from_hand(view, legal)
+        if "SelectExcessHandCardToDiscard" in kinds:
+            return self._choose_discard_from_hand(view, legal)
         if "SelectHandCardToResource" in kinds:
             return self._choose_resource_from_hand(view, legal)
         if "DiscloseSelectCard" in kinds or "DeclineDisclose" in kinds:
@@ -454,6 +456,29 @@ class HeuristicBot:
 
         # Resource the card with the *lowest* keep value.
         return min(resource_acts, key=keep_value)
+
+    def _choose_discard_from_hand(self, view: "PlayerView",
+                                  legal: list["Action"]) -> "Action":
+        """A forced "discard a card from your hand" / "discard down to N" — the bot
+        picks which (it used to take the first legal card).  Discard the card with
+        the lowest keep value, the resourcing reading: bodies and cheap, castable
+        cards are kept."""
+        acts = [a for a in legal
+                if type(a).__name__ == "SelectExcessHandCardToDiscard"]
+        if not acts:
+            return legal[0]
+        hand_by_id = {c.instance_id: c for c in view.my.hand}
+
+        def keep_value(act: "Action") -> float:
+            cv = hand_by_id.get(getattr(act, "instance_id", None))
+            if cv is None:
+                return 0.0
+            v = 6.0 if cv.card_type == "Unit" else 0.0
+            v += max(0, RESOURCE_KEEP_COST + 1 - cv.cost) * 1.5
+            v += _card_value(cv) * 0.1
+            return v
+
+        return min(acts, key=keep_value)
 
     # ── Main ACTION phase ─────────────────────────────────────────────────
 
@@ -688,11 +713,15 @@ class HeuristicBot:
         idx = _card_index(view)
         decline = next((a for a in legal if type(a).__name__ == "DeclineAmbush"), None)
         best, best_delta = None, float("-inf")
+        at_base = None   # Fett's Firespray HMW_53: an Ambush aimed at the enemy base
         for a in legal:
             if type(a).__name__ != "UseAmbush":
                 continue
             attacker = idx.get(a.attacker_id, (None, None))[0]
             defender = idx.get(a.target_id, (None, None))[0]
+            if defender is not None and defender.card_type == "Base":
+                at_base = a
+                continue
             if attacker is None or defender is None:
                 continue
             gain, loss = _trade_outcome(attacker, defender)
@@ -702,6 +731,8 @@ class HeuristicBot:
         threshold = TRADE_THRESHOLD_HARD if self.sharp_targeting else TRADE_THRESHOLD_NORMAL
         if best is not None and best_delta >= threshold:
             return best
+        if at_base is not None:
+            return at_base   # free base damage: nothing strikes back
         return decline or (best or legal[0])
 
     def _choose_exploit(self, view: "PlayerView", legal: list["Action"]) -> "Action":
@@ -1749,16 +1780,46 @@ class HeuristicBot:
     def _choose_select_token(
         self, view: "PlayerView", legal: list["Action"]
     ) -> "Action":
-        """Medal Ceremony SOR_245: give an Experience token to up to 3 eligible
-        units.  Tokens are purely beneficial, so give one to each of our OWN
-        eligible units (never an enemy's), then finish."""
+        """The "choose up to N units" loop (``select_token``).  Its payoff is read
+        off the decision context (``_select_token_polarity``), because the same
+        decision gives tokens and buffs (Medal Ceremony SOR_245) but also exhausts
+        (Evade Arrest TS26_82, No One Ever Knew SEC_196), strips abilities (Kazuda
+        Xiono JTL_18), bounces upgrades (There Is No Conflict ASH_199) and hands out
+        Weakness tokens (HMW).
+
+        * helpful  → our own units, one each, then finish (the old behaviour);
+        * harmful  → enemy cards, best victim first, then finish — never our own,
+          unless the clause is mandatory and nothing else is legal (then our least
+          valuable one);
+        * upgrades → return/defeat only upgrades an OPPONENT owns."""
         idx = _card_index(view)
-        mine = [a for a in legal
-                if type(a).__name__ == "SelectTokenTarget"
-                and idx.get(a.target_id, (None, None))[1] == "my"]
+        picks = [a for a in legal if type(a).__name__ == "SelectTokenTarget"]
+        finish = next((a for a in legal if type(a).__name__ == "FinishSelectToken"), None)
+        ctx = (view.pending_decisions[-1].context
+               if getattr(view, "pending_decisions", None) else {}) or {}
+        polarity = _select_token_polarity(ctx)
+        me = getattr(view, "viewer_id", None)
+
+        def card(a):
+            return idx.get(a.target_id, (None, None))
+
+        if ctx.get("kind") == "upgrade":
+            theirs = [a for a in picks if card(a)[0] is not None
+                      and card(a)[0].owner_id != me]
+            if theirs:
+                return theirs[0]
+            return finish or (picks[0] if picks else legal[0])
+        if polarity == "bad":
+            enemy = [a for a in picks if card(a)[1] == "opp"]
+            if enemy:
+                return max(enemy, key=lambda a: _select_token_victim_score(card(a)[0], ctx))
+            if finish is not None:
+                return finish
+            return min(picks, key=lambda a: _card_value(card(a)[0])) if picks else legal[0]
+        mine = [a for a in picks if card(a)[1] == "my"]
         if mine:
             return mine[0]
-        return self._first(legal, "FinishSelectToken")
+        return finish or (picks[0] if picks else legal[0])
 
     def _choose_select_damage(
         self, view: "PlayerView", legal: list["Action"]
@@ -1876,6 +1937,9 @@ _MALEFICENT_EFFECTS = frozenset({
     "ReturnToHand", "RevokeKeyword", "RevokeTrait", "CaptureUnit",
     "ResourceCardEffect",
 })
+# Token upgrades that HURT the unit they land on — ``GiveToken`` of one of these
+# is maleficent, whatever the bare effect name suggests.
+_HARMFUL_TOKENS = frozenset({"Weakness"})
 # Effects that carry a player-chosen ``target`` TargetSpec.  Mirrors
 # ``resolver._get_effect_target_spec`` — the engine's own list of what the
 # ChooseTarget machinery can be asking about.
@@ -1897,6 +1961,8 @@ def _effect_polarity(effect) -> Optional[str]:
     change).  ``None`` means "no opinion" — the caller falls back to its old
     guess rather than acting on a reading it does not have."""
     name = type(effect).__name__
+    if name == "GiveToken" and getattr(effect, "token_type", None) in _HARMFUL_TOKENS:
+        return "bad"   # a Weakness token (−1/−1, HMW) belongs on an ENEMY unit
     if name in _BENEFICIAL_EFFECTS:
         return "good"
     if name in _MALEFICENT_EFFECTS:
@@ -1908,6 +1974,39 @@ def _effect_polarity(effect) -> Optional[str]:
         if delta < 0:
             return "bad"
     return None
+
+
+def _select_token_polarity(ctx: dict) -> str:
+    """Whether a ``select_token`` decision's payoff helps (``"good"``) or hurts
+    (``"bad"``) each chosen unit, read off its mode flags.  Helpful is the default
+    (tokens, buffs, ready, keywords, borrowed When Played abilities)."""
+    if (ctx.get("exhaust") or ctx.get("defeat") or ctx.get("return_to_hand")
+            or ctx.get("suppress_abilities")):
+        return "bad"
+    if (ctx.get("token_type") in _HARMFUL_TOKENS
+            or ctx.get("extra_token_type") in _HARMFUL_TOKENS):
+        return "bad"
+    if int(ctx.get("power_bonus", 0) or 0) + int(ctx.get("hp_bonus", 0) or 0) < 0:
+        return "bad"
+    return "good"
+
+
+def _select_token_victim_score(cv, ctx: dict) -> float:
+    """How good a harmful ``select_token`` pick ``cv`` (an enemy CardView) is:
+    exhausting an already-exhausted unit is a wasted pick; an HP loss that kills
+    is worth the whole card; otherwise prefer the most valuable unit."""
+    if cv is None:
+        return float("-inf")
+    value = float(_card_value(cv))
+    if ctx.get("exhaust") and getattr(cv, "exhausted", False):
+        return -1.0
+    hp_loss = -int(ctx.get("hp_bonus", 0) or 0)
+    if ctx.get("token_type") in _HARMFUL_TOKENS:
+        hp_loss += int(ctx.get("token_count", 1) or 1)
+    remaining = int(getattr(cv, "effective_hp", 0) or 0) - int(getattr(cv, "damage", 0) or 0)
+    if hp_loss and remaining <= hp_loss:
+        return 1000.0 + value   # the pick defeats it: always the best use
+    return value
 
 
 def _ability_raw_effects(set_code: str, card_number: str, ability_idx: int) -> list:

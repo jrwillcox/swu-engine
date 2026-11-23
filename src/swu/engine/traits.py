@@ -84,12 +84,51 @@ def _revoked_traits(state: "GameState", ci: "CardInstance") -> set:
     return out
 
 
+_leader_copier_keys: "set | None" = None
+
+
+def _copied_leader_traits(state: "GameState", ci: "CardInstance") -> tuple[str, ...]:
+    """Traits ``ci`` copies off its controller's leader through a ``CopyLeaderTraits``
+    marker on its own card (Zam Wesell HMW_134: "gains each friendly leader's traits
+    except Force, even while she's not in play") — any zone.  The leader's PRINTED
+    traits, so this never re-enters the grant layer.  Gated on a cached index of the
+    registry keys carrying the marker, so the hot path is one set lookup."""
+    global _leader_copier_keys
+    if _leader_copier_keys is None:
+        try:
+            from swu.abilities.registry import get_all_registered, CopyLeaderTraits
+        except ImportError:
+            return ()
+        _leader_copier_keys = {
+            key for key, specs in get_all_registered().items()
+            if any(isinstance(sp, CopyLeaderTraits) for sp in specs)}
+    cd = ci.card_def
+    key = (getattr(cd, "set_code", None) or "", getattr(cd, "card_number", None) or "")
+    if key not in _leader_copier_keys:
+        return ()
+    from swu.abilities.registry import get_abilities, CopyLeaderTraits
+    from swu.engine.state import ability_suppressed
+    if ability_suppressed(state, ci):
+        return ()
+    res = state.find_instance(ci.instance_id)
+    ps = res[0] if res is not None else state.player_by_id(ci.owner_id)
+    leader = getattr(ps, "leader_instance", None)
+    if leader is None:
+        return ()
+    exclude: set = set()
+    for sp in get_abilities(*key):
+        if isinstance(sp, CopyLeaderTraits):
+            exclude |= set(sp.exclude)
+    return tuple(t for t in (getattr(leader.card_def, "traits", None) or ())
+                 if t not in exclude)
+
+
 def get_traits(state: "GameState", ci: "CardInstance") -> tuple[str, ...]:
     """Return the effective traits of ``ci`` — printed plus granted, minus any
     revoked — preserving printed order and appending any granted trait not already
     present."""
     printed = tuple(getattr(ci.card_def, "traits", None) or ())
-    granted = _granted_traits(state, ci)
+    granted = _granted_traits(state, ci) + _copied_leader_traits(state, ci)
     revoked = _revoked_traits(state, ci)
     out = [t for t in printed if t not in revoked]
     for t in granted:
@@ -104,6 +143,8 @@ def has_trait(state: "GameState", ci: "CardInstance", trait: str) -> bool:
     if trait in _revoked_traits(state, ci):
         return False
     if trait in (getattr(ci.card_def, "traits", None) or ()):
+        return True
+    if trait in _copied_leader_traits(state, ci):   # Zam Wesell HMW_134
         return True
     # Fast path: if no registered card can ever grant this trait, skip the
     # (potentially board-wide) granted-trait scan — the overwhelming majority of

@@ -611,6 +611,35 @@ def _apply_name_a_card_payoff(s: GameState, source_ci: CardInstance,
     SEC_260, Stolen Starpath Unit SEC_210).  The count is read off the opponent's
     hand at resolution, i.e. after the naming, which is the printed order."""
     kind, _, raw = payoff.partition(":")
+    if kind == "revoke_trait_enemy_phase":
+        # "Name a trait.  Enemy cards, including those not in play, lose that trait
+        # for this phase" (The First Legion HMW_108): a this_phase ``trait_revoke``
+        # modifier on every card the opponent owns, in EVERY zone (the RevokeTrait
+        # shape, Nameless Terror LOF_33).  The naming reused ``name_a_card``, which
+        # also stamps ``named_card`` on the source — a CARD-name ban (Galen Erso
+        # P25_31's read) — so clear it: a trait is not a card name.
+        from swu.engine.state import Modifier
+        source_ci.named_card = None
+        for p in s.players:
+            if p.player_id == source_ci.owner_id:
+                continue
+            pool: list = []
+            for zone in (p.hand, p.deck, p.discard, p.resources, p.base_zone,
+                         p.ground_arena, p.space_arena):
+                for ci in zone:
+                    pool.append(ci)
+                    pool.extend(u for u in getattr(ci, "attached_upgrades", ()) or ()
+                                if u.owner_id == p.player_id)
+            for ci in pool:
+                s.modifiers.append(Modifier(
+                    modifier_id=s.alloc_modifier_id(),
+                    source_instance_id=source_ci.instance_id,
+                    target_instance_id=ci.instance_id,
+                    kind="trait_revoke",
+                    value={"trait": named},
+                    duration="this_phase",
+                ))
+        return
     if kind == "forbid_play_this_phase":
         # "Cards with that name can't be played this phase" (Transmission Jamming
         # LAW_243) — a phase-scoped, any-player ban read at the play-legality seam.

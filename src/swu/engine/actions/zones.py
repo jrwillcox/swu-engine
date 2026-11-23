@@ -436,16 +436,35 @@ def _control_change_protected(s: GameState, ci: CardInstance) -> bool:
     return False
 
 
-def _enters_play_ready(state: GameState, ci: CardInstance) -> bool:
+def _enters_play_ready(state: GameState, ci: CardInstance,
+                       ps: PlayerState | None = None) -> bool:
     """True if ``ci`` declares a satisfied ``EntersPlayReady`` spec (Salacious Crumb
     LAW_210: "If you control Jabba the Hutt, this unit enters play ready").
-    Evaluated against the source's controller as it enters play."""
-    from swu.abilities.registry import get_abilities, EntersPlayReady
+    Evaluated against the source's controller as it enters play.
+
+    Also True when ``ps`` (the controller it enters under) has a satisfied
+    ``UnitsEnterPlayReady`` marker in play — ``ci`` itself included, for "(including
+    this one)" (Ritual Dragon HMW_234)."""
+    from swu.abilities.registry import get_abilities, EntersPlayReady, UnitsEnterPlayReady
+    from swu.engine.state import ability_suppressed
     sc = getattr(ci.card_def, "set_code", None) or ""
     cn = getattr(ci.card_def, "card_number", None) or ""
     for spec in get_abilities(sc, cn):
-        if isinstance(spec, EntersPlayReady):
+        if isinstance(spec, (EntersPlayReady, UnitsEnterPlayReady)):
             if spec.condition is None or spec.condition.evaluate(state, ci):
+                return True
+    if ps is None:
+        return False
+    for src in ps.ground_arena + ps.space_arena:
+        if src.instance_id == ci.instance_id or ability_suppressed(state, src):
+            continue
+        ssc = getattr(src.card_def, "set_code", None) or ""
+        scn = getattr(src.card_def, "card_number", None) or ""
+        if not ssc or not scn:
+            continue
+        for spec in get_abilities(ssc, scn):
+            if isinstance(spec, UnitsEnterPlayReady) and (
+                    spec.condition is None or spec.condition.evaluate(state, src)):
                 return True
     return False
 
@@ -531,7 +550,7 @@ def _put_unit_in_play(
         enters_ready = True
     # A card may declare it enters play ready under a condition (Salacious Crumb
     # LAW_210) — checked once at placement (default behaviour unchanged otherwise).
-    ci.exhausted = not (enters_ready or _enters_play_ready(s, ci))
+    ci.exhausted = not (enters_ready or _enters_play_ready(s, ci, ps))
     # A fresh entry clears any stale "can't ready this round" flag (No Good to Me
     # Dead SOR_186) that lingered on the instance from a previous stint in play.
     ci.cannot_ready_this_round = False
@@ -790,8 +809,12 @@ def _apply_capture(s: GameState, captor_id: str, target_id: str) -> GameState:
     target_ci.face_down = True
     target_ci.deployed = False
     target_ci.captured_by = captor_ci.instance_id
+    target_ci.control_linked_to = None
     target_ci.zone = Zone.CAPTURE_PILE
     captor_ps.capture_pile.append(target_ci)
+    # The captured unit has left play: its own captives go home and any control
+    # it took reverts (before this event, so the log reads in order).
+    _unit_left_play(s, target_ci)
 
     s.event_log.append(UnitCaptured(
         captor_instance_id=captor_ci.instance_id,
@@ -838,9 +861,8 @@ def _revert_linked_control(s: GameState, source_ci: CardInstance) -> None:
     that unit"): every in-play unit whose ``control_linked_to`` is this source's
     instance_id is returned to its owner's control via ``change_control`` and the
     link is cleared.  Mirrors ``_release_captured_cards`` (the capture leave-play
-    linkage); like it, this is wired into ``_defeat_unit`` only — a source
-    bounced/put-on-deck/captured while holding a linked unit does not revert (no
-    shipped card exercises that path)."""
+    linkage); both run on EVERY way a unit leaves play — ``_defeat_unit`` and
+    ``_unit_left_play`` (bounce, put on deck, capture), the latter since 2026-11-23."""
     linked = [
         ci
         for ps in s.players
@@ -851,6 +873,16 @@ def _revert_linked_control(s: GameState, source_ci: CardInstance) -> None:
     for ci in linked:
         ci.control_linked_to = None
         change_control(s, ci, ci.owner_id)
+
+
+def _unit_left_play(s: GameState, ci: CardInstance) -> None:
+    """The leave-play linkage for a unit that left play WITHOUT being defeated
+    (returned to hand, put on a deck, captured): the cards it captured are released
+    and any control it took reverts — exactly what ``_defeat_unit`` does.  Before
+    2026-11-23 only a defeat did this, so a bounced captor kept its captives and a
+    bounced Maul LAW_54 kept the unit it stole."""
+    _release_captured_cards(s, ci)
+    _revert_linked_control(s, ci)
 
 
 def _resolve_granted_bounty(s: GameState, collector_id: str, key: str) -> None:
@@ -1105,6 +1137,8 @@ def _apply_put_on_deck(s: GameState, target_id: str, *, to_top: bool) -> GameSta
             arena.remove(ci)
             break
     ci.zone = Zone.DECK
+    ci.control_linked_to = None
+    _unit_left_play(s, ci)
     owner_ps = s.player_by_id(ci.owner_id)
     if to_top:
         owner_ps.deck.insert(0, ci)  # deck[0] is the top (drawn via pop(0))

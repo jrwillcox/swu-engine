@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from tests.test_sor_cards import (
     repo,  # noqa: F401 — pytest fixture
+    _resolve_discards,
     _get_card, _make_state, _place, _fire_when_played, _fire_when_defeated,
     _fire_on_attack, _find_instance, _give_resources, _play_event_from_hand,
     _push_deck_top,
@@ -140,6 +141,9 @@ class TestIWantProofNotLeads:
         _deck_units(state, "P0", repo, 3)
         disc_before = len(state.player_by_id("P0").discard)
         state, _ = _play_event_from_hand(state, repo, "IBH", "74")
+        # The controller picks the discard from the 3 cards held after drawing.
+        assert len(state.player_by_id("P0").hand) == 3
+        state = _resolve_discards(state)
         # hand: [filler] + drew 2 - discarded 1 = 2
         assert len(state.player_by_id("P0").hand) == 2
         # discard grew by the played event + the discarded card = 2.
@@ -188,6 +192,8 @@ class TestAdmiralOzzel:
         _put_in_hand(state, "P1", _get_card(repo, "SOR", "46"))
         before = len(state.player_by_id("P1").hand)
         state = _fire_when_defeated(state, ozzel)
+        assert state.pending_decisions[-1].deciding_player_id == "P1"  # they choose
+        state = _resolve_discards(state)
         assert len(state.player_by_id("P1").hand) == before - 1
 
 

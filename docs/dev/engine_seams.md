@@ -29,7 +29,11 @@ pattern, reuse that pattern by name; don't invent a new one.
 | **Dealer-side "+1"** | "If a friendly ability would deal damage, it deals that much plus 1 instead" = `AbilityDamageBonus(amount)` on the unit, read by `_ability_damage_bonus` at the non-combat unit landing points and the ability base sinks, before prevention. Only damage to an OPPONENT's card is increased (the "may" taken when it helps); never indirect. The dealer-side twin of `DamageAmplification`. | Ty Yorrick HMW_185 |
 | **Base-upgrade stand-in** | "If an upgrade on your base would be defeated, you may defeat this unit instead" = `BaseUpgradeDefeatReplacement`, applied automatically (no prompt) at `resolver._apply_defeat_unit`'s upgrade branch when an OPPONENT's effect is the defeater (`actor_id`, passed by the DefeatUnit/DefeatAllUnits arms). A self-defeat cost is never replaced. | Vice Admiral Rampart HMW_60 |
 | **Base planet** | "If you control a Naboo base" is `Condition.CONTROLLER_HAS_PLANET_BASE(param=planet or tuple)`; `OPPONENT_HAS_PLANET_BASE` for an opponent's base. The planet is printed only on the base art, so it comes from the hand-maintained `swu/cards/base_planets.py` table (not the DB). `tests/test_base_planets.py` fails when a new base is missing from it. | Sando Aqua Monster HMW_94, Surveillance Cruiser HMW_247 |
-| **First-card discard** | "Opponent discards a card" is `DiscardFromHand(chooser="opponent")`, which takes their first card. A documented simplification. | K-2SO SOR_145, Garindan SEC_186 |
+| **Board-wide play markers** | "Friendly units enter play ready" = `UnitsEnterPlayReady(condition)`, read at `zones._enters_play_ready` (every entry route, the entering unit included). "The first, second and third units you play each round cost 1/2/3 less" = `NthUnitPlayDiscount(amounts, condition)`, read in `costs._standing_play_discount`; the index is `cards_played_this_phase − non_units_played_this_phase` (both written after payment), so nothing is consumed. | Ritual Dragon HMW_234, Origin Tree Shyyyo HMW_145 |
+| **"For each" keyword values** | `KeywordGrant(value_count=…)` falls back to any `StatBonus.count` source (`stats._stat_bonus_count`), so "gains Raid 1 for each …" reuses the stat counts. `count="target_raid"` reads the buffed unit's Raid. | Chewbacca HMW_117, The Chieftain HMW_212 |
+| **Ambush at bases** | "Friendly units can attack bases while using Ambush" = `AmbushCanAttackBases`: the Ambush listener pushes the decision even with no enemy unit, `_ambush_actions` adds `UseAmbush(unit, <enemy base id>)` unless a Sentinel blocks it, and `UseAmbush.apply` runs `_resolve_base_attack`. The bot takes the base when no unit trade clears its threshold. | Fett's Firespray HMW_53 |
+| **Copied traits** | "Gains each friendly leader's traits except Force, even while not in play" = `CopyLeaderTraits(exclude)`, read by `traits.get_traits`/`has_trait` in every zone (the leader's PRINTED traits). | Zam Wesell HMW_134 |
+| **Discard of choice** | "Opponent discards a card" / "Discard a card from your hand" is `DiscardFromHand(count, chooser="opponent"\|"controller")`: the DISCARDING player picks, via `push_discard_of_choice` (a one-player `discard_excess_from_hand`; no prompt when the hand holds `count` or fewer cards). `then_draw=N` draws after the choice ("discard a card, then draw"). A decision runs after the ability's remaining inline effects, so put a dependent draw in `then_draw`, not a following `DrawCards`. (Until 2026-11-23 it took the first card.) | K-2SO SOR_145, Garindan SEC_186, Furtive Handmaiden SEC_197 |
 | **Decider shift** | A stage decided by the opponent: walk an `order` list, switching `deciding_player_id` and `active_player_index` between stages. | `say_no` SOR_233 |
 | **`EACH_*` targets** | `fixed=EACH_FRIENDLY`/`EACH_ENEMY`/`EACH_IN_PLAY` hits every match with no prompt. | many |
 
@@ -46,7 +50,10 @@ adding one; `granted_attack` and `play_from_hand` take many options:
   `bonus_if_odd_cost_diff_from`, `then_defeat_attacker` (Heroic Sacrifice SOR_150),
   and `defender_power_bonus`/`defender_hp_bonus`, a `this_attack` debuff on the chosen
   defender (Jyn Erso SOR_18), and `swap_raid_restore` (a `raid_restore_swap`
-  modifier read at the top of `has_keyword`/`keyword_value`; Asajj Ventress HMW_1).
+  modifier read at the top of `has_keyword`/`keyword_value`; Asajj Ventress HMW_1),
+  `then_attack_again` (the same unit attacks again, even if exhausted, not a
+  base; Log Trap HMW_149) and `bonus_if_shares_trait_with_friendly` (Familiar
+  Strategem HMW_266).
 - **`play_from_hand`:** `trait`, `enters_ready`, `then_opponents_ready`,
   `cost_reduction`, `then_damage`, `cost_max`, `grant_keyword`, `free`, `aspect`,
   `exclude_aspect`, `from_discard`, `ignore_aspect_penalty`, `defeat_at_regroup`,
@@ -140,13 +147,37 @@ The golden files in `tests/fixtures/` (`actions_decision_kinds.json`,
   `legal_actions()` offers only the top decision's options. On resolution it pops and
   sets `active_player_index` to `after_resolve_player_index`. An activated ability
   hands the turn over only if it pushed no decision.
+- **Every play fires `CardPlayed` through the trigger system.** Log the event before
+  the card enters play, then call `shared._fire_card_played(s, evt, after_idx)` after
+  (bus + `fire_triggered_abilities`). Firing only `get_bus().fire` makes the play
+  invisible to the per-phase play counters and every "when you play a card" observer —
+  the bug that ability-driven plays and Exploit commits had until 2026-11-23.
+- **"You", "friendly" and "enemy" mean the CONTROLLER.** Use
+  `state.controller_id(state, ci)` (or `resolver._acting_player_id` for an ability's
+  source), never `ci.owner_id`, when a card asks who controls something. `owner_id`
+  is for where a card goes (owner's hand, discard, deck). Older card code still
+  reads `source_ci.owner_id`; see [known_deviations.md](../known_deviations.md).
+- **Every paid play prices through `_play_cost` and spends through
+  `_spend_play_discounts`.** Pass the playing ability's own "costs N less" as
+  `_play_cost(…, extra_reduction=N)` (never subtract it afterwards: the opponent tax
+  and The Starhawk's halving come last), use the same call in the candidate filter,
+  and call `_spend_play_discounts` once after paying. A play "for free" costs 0 and
+  spends nothing. Smuggle and Piloting keep their own alternate-cost pricing.
 - **Keywords.** Never string-match card text. Use
   `has_keyword(state, ci, Keyword.SENTINEL)` and `keyword_value(state, ci, Keyword.RAID)`
   from `engine/keywords.py`. Numeric values come from `text` (units) or `deploy_box`
   (leaders).
 - **Stats.** Use `compute_power(state, ci, is_attacking=...)` and `compute_hp`. They
   include upgrades, modifiers, constant abilities, Grit and (when attacking) Raid.
-  Never read `card_def.power` in game logic. `compute_power` floors at 0.
+  Never read `card_def.power` in game logic. `compute_power` floors at 0, and so
+  does `compute_hp`: a unit reduced to 0 HP is defeated even with no damage on it
+  (`_hp_lethal` is `damage >= HP`). Until HMW the HP floor was 1, which stopped any
+  −X/−X from killing an undamaged unit.
+- **Tokens with harmful effects.** The Weakness token (HMW, −1/−1) is a
+  TokenUpgrade DB row, so `GiveToken("Weakness", …)` just works. The bot reads it
+  as harmful (`heuristic_bot._HARMFUL_TOKENS`), and its `select_token` handler
+  reads the decision's mode flags (`_select_token_polarity`), because that one
+  decision also exhausts, defeats, bounces and strips abilities.
 - **Tokens.** Shield and Experience are real card defs. Create them with
   `tokens.attach_token(state, owner_ps, host_ci, "Shield")`. They vanish (are not
   discarded) when their host leaves play, and don't count for card conservation.

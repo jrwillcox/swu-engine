@@ -55,13 +55,13 @@ from swu.engine.actions.dispatch import (
     register_decisions,
 )
 from swu.engine.actions.costs import (
-    _affordable_with_credits, _aspect_penalty, _effective_cost, _event_aspect_waiver, _exhaust_resources, _ignorable_aspect_penalty, _pay_play_cost, _piloting_cost, _piloting_discount_entry, _play_cost, _play_reduction_for, _smuggle_cost, _usable_credits,
+    _affordable_with_credits, _aspect_penalty, _event_aspect_waiver, _exhaust_resources, _ignorable_aspect_penalty, _pay_play_cost, _piloting_cost, _piloting_discount_entry, _play_cost, _play_reduction_for, _smuggle_cost, _spend_play_discounts, _usable_credits,
 )
 from swu.engine.actions.zones import (
     _apply_capture, _attach_upgrade, _draw_cards, _eligible_upgrade_targets, _find_in_arenas, _put_unit_in_play, _resolve_event_ability,
 )
 from swu.engine.actions.shared import (
-    _apply_defeat_unit_by_id, _attach_pilot, _candidate_card_views, _eligible_pilot_targets, _resource_top_of_deck, _take_from_hand,
+    _fire_card_played, _apply_defeat_unit_by_id, _attach_pilot, _candidate_card_views, _eligible_pilot_targets, _resource_top_of_deck, _take_from_hand,
 )
 from swu.engine.actions.combat import (
     push_select_token,
@@ -69,6 +69,78 @@ from swu.engine.actions.combat import (
 from swu.engine.actions.observers import (
     _fire_defeat_own_resource,
 )
+
+
+# ── Exploit on an ability-driven play ────────────────────────────────────────
+
+def _exploit_value(state: GameState, ci: CardInstance) -> int:
+    """The card's Exploit N (0 if none)."""
+    from swu.engine.keywords import Keyword, has_keyword, keyword_value
+    if not has_keyword(state, ci, Keyword.EXPLOIT):
+        return 0
+    return max(0, int(keyword_value(state, ci, Keyword.EXPLOIT) or 0))
+
+
+def _exploit_best_case(state: GameState, ci: CardInstance, ps: PlayerState) -> int:
+    """The most Exploit could take off playing ``ci`` (2 per friendly unit, up to
+    N) — used by the candidate filters so a card affordable only by exploiting is
+    still offered."""
+    n = _exploit_value(state, ci)
+    return 2 * min(n, len(ps.ground_arena) + len(ps.space_arena)) if n else 0
+
+
+def _divert_to_exploit(s: GameState, ps: PlayerState, ci: CardInstance,
+                       top: PendingDecision, *, origin: str, replay: dict,
+                       extra_reduction: int, from_zone: Optional[list] = None) -> bool:
+    """Exploit on a play made by an ABILITY (Admiral Ozzel's play-from-hand, Ezra
+    Bridger SOR_192's play-the-top-card …).  Exploit is part of playing the card, so
+    it applies however the card is played; until 2026-11-23 only ``PlayCard``
+    offered it.
+
+    Parks ``ci`` in ``PLAY_BUFFER`` and replaces the play decision ``top`` with the
+    ordinary ``exploit`` decision, carrying a ``resume`` record.  At commit
+    (``sacrifice._resume_play_after_exploit``) the card goes back to ``origin``
+    ("hand" | "discard" | "deck_top"), ``top`` is re-pushed with
+    ``exploit_discount`` / ``exploited_powers`` / ``exploit_resolved`` in its
+    context, and the ``replay`` action runs — so every rider of the original play
+    still applies.  Returns False (nothing done) for a free play, an already-exploited
+    replay, a card without Exploit, or no unit to exploit."""
+    ctx = top.context
+    if ctx.get("free") or ctx.get("exploit_resolved"):
+        return False
+    n = _exploit_value(s, ci)
+    if n <= 0 or not (ps.ground_arena or ps.space_arena):
+        return False
+    if from_zone is not None and ci in from_zone:
+        from_zone.remove(ci)
+    ci.zone = Zone.PLAY_BUFFER
+    ps.play_buffer.append(ci)
+    s.pending_decisions.remove(top)
+    s.pending_decisions.append(PendingDecision(
+        deciding_player_id=ps.player_id,
+        kind="exploit",
+        context={
+            "max_remaining": n,
+            "sacrificed_ids": [],
+            "sacrificed_powers": [],
+            "upgrade_target_id": replay.get("upgrade_target_id"),
+            "extra_reduction": int(extra_reduction),
+            "resume": {
+                "origin": origin,
+                "replay": dict(replay),
+                "decision": {
+                    "kind": top.kind,
+                    "deciding_player_id": top.deciding_player_id,
+                    "context": dict(ctx),
+                    "after_resolve_player_index": top.after_resolve_player_index,
+                },
+            },
+        },
+        after_resolve_player_index=top.after_resolve_player_index,
+    ))
+    s.active_player_index = s.player_index(ps.player_id)
+    s.event_log.append(DecisionPushed(deciding_player_id=ps.player_id, kind="exploit"))
+    return True
 
 
 # ── ACTION phase actions ──────────────────────────────────────────────────────
@@ -142,14 +214,25 @@ class PlayFromHand(Action):
             cost_reduction += _ignorable_aspect_penalty(ci.card_def, deciding_ps, s)
         cost_reduction += _waived_aspect_penalty(
             ci.card_def, deciding_ps, s, ctx.get("waive_aspect"))
+        # Exploit applies to an ability-driven play too: hand the play over to the
+        # exploit decision, which replays this action once the sacrifices are made.
+        if resources_of is None and _divert_to_exploit(
+                s, deciding_ps, ci, top,
+                origin="discard" if played_from_discard else "hand",
+                replay={"action": "PlayFromHand", "instance_id": ci.instance_id},
+                extra_reduction=cost_reduction):
+            return s
+        cost_reduction += int(ctx.get("exploit_discount", 0) or 0)
         if bool(ctx.get("free")):
             cost = 0
         else:
-            cost = max(0, _effective_cost(ci.card_def, deciding_ps, s) - cost_reduction)
+            cost = _play_cost(s, ci, deciding_ps, extra_reduction=cost_reduction)
         # Pay from ready resources, defeating Credit tokens for any shortfall
         # (jabba-the-hutt:07); credits_defeated drives the "if you defeated a
         # Credit while paying its cost" rider below.
         credits_defeated = _pay_play_cost(s, deciding_ps, cost)
+        if not bool(ctx.get("free")):
+            _spend_play_discounts(s, ci, deciding_ps)
 
         card_played_evt = CardPlayed(
             player_id=deciding_ps.player_id,
@@ -223,8 +306,9 @@ class PlayFromHand(Action):
             play_source="discard" if played_from_discard else "hand",
             cost_paid=cost,
             defeat_at_regroup=bool(ctx.get("defeat_at_regroup")),
+            exploited_powers=list(ctx.get("exploited_powers") or []),
         )
-        get_bus().fire(s, card_played_evt)
+        _fire_card_played(s, card_played_evt, after_idx)
 
         # "Deal damage to your base equal to its cost" (Galactic Ambition SOR_235),
         # after the unit is in play and its play event fired.
@@ -547,7 +631,7 @@ def _finish_play_captured(s: GameState, instance_id: str) -> GameState:
         if "Villainy" in card_aspects:
             s.game_memory.villainy_players_this_phase.add(ps.player_id)
         _put_unit_in_play(s, ps, ci, play_source="capture", cost_paid=0)
-        get_bus().fire(s, evt)
+        _fire_card_played(s, evt, top.after_resolve_player_index)
     s.event_log.append(DecisionResolved(
         deciding_player_id=top.deciding_player_id,
         kind="play_captured_card", choice=f"played {name}"))
@@ -680,7 +764,7 @@ def _finish_play_resource_unit(s: GameState, instance_id: str) -> GameState:
     if "Villainy" in card_aspects:
         s.game_memory.villainy_players_this_phase.add(ps.player_id)
     _put_unit_in_play(s, ps, ci, play_source="resource", cost_paid=0)
-    get_bus().fire(s, evt)
+    _fire_card_played(s, evt, top.after_resolve_player_index)
     s.event_log.append(DecisionResolved(
         deciding_player_id=top.deciding_player_id,
         kind="play_resource_units", choice=f"played {name}"))
@@ -1000,6 +1084,8 @@ def _playable_units_from_hand(
             reduction = base_reduction + (
                 _ignorable_aspect_penalty(cd, ps, state) if ignore_aspect_penalty else 0)
             reduction += _waived_aspect_penalty(cd, ps, state, waive_aspect)
+            if resources_of is None:
+                reduction += _exploit_best_case(state, ci, ps)  # Exploit applies too
             # A card played out of its player's OWN resource row (Osha HMW_17)
             # leaves it before the cost is paid, so if it was ready it cannot help
             # pay for itself.
@@ -1010,7 +1096,7 @@ def _playable_units_from_hand(
             # Credits can cover a shortfall when paying the played unit's cost
             # (jabba-the-hutt:07), so they count toward affordability here too.
             if free or (
-                    max(0, _effective_cost(cd, ps, state) - reduction)
+                    _play_cost(state, ci, ps, extra_reduction=reduction)
                     <= available + _usable_credits(state, ps)):
                 out.append(ci)
     return out
@@ -1309,7 +1395,7 @@ def _playable_events_from_hand(
         if eligible_ids is not None and ci.instance_id not in eligible_ids:
             continue
         waived = _event_aspect_waiver(ci.card_def, ps, ignore_aspect_penalty, state)
-        if free or (max(0, _effective_cost(ci.card_def, ps, state) - cost_reduction - waived)
+        if free or (_play_cost(state, ci, ps, extra_reduction=cost_reduction + waived)
                     <= ps.available_resources + _usable_credits(state, ps)):
             out.append(ci)
     return out
@@ -1386,9 +1472,11 @@ class PlayEventFromHand(Action):
         cost_reduction += _event_aspect_waiver(
             ci.card_def, deciding_ps, bool(ctx.get("ignore_aspect_penalty")), s)
         cost = (0 if ctx.get("free")
-                else max(0, _play_cost(s, ci, deciding_ps) - cost_reduction))
+                else _play_cost(s, ci, deciding_ps, extra_reduction=cost_reduction))
         deciding_ps.hand.remove(ci)
         _pay_play_cost(s, deciding_ps, cost)
+        if not ctx.get("free"):
+            _spend_play_discounts(s, ci, deciding_ps)
 
         card_played_evt = CardPlayed(
             player_id=deciding_ps.player_id,

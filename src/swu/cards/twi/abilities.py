@@ -333,10 +333,8 @@ def _tranquility():
     Republic *card* play (``units_only=False`` so events/upgrades qualify too, not
     just units).  The discounts lift at the phase rollover.
 
-    LIMITATION (inherited from Khetanna): the discount applies only on the normal
-    hand-play path (``PlayCard``) and its affordability gates, not on the
-    ability-driven play-from-hand subsystem (which pays the raw effective cost) — the
-    common, faithful case.
+    Every paid play path applies and spends it, ability-driven plays included (fixed
+    2026-11-23; see Khetanna LAW_158).
     """
     return [
         TriggerAbility(
@@ -891,15 +889,14 @@ def _soulless_one():
     not a Droid).  Choosing one exhausts it and applies a +2/+0 this-attack modifier
     to Soulless One; cost and buff are bound in one CustomEffect so "If you do"
     holds (the Kihraxz SHD_118 pattern).  With no eligible unit the optional trigger
-    auto-declines.  LIMITATION: the undeployed leader form is in base_zone and is
-    not an arena unit, so it is not offered as the exhaust target (the unexercised
-    "(leader or unit)" edge)."""
+    auto-declines.  ``kind="unit_or_leader"`` also offers the UNDEPLOYED General
+    Grievous leader in the base zone ("(leader or unit)"; 2026-11-23)."""
     return TriggerAbility(
         trigger=OnAttack(),
         optional=True,
         effects=[CustomEffect(
             fn=_soulless_one_on_attack,
-            target=TargetSpec(controller="friendly", kind="unit",
+            target=TargetSpec(controller="friendly", kind="unit_or_leader",
                               predicates=("droid_or_general_grievous", "ready")),
         )],
     )
@@ -3256,8 +3253,8 @@ def _favorable_delegate():
       * "When Played: Draw a card."
       * "When Defeated: Discard a card from your hand."
 
-    Two plain triggers over the declarative primitives; the discard is the
-    first-card convention (``DiscardFromHand(chooser="controller")``)."""
+    Two plain triggers over the declarative primitives; the controller picks the
+    discard (``DiscardFromHand(chooser="controller")``)."""
     return [
         TriggerAbility(trigger=WhenPlayed(), effects=[DrawCards(1)]),
         TriggerAbility(trigger=WhenDefeated(),
@@ -5657,8 +5654,7 @@ def _senatorial_corvette():
     "When Defeated: Each opponent discards a card from their hand."
 
     Saboteur is the keyword layer.  A plain ``DiscardFromHand(chooser="opponent")``
-    — the first-card discard simplification (K-2SO SOR_145) applied to the one
-    opponent this two-player engine has."""
+    — the one opponent this two-player engine has picks the card."""
     return TriggerAbility(
         trigger=WhenDefeated(),
         effects=[DiscardFromHand(count=1, chooser="opponent")],

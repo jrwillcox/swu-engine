@@ -15,7 +15,7 @@ from __future__ import annotations
 import uuid
 
 
-from tests.test_sor_cards import repo, _get_card, _make_state, _place  # noqa: F401
+from tests.test_sor_cards import repo, _get_card, _make_state, _place, _resolve_discards  # noqa: F401
 from tests.test_smuggle import _add_resource, _fill_resources, _add_deck_card
 from tests.test_plot import _synthetic_leader, _add_leader
 
@@ -51,12 +51,18 @@ class TestGarindan:
         play = next(a for a in legal_actions(state)
                     if isinstance(a, PlotPlay) and a.instance_id == garindan.instance_id)
         state = apply(state, play)
+        # Garindan's controller names a card in the opponent's hand.
+        assert state.pending_decisions[-1].kind == "name_and_discard"
+        assert state.pending_decisions[-1].deciding_player_id == "P0"
+        from swu.engine.actions import NameAndDiscard
+        state = apply(state, next(a for a in legal_actions(state)
+                                  if isinstance(a, NameAndDiscard)))
 
         ps0 = state.player_by_id("P0")
         ps1 = state.player_by_id("P1")
         # Garindan entered play via Plot.
         assert any(u.instance_id == garindan.instance_id for u in ps0.ground_arena)
-        # Its When Played stripped one card from the opponent's hand (inline).
+        # Its When Played stripped one card from the opponent's hand.
         assert len(ps1.hand) == hand_before - 1
         assert len(ps1.discard) == 1
 

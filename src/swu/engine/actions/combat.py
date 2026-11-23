@@ -82,6 +82,13 @@ class AttackWithUnit(Action):
         granted = None
         if s.pending_decisions and s.pending_decisions[-1].kind == "granted_attack":
             granted = s.pending_decisions.pop()
+            # The granted attacker's controller attacks, whatever seat a decision
+            # resolved above this one left active (a follow-up granted attack can
+            # surface from beneath trigger decisions).
+            s.active_player_index = s.player_index(granted.deciding_player_id)
+        # Decisions below this depth predate the attack; a granted follow-up attack
+        # is inserted here, BENEATH anything the attack itself pushes.
+        depth0 = len(s.pending_decisions)
 
         active_ps = s.active_player
         inactive_ps = s.inactive_player
@@ -124,6 +131,15 @@ class AttackWithUnit(Action):
             if bonus_trait is not None:
                 traits = getattr(attacker.card_def, "traits", ()) or ()
                 if bonus_trait not in traits:
+                    p_bonus = h_bonus = 0
+            # "If it shares a Trait with another friendly unit, it gets +2/+0"
+            # (Familiar Strategem HMW_266) — effective traits on both sides.
+            if gctx.get("bonus_if_shares_trait_with_friendly"):
+                from swu.engine.traits import get_traits
+                mine = set(get_traits(s, attacker))
+                if not any(set(get_traits(s, u)) & mine
+                           for u in active_ps.ground_arena + active_ps.space_arena
+                           if u.instance_id != attacker.instance_id):
                     p_bonus = h_bonus = 0
             # A defender-gated bonus (Moff Gideon SHD_7: "If it's attacking a
             # unit, it gets +1/+0") applies only when attacking a unit, not a base.
@@ -351,108 +367,19 @@ class AttackWithUnit(Action):
                     ))
             needs_continuation = _resolve_unit_combat(s, active_ps, inactive_ps, attacker, defender)
 
-        # Mon Mothma SEC_103: "attack with any number of other units (one at a
-        # time)" — re-push the granted_attack so the controller may attack again
-        # with a not-yet-attacked unit, until they decline or none remain.  Only
-        # when the attack fully settled (no pre_attack continuation pending).
-        if (granted is not None and granted.context.get("repeat")
-                and not needs_continuation and not s.is_terminal()
-                and not s.pending_decisions):
-            new_ctx = dict(granted.context)
-            new_ctx["already_attacked"] = (
-                list(new_ctx.get("already_attacked") or []) + [self.attacker_id])
-            # "up to N units": once N attacks have resolved, stop re-pushing
-            # (Headhunting SHD_145).  ``repeat`` alone (Mon Mothma SEC_103) is an
-            # unbounded "any number" and leaves repeat_max None.
-            _rmax = new_ctx.get("repeat_max")
-            capped = _rmax is not None and len(new_ctx["already_attacked"]) >= _rmax
-            deciding_ps2 = s.active_player
-            enemy_ps2 = s.inactive_player
-            if not capped and _filter_granted_attacks(s, new_ctx, deciding_ps2, enemy_ps2):
-                s.pending_decisions.append(PendingDecision(
-                    deciding_player_id=granted.deciding_player_id,
-                    kind="granted_attack",
-                    context=new_ctx,
-                    after_resolve_player_index=granted.after_resolve_player_index,
-                ))
-                s.active_player_index = s.player_index(granted.deciding_player_id)
-                s.event_log.append(DecisionPushed(
-                    deciding_player_id=granted.deciding_player_id,
-                    kind="granted_attack",
-                ))
-
-        # Colonel Yularen SEC_6: "Attack with a unit.  Then, you may attack with
-        # another unit that COSTS LESS THAN IT" — a one-shot follow-up whose cap is
-        # read off the unit that just attacked (unlike ``repeat``, which re-pushes
-        # the same context).  Optional, and the first attacker is excluded.
-        if (granted is not None and granted.context.get("then_attack_cheaper")
-                and not needs_continuation and not s.is_terminal()
-                and not s.pending_decisions):
-            first_cost = int(getattr(attacker.card_def, "cost", None) or 0)
-            new_ctx = dict(granted.context)
-            new_ctx.pop("then_attack_cheaper", None)
-            new_ctx["optional"] = True
-            new_ctx["attacker_cost_max"] = first_cost - 1
-            new_ctx["already_attacked"] = (
-                list(new_ctx.get("already_attacked") or []) + [self.attacker_id])
-            if (first_cost > 0
-                    and _filter_granted_attacks(s, new_ctx, s.active_player,
-                                                s.inactive_player)):
-                s.pending_decisions.append(PendingDecision(
-                    deciding_player_id=granted.deciding_player_id,
-                    kind="granted_attack",
-                    context=new_ctx,
-                    after_resolve_player_index=granted.after_resolve_player_index,
-                ))
-                s.active_player_index = s.player_index(granted.deciding_player_id)
-                s.event_log.append(DecisionPushed(
-                    deciding_player_id=granted.deciding_player_id,
-                    kind="granted_attack",
-                ))
-
-        # Heroic Sacrifice SOR_150: the granted attacker "gains: 'When this unit
-        # deals combat damage: Defeat it.'"  A +2/+0 attacker always deals combat
-        # damage, so once the attack settles we defeat it (if it survived combat).
-        if (base_damage_before is not None and not needs_continuation
-                and not s.is_terminal()):
-            hit_a_base = any(
-                (ps.base_instance.damage if ps.base_instance is not None else 0)
-                > base_damage_before.get(ps.player_id, 0)
-                for ps in s.players)
-            if hit_a_base and granted.context.get("draw_if_base_damaged"):
-                _draw_cards(s, s.player_by_id(active_ps.player_id), 1)
-            # "…if that unit damaged a base, defeat that unit" (LAW_205) — the
-            # conditional twin of then_defeat_attacker below, sharing this snapshot.
-            if hit_a_base and granted.context.get("defeat_attacker_if_base_damaged"):
-                from swu.abilities.resolver import _apply_defeat_unit
-                if _find_in_arenas(s.active_player, self.attacker_id) is not None:
-                    _apply_defeat_unit(s, self.attacker_id)
-            # "…gains: 'When Attack Ends: If this unit dealt combat damage to an
-            # opponent's base, that opponent discards a card'" (Rash Action ASH_162).
-            # An OPPONENT's base specifically, so it re-reads the same snapshot
-            # rather than the any-base ``hit_a_base`` above; the discard is the
-            # standing first-card simplification (K-2SO SOR_145).
-            if granted.context.get("opponent_discard_if_base_damaged"):
-                from swu.engine.state import Zone as _Zone
-                for ps in s.players:
-                    if ps.player_id == active_ps.player_id or ps.base_instance is None:
-                        continue
-                    if ps.base_instance.damage <= base_damage_before.get(
-                            ps.player_id, 0):
-                        continue
-                    if not ps.hand:
-                        continue
-                    dropped = ps.hand.pop(0)
-                    dropped.zone = _Zone.DISCARD
-                    ps.discard.append(dropped)
-                    note_hand_or_deck_discard(s, dropped)
-                    record_hand_discard(s, ps.player_id)
-
-        if (granted is not None and granted.context.get("then_defeat_attacker")
-                and not needs_continuation):
-            from swu.abilities.resolver import _apply_defeat_unit
-            if _find_in_arenas(s.active_player, self.attacker_id) is not None:
-                _apply_defeat_unit(s, self.attacker_id)
+        # The granted-attack riders (repeat, follow-up attacks, base-damage
+        # riders, then-defeat).  If the attack paused for an On Attack choice,
+        # they ride on the pre_attack decision and run when ContinueAttack
+        # settles it — they used to be dropped (2026-11-23).
+        if granted is not None:
+            if needs_continuation:
+                _stash_granted_riders(s, depth0, self.attacker_id, granted,
+                                      base_damage_before)
+            else:
+                _apply_granted_riders(s, granted.context, granted.deciding_player_id,
+                                      granted.after_resolve_player_index,
+                                      self.attacker_id, attacker, active_ps,
+                                      base_damage_before, depth0)
 
         if not needs_continuation and not s.is_terminal() and not s.pending_decisions:
             _switch_active_player(s)
@@ -462,6 +389,134 @@ class AttackWithUnit(Action):
         if self.defender_id:
             return f"Attack unit {self.defender_id} with {self.attacker_id}"
         return f"Attack base with {self.attacker_id}"
+
+
+# ── Granted-attack riders ─────────────────────────────────────────────────────
+
+def _stash_granted_riders(s: GameState, depth0: int, attacker_id: str,
+                          granted: PendingDecision,
+                          base_damage_before: Optional[dict]) -> None:
+    """The attack paused for On Attack choices: park the granted-attack riders on
+    its ``pre_attack`` decision, so ``ContinueAttack`` applies them once the attack
+    settles."""
+    for d in s.pending_decisions[depth0:]:
+        if d.kind == "pre_attack" and d.context.get("attacker_id") == attacker_id:
+            d.context["granted"] = {
+                "context": dict(granted.context),
+                "deciding_player_id": granted.deciding_player_id,
+                "after_resolve_player_index": granted.after_resolve_player_index,
+                "base_damage_before": base_damage_before,
+            }
+            return
+
+
+def _push_granted_followup(s: GameState, ctx: dict, deciding_player_id: str,
+                           after_idx: int, insert_at: int) -> None:
+    """Push a follow-up ``granted_attack`` at ``insert_at`` — beneath any decision
+    the attack that just ended pushed (a When Defeated choice), so those resolve
+    first.  On top of the stack it also takes the seat."""
+    dec = PendingDecision(
+        deciding_player_id=deciding_player_id,
+        kind="granted_attack",
+        context=ctx,
+        after_resolve_player_index=after_idx,
+    )
+    insert_at = min(insert_at, len(s.pending_decisions))
+    s.pending_decisions.insert(insert_at, dec)
+    if insert_at == len(s.pending_decisions) - 1:
+        s.active_player_index = s.player_index(deciding_player_id)
+    s.event_log.append(DecisionPushed(deciding_player_id=deciding_player_id,
+                                      kind="granted_attack"))
+
+
+def _apply_granted_riders(s: GameState, gctx: dict, deciding_player_id: str,
+                          after_idx: int, attacker_id: str, attacker,
+                          active_ps: PlayerState,
+                          base_damage_before: Optional[dict],
+                          insert_at: int) -> None:
+    """Everything a granted attack does once its attack has SETTLED: re-push for
+    "any number of units" (``repeat``), the cheaper / same-unit follow-ups, the
+    base-damage riders and "then defeat it".  Called from ``AttackWithUnit`` when
+    the attack settles at once, and from ``ContinueAttack`` when it paused for On
+    Attack choices (``_stash_granted_riders``) — before 2026-11-23 a paused attack
+    silently dropped all of them, and a follow-up was dropped whenever a combat
+    trigger left a decision pending (it is now inserted beneath it)."""
+    if s.is_terminal():
+        return
+    # Mon Mothma SEC_103: "attack with any number of other units (one at a time)"
+    # — re-push until they decline or none remain.  "up to N" (Headhunting SHD_145)
+    # stops once N attacks have resolved.
+    if gctx.get("repeat"):
+        new_ctx = dict(gctx)
+        new_ctx["already_attacked"] = (
+            list(new_ctx.get("already_attacked") or []) + [attacker_id])
+        _rmax = new_ctx.get("repeat_max")
+        capped = _rmax is not None and len(new_ctx["already_attacked"]) >= _rmax
+        me = s.player_by_id(deciding_player_id)
+        foe = s.players[1 - s.player_index(deciding_player_id)]
+        if not capped and _filter_granted_attacks(s, new_ctx, me, foe):
+            _push_granted_followup(s, new_ctx, deciding_player_id, after_idx, insert_at)
+
+    # Colonel Yularen SEC_6: "Then, you may attack with another unit that COSTS
+    # LESS THAN IT" — a one-shot, optional follow-up capped by this attacker's cost.
+    if gctx.get("then_attack_cheaper"):
+        first_cost = int(getattr(attacker.card_def, "cost", None) or 0)
+        new_ctx = dict(gctx)
+        new_ctx.pop("then_attack_cheaper", None)
+        new_ctx["optional"] = True
+        new_ctx["attacker_cost_max"] = first_cost - 1
+        new_ctx["already_attacked"] = (
+            list(new_ctx.get("already_attacked") or []) + [attacker_id])
+        me = s.player_by_id(deciding_player_id)
+        foe = s.players[1 - s.player_index(deciding_player_id)]
+        if first_cost > 0 and _filter_granted_attacks(s, new_ctx, me, foe):
+            _push_granted_followup(s, new_ctx, deciding_player_id, after_idx, insert_at)
+
+    # Log Trap HMW_149: "Then attack with it again, even if it's exhausted.  It
+    # can't attack bases for the second attack."  Pinned to the same unit; a
+    # defeated attacker leaves no candidate, so nothing is pushed.
+    if gctx.get("then_attack_again"):
+        new_ctx = dict(gctx)
+        new_ctx.pop("then_attack_again", None)
+        new_ctx.update(attacker_id=attacker_id, allow_exhausted=True,
+                       no_base=True, optional=False)
+        me = s.player_by_id(deciding_player_id)
+        foe = s.players[1 - s.player_index(deciding_player_id)]
+        if _filter_granted_attacks(s, new_ctx, me, foe):
+            _push_granted_followup(s, new_ctx, deciding_player_id, after_idx, insert_at)
+
+    # The base-damage riders read the pre-attack snapshot.
+    if base_damage_before is not None:
+        hit_a_base = any(
+            (ps.base_instance.damage if ps.base_instance is not None else 0)
+            > base_damage_before.get(ps.player_id, 0)
+            for ps in s.players)
+        # Stay on Target JTL_177: "When this unit deals damage to a base: Draw."
+        if hit_a_base and gctx.get("draw_if_base_damaged"):
+            _draw_cards(s, s.player_by_id(active_ps.player_id), 1)
+        # "…if that unit damaged a base, defeat that unit" (Flash the Vents LAW_205).
+        if hit_a_base and gctx.get("defeat_attacker_if_base_damaged"):
+            from swu.abilities.resolver import _apply_defeat_unit
+            if _find_in_arenas(s.player_by_id(active_ps.player_id), attacker_id) is not None:
+                _apply_defeat_unit(s, attacker_id)
+        # Rash Action ASH_162: "If this unit dealt combat damage to an opponent's
+        # base, that opponent discards a card" — a card of THEIR choice.
+        if gctx.get("opponent_discard_if_base_damaged"):
+            from swu.engine.actions import push_discard_of_choice
+            for ps in s.players:
+                if ps.player_id == active_ps.player_id or ps.base_instance is None:
+                    continue
+                if ps.base_instance.damage <= base_damage_before.get(ps.player_id, 0):
+                    continue
+                push_discard_of_choice(
+                    s, ps.player_id, 1, source_id=str(gctx.get("source_id") or ""),
+                    after_idx=1 - s.player_index(ps.player_id))
+
+    # Heroic Sacrifice SOR_150 etc.: "then defeat it" once the attack settles.
+    if gctx.get("then_defeat_attacker"):
+        from swu.abilities.resolver import _apply_defeat_unit
+        if _find_in_arenas(s.player_by_id(active_ps.player_id), attacker_id) is not None:
+            _apply_defeat_unit(s, attacker_id)
 
 
 # ── apply convenience wrapper ─────────────────────────────────────────────────
@@ -2216,6 +2271,19 @@ class ContinueAttack(Action):
         active_ps = s.player_by_id(top.context["active_player_id"])
         inactive_ps = s.players[1 - s.player_index(top.context["active_player_id"])]
         attacker = _find_in_arenas(active_ps, self.attacker_id)
+        # Riders of a granted attack that paused here (``_stash_granted_riders``),
+        # applied once the attack settles; follow-ups go beneath anything the rest
+        # of the attack pushes.
+        stashed = top.context.get("granted")
+        depth0 = len(s.pending_decisions)
+
+        def _riders() -> None:
+            if stashed and attacker is not None:
+                _apply_granted_riders(
+                    s, stashed["context"], stashed["deciding_player_id"],
+                    stashed["after_resolve_player_index"], self.attacker_id,
+                    attacker, active_ps, stashed.get("base_damage_before"), depth0)
+
         if attacker is None:
             # The attack fizzles (a pre-attack trigger removed the attacker from
             # play), but it still ended — clean up its this-attack modifiers so
@@ -2237,7 +2305,8 @@ class ContinueAttack(Action):
                 # Both co-defenders left play during pre-attack triggers — cleanup.
                 _clear_this_attack_combat_flags(attacker)
                 _expire_modifiers(s, "this_attack")
-                if not s.is_terminal():
+                _riders()
+                if not s.is_terminal() and not s.pending_decisions:
                     _switch_active_player(s)
                 return s
             _resolve_two_unit_combat_step2(s, active_ps, inactive_ps, attacker, defenders)
@@ -2249,11 +2318,13 @@ class ContinueAttack(Action):
                 # Defender left play during pre-attack triggers — same cleanup.
                 _clear_this_attack_combat_flags(attacker)
                 _expire_modifiers(s, "this_attack")
-                if not s.is_terminal():
+                _riders()
+                if not s.is_terminal() and not s.pending_decisions:
                     _switch_active_player(s)
                 return s
             _resolve_unit_combat_step2(s, active_ps, inactive_ps, attacker, defender)
 
+        _riders()
         if not s.is_terminal() and not s.pending_decisions:
             _switch_active_player(s)
         return s
@@ -2480,6 +2551,8 @@ def push_granted_attack(
     return_defender_upgrades: bool = False,
     excess_damage_to_unit: bool = False,
     then_attack_cheaper: bool = False,
+    then_attack_again: bool = False,
+    bonus_if_shares_trait_with_friendly: bool = False,
     defender_suppress_abilities: bool = False,
     borrow_abilities: bool = False,
     borrow_lender_id: Optional[str] = None,
@@ -2547,12 +2620,10 @@ def push_granted_attack(
         After each granted attack resolves, the decision is re-pushed so the
         controller may attack with another (not-yet-attacked) unit, until they
         decline or no eligible unit remains.  Combine with ``optional`` so a
-        decline is always available to stop the loop.  LIMITATION: the re-push
-        happens at the end of AttackWithUnit; if a single attack itself requires a
-        mid-attack decision (a ``pre_attack`` continuation from an OnAttack trigger
-        that needs a choice), control returns through ContinueAttack instead and
-        the loop ends early.  No shipped repeat-grant card has a choice-requiring
-        OnAttack trigger on its other units, so this edge is not exercised.
+        decline is always available to stop the loop.  The re-push happens when the
+        attack SETTLES (``_apply_granted_riders``) — also after a ``pre_attack``
+        pause, via ContinueAttack — and lands beneath any decision the attack
+        itself left pending.
     repeat_max
         Caps ``repeat`` at N attacks — "Attack with up to N units (one at a time)"
         (Headhunting SHD_145).  None (the default) is the unbounded "any number"
@@ -2573,10 +2644,8 @@ def push_granted_attack(
         combat damage: Defeat it.'").  A +2/+0 attacker always has power ≥ 2 so it
         always deals combat damage to its target — the "when it deals combat
         damage" clause is therefore treated as unconditional.  If combat already
-        defeated the attacker, this is a clean no-op.  LIMITATION: like ``repeat``,
-        this fires only on the no-continuation settle path; an attacker whose own
-        OnAttack trigger needs a mid-attack choice (a ``pre_attack`` continuation)
-        is not self-defeated — no shipped card grants this rider to such a unit.
+        defeated the attacker, this is a clean no-op.  Applied at the settle point,
+        so also after a ``pre_attack`` pause (``_apply_granted_riders``).
 
     cross_arena
         For THIS granted attack, let the chosen attacker reach enemy units in the
@@ -2614,8 +2683,8 @@ def push_granted_attack(
         Attack Ends: If this unit dealt combat damage to an opponent's base, that
         opponent discards a card.'" (Rash Action ASH_162).  Shares
         ``draw_if_base_damaged``'s snapshot and settle point, but re-reads it per
-        player so only a damaged OPPONENT's base counts; the discard is the standing
-        first-card simplification.
+        player so only a damaged OPPONENT's base counts; that opponent picks the
+        card (``push_discard_of_choice``).
     defeat_attacker_if_base_damaged
         Defeat the attacker after the attack settles, but ONLY if it put damage on a
         base — "After completing this attack, if that unit damaged a base, defeat that
@@ -2634,6 +2703,12 @@ def push_granted_attack(
         attacker).  DOCUMENTED NARROWING: constant and activated abilities are not
         borrowed — they are read by scans keyed on the card in the arena, and only
         the keyword and trigger layers have a per-instance seam a duration can ride.
+    then_attack_again
+        After the attack settles, the same unit attacks again, even if exhausted,
+        and not a base (Log Trap HMW_149) — a one-shot re-push pinned to it.
+    bonus_if_shares_trait_with_friendly
+        The stat bonus applies only if the chosen attacker shares a trait with
+        another friendly unit (Familiar Strategem HMW_266).
     swap_raid_restore
         "For this attack, replace any Raid it has or gains with Restore, or vice
         versa" (Asajj Ventress HMW_1) — a ``raid_restore_swap`` this_attack modifier
@@ -2669,6 +2744,12 @@ def push_granted_attack(
             # (Colonel Yularen SEC_6) — a one-shot follow-up whose cost cap is read
             # off the unit that just attacked, resolved at the AttackWithUnit site.
             "then_attack_cheaper": then_attack_cheaper,
+            # "Then attack with it again, even if it's exhausted.  It can't attack
+            # bases for the second attack" (Log Trap HMW_149).
+            "then_attack_again": then_attack_again,
+            # "If it shares a Trait with another friendly unit, it gets +2/+0 for
+            # this attack" (Familiar Strategem HMW_266).
+            "bonus_if_shares_trait_with_friendly": bonus_if_shares_trait_with_friendly,
             "allow_exhausted": allow_exhausted,
             "no_base": no_base,
             "exclude_source": exclude_source,
@@ -3002,9 +3083,16 @@ class UseAmbush(Action):
         defender = _find_in_arenas(enemy_ps, self.target_id)
         if attacker is None:
             raise IllegalActionError(f"Ambush attacker {self.attacker_id} not in play")
-        if defender is None:
+        # "Friendly units can attack bases while using Ambush" (Fett's Firespray
+        # HMW_53): the target may be the enemy BASE, offered by _ambush_actions.
+        base = enemy_ps.base_instance
+        at_base = (defender is None and base is not None
+                   and self.target_id == base.instance_id)
+        if at_base and not _ambush_can_attack_bases(s, deciding_ps):
+            raise IllegalActionError("Ambush can't attack a base")
+        if defender is None and not at_base:
             raise IllegalActionError(f"Ambush target {self.target_id} not in play")
-        if attacker.zone != defender.zone:
+        if defender is not None and attacker.zone != defender.zone:
             raise IllegalActionError("Ambush target not in same arena")
 
         # Consume the Ambush decision BEFORE resolving combat (an Ambush unit
@@ -3028,14 +3116,18 @@ class UseAmbush(Action):
         # attack is declared, so the debuff is applied here as a this_attack stats
         # modifier on the defender (expiring with the attack, like Jyn Erso SOR_18's
         # granted-attack defender debuff).
-        _apply_ambush_defender_debuff(s, deciding_ps, attacker, defender)
+        if defender is not None:
+            _apply_ambush_defender_debuff(s, deciding_ps, attacker, defender)
         # "While attacking using Ambush, this unit gets +2/+0" (Heroic Purrgil
         # ASH_207) — the attacker-side mirror, read off the attacker alone.
         _apply_ambush_attacker_bonus(s, attacker)
 
-        # Resolve the attack (unit vs unit only — never base for Ambush)
-        needs_continuation = _resolve_unit_combat(
-            s, deciding_ps, enemy_ps, attacker, defender)
+        # Resolve the attack — a unit, or (HMW_53) the enemy base.
+        if defender is None:   # at_base (validated above)
+            needs_continuation = _resolve_base_attack(s, deciding_ps, enemy_ps, attacker)
+        else:
+            needs_continuation = _resolve_unit_combat(
+                s, deciding_ps, enemy_ps, attacker, defender)
         if not needs_continuation and not s.is_terminal() and not s.pending_decisions:
             s.active_player_index = top.after_resolve_player_index
         return s
@@ -3130,8 +3222,30 @@ def _ambush_actions(state: GameState, top: PendingDecision) -> list[Action]:
             targets = sentinels
         for tgt in targets:
             acts.append(UseAmbush(unit_id, tgt.instance_id))
+        # Fett's Firespray HMW_53: the enemy base too, unless a Sentinel the unit
+        # can't bypass guards this arena.
+        if (_ambush_can_attack_bases(state, deciding_ps)
+                and (saboteur or not sentinels)
+                and enemy_ps.base_instance is not None
+                and not _cannot_attack_bases(state, unit_ci)):
+            acts.append(UseAmbush(unit_id, enemy_ps.base_instance.instance_id))
     acts.append(DeclineAmbush(top.context["unit_id"]))
     return acts
+
+
+def _ambush_can_attack_bases(state: GameState, ps: PlayerState) -> bool:
+    """True if ``ps`` controls an un-suppressed unit carrying the
+    ``AmbushCanAttackBases`` marker (Fett's Firespray HMW_53)."""
+    from swu.abilities.registry import get_abilities, AmbushCanAttackBases
+    for u in ps.ground_arena + ps.space_arena:
+        if ability_suppressed(state, u):
+            continue
+        sc = getattr(u.card_def, "set_code", None) or ""
+        cn = getattr(u.card_def, "card_number", None) or ""
+        if sc and cn and any(isinstance(sp, AmbushCanAttackBases)
+                             for sp in get_abilities(sc, cn)):
+            return True
+    return False
 
 
 # ── Interactive combat-damage prevention (Queen Amidala SEC_101) ────────────────

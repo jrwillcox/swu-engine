@@ -206,7 +206,8 @@ def compute_power(state: GameState, unit_ci: CardInstance, is_attacking: bool = 
     # ``defender_id`` identifies the current combat defender so a "while defending"
     # source debuffs only the unit attacking it (Lando Calrissian LAW_108).
     base += _constant_ability_power_bonus(state, unit_ci, attacking_unit, defender_id,
-                                          is_defending, attacker_id)
+                                          is_defending, attacker_id,
+                                          is_attacking=is_attacking)
     return max(0, base)
 
 
@@ -236,7 +237,11 @@ def compute_hp(state: GameState, unit_ci: CardInstance) -> int:
             base += mod.value.get("hp", 0)
     # Phase 3: ConstantAbility HP buffs
     base += _constant_ability_hp_bonus(state, unit_ci)
-    return max(1, base)
+    # Floored at 0, not 1: a unit reduced to 0 HP is defeated even with no damage
+    # on it (a Weakness token on a 1-HP unit, HMW; a −2/−2 on an undamaged 2-HP
+    # unit).  ``_hp_lethal`` reads ``damage >= HP``, so 0 HP is lethal.  The old
+    # floor of 1 made every HP debuff unable to kill an undamaged unit.
+    return max(0, base)
 
 
 def _modifier_source_in_play(state: GameState, source_id: str) -> bool:
@@ -275,8 +280,12 @@ def _constant_ability_power_bonus(state: GameState, unit_ci: CardInstance,
                                   attacking_unit: bool = False,
                                   defender_id: Optional[str] = None,
                                   is_defending: bool = False,
-                                  attacker_id: Optional[str] = None) -> int:
+                                  attacker_id: Optional[str] = None,
+                                  is_attacking: bool = False) -> int:
     """Sum all active ConstantAbility power bonuses that apply to unit_ci.
+
+    A ``while_target_attacking`` constant (Blockade Ship HMW_251) contributes only
+    while ``unit_ci`` itself is attacking (``is_attacking``, a unit or a base).
 
     A ``while_attacking_unit`` constant (Moff Gideon SHD_7) contributes its
     StatBonus only when ``unit_ci`` is currently attacking an enemy unit.  A
@@ -347,6 +356,8 @@ def _constant_ability_power_bonus(state: GameState, unit_ci: CardInstance,
                         or source_ci.instance_id != defender_id):
                     continue
                 if getattr(spec, "while_target_defending", False) and not is_defending:
+                    continue
+                if getattr(spec, "while_target_attacking", False) and not is_attacking:
                     continue
                 if getattr(spec, "while_attacking", False) and (
                         attacker_id is None
@@ -591,6 +602,25 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
         # 97th Legion SOR_118: "+1/+1 for each resource you control."  Count every
         # resource in the buff controller's resource row (available + spent).
         return len(state.player_by_id(source_ci.owner_id).resources)
+    if count_src == "controller_exhausted_resources":
+        # Chewbacca HMW_117: "This unit gains Raid 1 for each exhausted resource you
+        # control" (read through ``KeywordGrant.value_count``'s fallback).
+        return sum(1 for r in state.player_by_id(source_ci.owner_id).resources
+                   if r.exhausted)
+    if count_src.startswith("controller_resources_per_"):
+        # Wroshyr Rebel HMW_133: "+1/+0 for every 2 resources you control" — the
+        # divisor rides in the string (the ``controller_base_damage_per_`` shape).
+        per = int(count_src.rsplit("_", 1)[1] or 1)
+        n = len(state.player_by_id(source_ci.owner_id).resources)
+        return (n // per) if per > 0 else 0
+    if count_src == "target_raid":
+        # The Chieftain HMW_212: "While a friendly Tusken unit is defending, it gets
+        # +1/+0 for each Raid it has" — read off the BUFFED unit (the
+        # ``target_damage`` shape).  Raid never reads power, so no re-entry.
+        if target_ci is None:
+            return 0
+        from swu.engine.keywords import keyword_value, Keyword
+        return keyword_value(state, target_ci, Keyword.RAID)
     if count_src == "controller_ready_token_units":
         # Governor Pryce SEC_11 (deployed): "This unit gets +1/+0 for each READY
         # friendly TOKEN unit."  Token units are the ones with no printed cost that
@@ -736,6 +766,8 @@ def _constant_ability_hp_bonus(state: GameState, unit_ci: CardInstance) -> int:
                     continue  # combat-only (Marrok's Fiend Fighter ASH_241 is +2/+0)
                 if getattr(spec, "while_defending", False):
                     continue
+                if getattr(spec, "while_target_attacking", False):
+                    continue  # combat-only (Blockade Ship HMW_251 is −1/−0)
                 if spec.condition and not spec.condition.evaluate(state, source_ci):
                     continue
                 from swu.abilities.resolver import _spec_matches_ci
