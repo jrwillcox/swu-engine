@@ -238,6 +238,10 @@ class ExplorerCard(BaseModel):
     arenas: list[str] = []
     status: str                   # classifier label (implemented / text-bearing / …)
     playable: bool                # "Available to play" in the engine
+    # Deck-builder copy cap: 3, or the card's printed override (Swarming Vulture
+    # Droid = 15). Without this field the response dropped it and the Explorer
+    # fell back to 3 for every card.
+    deckbuild_max_copies: int = 3
     decks: list[str] = []         # catalog deck keys this card appears in
     image_url: Optional[str] = None
     # Card back (Leaders / double-sided Bases); null for single-faced cards.
