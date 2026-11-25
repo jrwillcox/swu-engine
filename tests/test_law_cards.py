@@ -1242,13 +1242,15 @@ class TestBibFortuna:
 
 class TestFettsFirespray:
     def _fire_attack_defeats_unit(self, state, attacker_ci):
+        """The "When Attack Ends" fire of an attack whose defender was defeated."""
         from swu.abilities.resolver import fire_triggered_abilities
         return fire_triggered_abilities(
             state, None, after_all_player_idx=0,
-            event_ctx={"attack_defeated_unit": attacker_ci.instance_id})
+            event_ctx={"attack_ended_survivor": attacker_ci.instance_id,
+                       "attack_ended_defender_defeated": "P1_victim"})
 
     def test_law_252_creates_credit_when_it_defeats_the_defender(self, repo):
-        """OnAttackDefeatsUnit (Fett's Firespray defeated the defender) -> credit."""
+        """When Attack Ends with the defender defeated -> credit."""
         fett = _get_card(repo, "LAW", "252")
         state = _make_state()
         fett_ci = _place(state, "P0", fett, "space")
@@ -7824,9 +7826,12 @@ class TestPatientHunterLAW73:
         state = _law14_choose(state, prey.instance_id)
         locked = _find_instance(state, prey.instance_id)
         assert _experience_count(locked) == 1
-        assert locked.cannot_ready_this_round is True
+        assert prey.instance_id in state.game_memory.skip_next_ready
         _ready_all_cards(state)
         assert _find_instance(state, prey.instance_id).exhausted is True
+        # Max Rebo's additional regroup: "during THIS regroup phase" is over.
+        _ready_all_cards(state)
+        assert _find_instance(state, prey.instance_id).exhausted is False
 
     def test_LAW_73_declining_the_may_gives_no_token_and_no_lock(self, repo):
         from swu.engine.actions import apply, legal_actions as _legal
@@ -9094,13 +9099,15 @@ class TestTearThisShipApartLAW66:
         assert len(p1.resources) == p1_res_before
         assert p1.resources[-1].exhausted
 
-    def test_LAW_66_offers_no_non_unit_resource(self, repo):
+    def test_LAW_66_offers_a_non_unit_resource_too(self, repo):
+        """"You may play 1 of those cards" — any card, not only units."""
         from swu.engine.actions import legal_actions, PlayFromHand
         state = _make_state()
-        self._resource(state, "P1", _get_card(repo, "SOR", "76"))   # an Event
+        evt = self._resource(state, "P1", _get_card(repo, "SOR", "76"))   # an Event
         _give_resources(state, "P0", 20)
         state, _evt = _play_event_from_hand(state, repo, "LAW", "66")
-        assert not [a for a in legal_actions(state) if isinstance(a, PlayFromHand)]
+        offered = [a for a in legal_actions(state) if isinstance(a, PlayFromHand)]
+        assert [a.instance_id for a in offered] == [evt.instance_id]
 
 
 class TestTheMaxReboBandLAW71:

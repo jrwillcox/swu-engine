@@ -649,16 +649,17 @@ class TestKouhunAssassinationTS26_33:
 
     def test_TS26_33_discarding_applies_the_debuff(self, repo):
         from swu.engine.actions import (
-            legal_actions, apply, ChooseTarget, DiscardRandomCard, compute_power)
+            legal_actions, apply, ChooseTarget, DiscardChosenCard, compute_power)
         state = _make_state()
         victim = _place(state, "P1", _get_card(repo, "SOR", "46"), "ground")  # 3/7
-        _put_in_hand(state, "P1", _get_card(repo, "SOR", "128"))
+        card = _put_in_hand(state, "P1", _get_card(repo, "SOR", "128"))
         state, _ev = _play_event_from_hand(state, repo, "TS26", "33")
         state = apply(state, ChooseTarget(victim.instance_id))
         assert state.pending_decisions[-1].kind == "may_discard"
         assert state.pending_decisions[-1].deciding_player_id == "P1"
         state = apply(state, next(a for a in legal_actions(state)
-                                  if isinstance(a, DiscardRandomCard)))
+                                  if isinstance(a, DiscardChosenCard)
+                                  and a.instance_id == card.instance_id))
         # compute_power floors at 0, so assert the modifier itself as well.
         assert any(m.target_instance_id == victim.instance_id and m.kind == "stats"
                    and m.value.get("power") == -8 and m.value.get("hp") == -8

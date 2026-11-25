@@ -29,6 +29,8 @@ a question with exactly one meaningful answer.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass
 from typing import Optional
@@ -747,8 +749,8 @@ def push_modal(s: GameState, source_ci: CardInstance, modes: list[str], *,
     player and the seat back before the target stage (the say_no SOR_233 /
     let_wookiee_win SHD_205 decider shift).
     """
-    owner_idx = s.player_index(source_ci.owner_id)
-    controller_id = source_ci.owner_id
+    owner_idx = s.player_index(actor_of(s, source_ci))
+    controller_id = actor_of(s, source_ci)
     decider = decider_id or controller_id
     available = [m for m in modes if _modal_mode_targets(s, controller_id, m)]
     if not available:
@@ -785,7 +787,7 @@ def push_let_wookiee_win(s: GameState, source_ci: CardInstance) -> None:
     player for the mode stage; ``ChooseWookieeMode`` shifts control back to the
     controller for the ``ready_attack`` target stage (the opponent_chooses_target
     SHD_246 decider-shift pattern)."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     controller_idx = s.player_index(controller_id)
     opponent_idx = 1 - controller_idx
     opponent_id = s.players[opponent_idx].player_id
@@ -872,16 +874,16 @@ def push_repeated_modal(
     """
     if modes is None:
         modes = ["deal_2_damage", "defeat_upgrade", "opponent_discards"]
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     if not ps.hand:
         return  # nothing to discard → no options → ability does nothing
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="repeated_modal",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "modes": list(modes),
             "max_discards": int(max_discards),
             "stage": "discard",
@@ -895,7 +897,7 @@ def push_repeated_modal(
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="repeated_modal",
     ))
 
@@ -1032,7 +1034,7 @@ def push_choose_modal(
     ``allow_repeat`` — "Choose two.  You may choose the same option more than once"
     (Hunter HMW_35): a chosen option stays offered, and ``pick`` is not capped by
     the number of options."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     owner_idx = s.player_index(controller_id)
     pick = int(pick) if allow_repeat else min(int(pick), len(option_indices))
     if pick <= 0:

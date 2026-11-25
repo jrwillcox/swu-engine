@@ -4355,12 +4355,16 @@ class TestForceThrowSOR167:
         cost = discard_def.cost
         state.players[1].hand.append(CardInstance("p1_disc", discard_def, "P1", Zone.HAND))
 
+        state.players[1].hand.append(  # a second card: the opponent CHOOSES
+            CardInstance("p1_keep", _get_card(repo, "SOR", "128"), "P1", Zone.HAND))
+
         state, _ = _play_event_from_hand(state, repo, "SOR", "167")
-        # Auto-resolve runs the mandatory discard and arms the payoff.
-        state = _auto_resolve(state)
-        assert not state.players[1].hand, "opponent discarded their card"
+        assert state.pending_decisions[-1].deciding_player_id == "P1"
+        state = _resolve_discards(state, pick_ids=("p1_disc",))
+        assert [c.instance_id for c in state.players[1].hand] == ["p1_keep"]
         # Payoff armed (Force unit + positive cost) -> deal that cost to a chosen unit.
-        state = _choose(state, target.instance_id)
+        from swu.engine.actions import apply, SelectDamageTarget
+        state = apply(state, SelectDamageTarget(target.instance_id))
         assert _find_instance(state, target.instance_id).damage == cost, "cost-many damage"
 
     def test_SOR_167_no_payoff_without_a_force_unit(self, repo):
@@ -4370,8 +4374,7 @@ class TestForceThrowSOR167:
         state.players[1].hand.append(
             CardInstance("p1_disc2", _get_card(repo, "SOR", "134"), "P1", Zone.HAND))
         state, _ = _play_event_from_hand(state, repo, "SOR", "167")
-        state = _auto_resolve(state)  # mandatory discard runs; payoff not armed
-        assert not state.players[1].hand, "still discards (mandatory)"
+        assert not state.players[1].hand, "still discards (mandatory, no choice)"
         assert not state.pending_decisions, "no Force unit -> no damage prompt"
         assert _find_instance(state, target.instance_id).damage == 0
 
@@ -4905,6 +4908,8 @@ class TestForcedSurrender_SOR_175:
         opp_before = len(state.player_by_id("P1").hand)
         opp_disc_before = len(state.player_by_id("P1").discard)
         state, _evt = _play_event_from_hand(state, repo, "SOR", "175")
+        assert state.pending_decisions[-1].deciding_player_id == "P1", "their choice"
+        state = _resolve_discards(state)
         assert len(state.player_by_id("P1").hand) == opp_before - 2
         assert len(state.player_by_id("P1").discard) == opp_disc_before + 2
 
@@ -5068,10 +5073,17 @@ class TestSparkOfRebellion_SOR_200:
         for i in range(3):
             p1.hand.append(CardInstance(f"P1_h{i}", _get_card(repo, "SOR", "128"),
                                         "P1", Zone.HAND))
+        p1.hand.append(CardInstance("P1_evt", _get_card(repo, "SOR", "74"), "P1",
+                                    Zone.HAND))
         state, _evt = _play_event_from_hand(state, repo, "SOR", "200")
-        assert state.pending_decisions[-1].kind == "look_hand"
-        assert len(state.player_by_id("P1").hand) == 2, "one card discarded from opponent's hand"
-        assert len(state.player_by_id("P1").discard) == 1
+        top = state.pending_decisions[-1]
+        assert top.kind == "name_and_discard" and top.deciding_player_id == "P0"
+        assert len(top.context["revealed_hand"]) == 4, "the whole hand is shown"
+        from swu.engine.actions import apply, NameAndDiscard
+        name = _get_card(repo, "SOR", "74").display_name
+        state = apply(state, NameAndDiscard(name))           # the controller's pick
+        assert len(state.player_by_id("P1").hand) == 3
+        assert [c.instance_id for c in state.player_by_id("P1").discard] == ["P1_evt"]
 
 
 class TestBodhiRook_SOR_201:
@@ -5084,6 +5096,11 @@ class TestBodhiRook_SOR_201:
         event_card = CardInstance("P1_evt", _get_card(repo, "SOR", "74"), "P1", Zone.HAND)
         p1.hand.extend([unit_card, event_card])  # unit first, so a naive first-card would miss
         state = _fire_when_played(state, bodhi)
+        top = state.pending_decisions[-1]
+        assert top.kind == "name_and_discard"
+        assert top.context["eligible_names"] == [event_card.card_def.display_name]
+        from swu.engine.actions import apply, NameAndDiscard
+        state = apply(state, NameAndDiscard(event_card.card_def.display_name))
         remaining = {c.instance_id for c in state.player_by_id("P1").hand}
         assert unit_card.instance_id in remaining, "the unit is NOT discarded"
         assert event_card.instance_id not in remaining, "the non-unit event is discarded"

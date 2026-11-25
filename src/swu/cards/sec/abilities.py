@@ -15,6 +15,8 @@ Group ``leia-organa:03`` — Combat tricks, buffs & tempo:
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from swu.abilities.registry import (
     card_ability,
     TriggerAbility, ActivatedAbility, EventAbility, ConstantAbility,
@@ -28,8 +30,7 @@ from swu.abilities.registry import (
     InteractiveDamagePrevention,
     Heal, ExhaustSelf, ExhaustCard, ReadyCard, DiscardFromHand, PayResources,
     ConditionalEffect, GrantedAbility, AuraGrantedAbility,
-    WhenFriendlyUnitDealtCombatDamage,
-    WhenDealtCombatDamage, DamagePrevention, DamageAmplification,
+    WhenDamageDealt, DamagePrevention, DamageAmplification,
     WhenYouTakeInitiative,
     CannotPlayFromHand, IgnoreAspectPenaltyForPlays, DiscardCardCost, WhenYouPlayCard,
     SuppressHostAbilities, StandingPlayDiscount, CostReduction, UnitsPayCosts,
@@ -39,6 +40,7 @@ from swu.abilities.registry import (
     TargetSpec, Duration, SELF, EACH_FRIENDLY, EACH_ENEMY, EACH_IN_PLAY,
     ConditionCheck, Condition,
 )
+from swu.engine.discard_payoffs import discard_payoff
 
 
 @card_ability("SEC", "93")
@@ -236,23 +238,16 @@ def _first_light():
 #    reuse; siblings aliased in swu.cards.reprints.REPRINT_ALIASES. ─────────────
 
 def _bail_organa_on_attack(state, source_ci, target_id, event_ctx):
-    """Discard the first card from the controller's hand (the established
-    first-card discard simplification, K-2SO SOR_145 / Merrin LOF_160); if a card
-    was discarded, create a Spy token.  Cost and payoff are bound so "If you do"
+    """Discard a card of the controller's choice; if a card was discarded, the
+    ``create_token_if_discarded`` payoff creates a Spy token, so "If you do"
     holds."""
-    ps = state.player_by_id(source_ci.owner_id)
-    if not ps.hand:
-        return state  # cannot discard → "if you do" not satisfied → no token
-    from swu.engine.state import Zone
-    card = ps.hand.pop(0)
-    card.zone = Zone.DISCARD
-    ps.discard.append(card)
-    # Record the "discard 1+ cards from your hand" observer instruction (Padmé
-    # Amidala SEC_16) — this bespoke discard doesn't route through the
-    # DiscardFromHand effect arm, so record it explicitly.
-    from swu.engine.actions import _create_token_units, record_hand_discard
-    record_hand_discard(state, ps.player_id)
-    _create_token_units(state, ps, "Spy", 1)
+    from swu.engine.actions import push_discard_of_choice
+    push_discard_of_choice(state, actor_of(state, source_ci), 1,
+                           source_id=source_ci.instance_id,
+                           after_idx=1 - state.player_index(actor_of(state, source_ci)),
+                           payoff="create_token_if_discarded",
+                           payoff_args={"player_id": actor_of(state, source_ci),
+                                        "token": "Spy"})
     return state
 
 
@@ -265,8 +260,7 @@ def _bail_organa():
     ``CONTROLLER_HAS_CARD_IN_HAND`` so it is not offered with an empty hand (the
     discard cost cannot be paid).  One no-target ``CustomEffect`` discards a card
     then creates a Spy token (the create-token-unit primitive), bound so "If you
-    do" holds.  DEVIATION (documented): the discard uses the established first-card
-    simplification — the controller doesn't pick *which* card."""
+    do" holds.  The controller picks the card."""
     return TriggerAbility(
         trigger=OnAttack(),
         optional=True,
@@ -481,7 +475,7 @@ def _lando_capture(state, source_ci, target_id, event_ctx):
     if not (enemy_id and target_id):
         return state
     from swu.engine.actions import _apply_capture
-    ctrl = state.player_by_id(source_ci.owner_id)
+    ctrl = state.player_by_id(actor_of(state, source_ci))
     if ctrl.base_instance is not None:
         ctrl.base_instance.damage = max(0, ctrl.base_instance.damage - 6)
     _apply_capture(state, enemy_id, target_id)
@@ -523,7 +517,7 @@ def _palpatine_spies(state, source_ci, target_id, event_ctx):
     the create-token-unit primitive (ahsoka-tano:05), and the Sentinel grant is a
     ``this_phase`` ``keyword_grant`` Modifier on each created token."""
     from swu.cards.models import Leader
-    ctrl = state.player_by_id(source_ci.owner_id)
+    ctrl = state.player_by_id(actor_of(state, source_ci))
     has_leader_unit = any(
         isinstance(u.card_def, Leader)
         for u in ctrl.ground_arena + ctrl.space_arena
@@ -568,7 +562,7 @@ def _darth_traya_ready_leader(state, source_ci, target_id, event_ctx):
     trigger's condition already guarantees such a leader exists and is exhausted;
     readying enemy leaders is never worth it, so only the controller's is readied
     (the meaningful case in 2-player)."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     ldr = ps.leader_instance
     if ldr is not None and not getattr(ldr, "deployed", False):
         ldr.exhausted = False
@@ -609,7 +603,7 @@ def _oppression_breeds_rebellion_sec_158():
         if ConditionCheck(
                 Condition.CONTROLLER_FRIENDLY_ATTACKER_DEFEATED_THIS_PHASE
         ).evaluate(state, source_ci):
-            _draw_cards(state, state.player_by_id(source_ci.owner_id), 3)
+            _draw_cards(state, state.player_by_id(actor_of(state, source_ci)), 3)
         return state
     return EventAbility(effects=[CustomEffect(fn=_fn)])
 
@@ -623,8 +617,8 @@ def _darth_sion_when_played(state, source_ci, target_id, event_ctx):
     of every unit defeated this round == this phase), so a scaling CustomEffect
     rather than a fixed-count GiveToken (the Leia LAW_10 deploy-tokens pattern)."""
     from swu.engine.tokens import attach_token
-    controller = state.player_by_id(source_ci.owner_id)
-    enemy_id = state.players[1 - state.player_index(source_ci.owner_id)].player_id
+    controller = state.player_by_id(actor_of(state, source_ci))
+    enemy_id = state.players[1 - state.player_index(actor_of(state, source_ci))].player_id
     n = state.game_memory.defeated_controllers_this_round.count(enemy_id)
     for _ in range(n):
         attach_token(state, controller, source_ci, "Experience")
@@ -748,8 +742,8 @@ def _syril_karn():
     (``TargetSpec`` enemy unit — you never damage your own; a documented
     simplification of "a unit"), then pushes the ``disclose`` decision.  On a
     successful disclose the payoff hands a ``may_discard`` (else-damage) decision to
-    that unit's controller — discard a card (first-card simplification) to prevent
-    the 2 damage, or take it.  With no enemy unit the mandatory targeted effect
+    that unit's controller — discard a card of their choice to prevent the 2
+    damage, or take it.  With no enemy unit the mandatory targeted effect
     fizzles (no prompt), so nothing is disclosed."""
     return TriggerAbility(
         trigger=OnAttack(),
@@ -1459,8 +1453,8 @@ def _retaliation():
 
     A plain mandatory ``EventAbility`` with one ``DefeatUnit`` narrowed by the new
     ``dealt_damage_to_base_this_phase`` predicate (backed by
-    ``game_memory.units_dealt_base_damage_this_round`` — units that dealt combat
-    damage by attacking a base this round; "this round" == "this phase").  The
+    ``game_memory.units_dealt_base_damage_this_round`` — units that dealt damage to a
+    base this round, in combat or by an ability; "this round" == "this phase").  The
     target is non-fixed (the controller picks among the eligible units);
     mandatory-if-able, so with no such unit it fizzles cleanly with no prompt."""
     return EventAbility(effects=[
@@ -1567,16 +1561,17 @@ def _the_chancellors_shuttle():
 
 def _cantwell_disclose(state, source_ci, target_id, event_ctx):
     """Cantwell Arrestor Cruiser SEC_37 payoff: pick an enemy unit up front, then
-    disclose Vigilance×2 + Villainy → exhaust that unit and keep it tapped (the
-    ``exhaust_unit`` disclose payoff with ``lock_round``).  ``target_id`` is None
-    when there is no enemy unit → no disclose (nothing to exhaust)."""
+    disclose Vigilance×2 + Villainy → exhaust that unit and keep it tapped while
+    the Cruiser is in play (the ``exhaust_unit`` disclose payoff with
+    ``lock_while_source_in_play``).  ``target_id`` is None when there is no enemy
+    unit → no disclose (nothing to exhaust)."""
     from swu.engine.actions import push_disclose
     if target_id is None:
         return state
     push_disclose(
         state, source_ci, ["Vigilance", "Vigilance", "Villainy"],
         payoff="exhaust_unit",
-        payoff_args={"target_id": target_id, "lock_round": True},
+        payoff_args={"target_id": target_id, "lock_while_source_in_play": True},
     )
     return state
 
@@ -1593,12 +1588,9 @@ def _cantwell_arrestor_cruiser():
     enemy unit", the Syril Karn SEC_133 convention), then pushes the ``disclose``
     decision — the "you may" lives in the disclose Decline, so no double-``optional``.
     On a successful disclose the ``exhaust_unit`` payoff exhausts the chosen unit and
-    flags it ``cannot_ready_this_round``.  DEVIATION (documented): "can't ready while
-    this unit is in play" is approximated as "can't ready this round" via the existing
-    ``cannot_ready_this_round`` flag (the faithful persistent while-in-play lock would
-    need a new ready-lock modifier kind, out of scope for this no-new-primitive group).
-    With no enemy unit the mandatory targeted effect fizzles (no prompt), so nothing
-    is disclosed."""
+    lands a ``permanent`` ``ready_lock`` modifier sourced by the Cruiser, so the unit
+    can't ready while the Cruiser is in play.  With no enemy unit the mandatory
+    targeted effect fizzles (no prompt), so nothing is disclosed."""
     return TriggerAbility(
         trigger=WhenPlayed(),
         effects=[CustomEffect(
@@ -1816,7 +1808,7 @@ def _sly_moore_debuff(state, source_ci, target_id, event_ctx):
     per-unit-snapshot pattern (each enemy unit in play gets its own modifier),
     gated to base attacks."""
     from swu.engine.state import Modifier
-    enemy = state.players[1 - state.player_index(source_ci.owner_id)]
+    enemy = state.players[1 - state.player_index(actor_of(state, source_ci))]
     for u in enemy.ground_arena + enemy.space_arena:
         state.modifiers.append(Modifier(
             modifier_id=state.alloc_modifier_id(),
@@ -1857,7 +1849,7 @@ def _isb_shuttle_token(state, source_ci, target_id, event_ctx):
     unit defeated this round == this phase — the Darth Sion SEC_35 / Oppression
     Breeds Rebellion SEC_158 precedent): the controller's own id present means a
     friendly unit died.  The Spy token is the create-token-unit primitive."""
-    ctrl = state.player_by_id(source_ci.owner_id)
+    ctrl = state.player_by_id(actor_of(state, source_ci))
     if ctrl.player_id in state.game_memory.defeated_controllers_this_round:
         from swu.engine.actions import _create_token_units
         _create_token_units(state, ctrl, "Spy", 1)
@@ -1944,15 +1936,13 @@ def _jabba_sec2_deal(state, source_ci, target_id, event_ctx):
 
 
 def _jabba_sec2_retaliate(state, source_ci, target_id, event_ctx):
-    """Jabba SEC_2 deployed: the friendly unit that was just dealt combat damage and
-    survived deals THAT MUCH to the chosen enemy unit, and the round's single use is
-    spent (the Toro Calican SHD_239 ``:trig`` marker — set only here, on resolution,
-    so declining the "you may" does not burn the round's use).
-
-    "Another friendly unit" — a self-hit is dropped here rather than in the trigger
-    filter, because ``WhenFriendlyUnitDealtCombatDamage`` filters only on traits."""
-    dmg_id = event_ctx.get("dealt_combat_damage_to")
-    amount = int(event_ctx.get("combat_damage_amount", 0) or 0)
+    """Jabba SEC_2 deployed: the friendly unit that was just dealt damage (combat or
+    not) and survived deals THAT MUCH to the chosen enemy unit, and the round's single
+    use is spent (the Toro Calican SHD_239 ``:trig`` marker — set only here, on
+    resolution, so declining the "you may" does not burn the round's use)."""
+    dmg = event_ctx.get("damage_event") or {}
+    dmg_id = dmg.get("target_id")
+    amount = int(dmg.get("amount", 0) or 0)
     if target_id is None or not dmg_id or dmg_id == source_ci.instance_id or amount <= 0:
         return state
     res = state.find_instance(dmg_id)
@@ -1977,12 +1967,9 @@ def _jabba_the_hutt_sec():
 
     Deployed: "When another friendly unit is dealt damage and survives: You may have
     that unit deal that much damage to an enemy unit.  Use this ability only once each
-    round."  An optional ``WhenFriendlyUnitDealtCombatDamage`` observer (whose firing
-    site only fires for a unit still in play, so "and survives" is intrinsic), limited
-    by ``SOURCE_ONCE_PER_ROUND_TRIGGER_AVAILABLE``.
-    DEVIATION (documented): the card's rules insert says Jabba triggers on combat AND
-    non-combat damage; the observer trigger available today covers COMBAT damage only,
-    so ability/indirect damage to a friendly unit does not offer the retaliation."""
+    round."  An optional ``WhenDamageDealt(target="other_friendly", kind="unit",
+    survived=True)`` observer — combat AND non-combat damage, as the card's rules
+    insert says — limited by ``SOURCE_ONCE_PER_ROUND_TRIGGER_AVAILABLE``."""
     return [
         ActivatedAbility(
             costs=[PayResources(1), ExhaustSelf()],
@@ -1998,7 +1985,8 @@ def _jabba_the_hutt_sec():
             title="A friendly damaged unit deals damage to an enemy unit",
         ),
         TriggerAbility(
-            trigger=WhenFriendlyUnitDealtCombatDamage(),
+            trigger=WhenDamageDealt(target="other_friendly", kind="unit",
+                                    survived=True),
             deployed_only=True,
             optional=True,
             condition=ConditionCheck(
@@ -2091,7 +2079,7 @@ def _satine_heal_then_base(state, source_ci, target_id, event_ctx):
         return state
     from swu.abilities.resolver import _apply_heal, _apply_deal_damage
     state = _apply_heal(state, source_ci, target_id, healed)
-    own = state.player_by_id(source_ci.owner_id)
+    own = state.player_by_id(actor_of(state, source_ci))
     if own.base_instance is not None:
         state = _apply_deal_damage(state, own.base_instance.instance_id, healed,
                                    source_ci.card_def.display_name)
@@ -2354,7 +2342,7 @@ def _arihnda_pryce_sacrifice(state, source_ci, target_id, event_ctx):
     state = _apply_defeat_unit(state, target_id)
     name = source_ci.card_def.display_name
     for ps in state.players:
-        if ps.player_id == source_ci.owner_id or ps.base_instance is None:
+        if ps.player_id == actor_of(state, source_ci) or ps.base_instance is None:
             continue
         state = _apply_deal_damage(state, ps.base_instance.instance_id, 4, name)
     return state
@@ -2385,18 +2373,15 @@ def _miraj_scintel():
     friendly unit is attacking a damaged unit, the attacker gains Overwhelm.  When
     Played: You may deal 3 damage to an undamaged unit."
 
-    The grant is a ``while_attacking_unit`` ``ConstantAbility`` over friendly units
-    carrying a ``KeywordGrant("Overwhelm")``.  DEVIATION (documented, and the standing
-    convention for this shape — Moff Gideon SHD_7 / Jango Fett SHD_138): the keyword
-    query layer sees no combat context, so the granted Overwhelm is reported for a
-    friendly unit at all times rather than only while it attacks a DAMAGED unit.
-    Overwhelm only does anything during an attack that defeats a defender, so the
-    visible effect is limited to attacks on an *undamaged* defender."""
+    The grant is a ``while_attacking_damaged_unit`` ``ConstantAbility`` over
+    friendly units carrying a ``KeywordGrant("Overwhelm")``.  The keyword layer
+    counts it only for the attacker of the attack in progress, and only when the
+    defender was damaged before combat damage (``keywords.attack_context``)."""
     return [
         ConstantAbility(
             target=TargetSpec(controller="friendly", kind="unit"),
             effects=[KeywordGrant("Overwhelm", 0)],
-            while_attacking_unit=True,
+            while_attacking_damaged_unit=True,
         ),
         TriggerAbility(
             trigger=WhenPlayed(),
@@ -2413,17 +2398,16 @@ def _the_elite_squad():
     Played/When damage is dealt to this unit: You may deal 2 damage to another unique
     unit."
 
-    Two optional triggers sharing one effect.  DEVIATION (documented): the second is a
-    ``WhenDealtCombatDamage`` observer, so it fires on COMBAT damage to this unit but
-    not on ability or indirect damage — the same limit the observer family has carried
-    since Phase-III Dark Trooper SHD_84 (its firing site is the combat pipeline).  The
-    survivor clause is intrinsic there, which is right: a defeated Elite Squad has no
-    ability to use."""
+    Two optional triggers sharing one effect.  The second is the general
+    ``WhenDamageDealt(target="self")`` observer, so combat, ability and indirect damage
+    all trigger it.  It resolves at the settle point, after the attack or ability that
+    dealt the damage, and only while the unit is still in play."""
     hit = DealDamage(2, TargetSpec(controller="any", kind="unit",
                                    predicates=("unique", "not_self")))
     return [
         TriggerAbility(trigger=WhenPlayed(), optional=True, effects=[hit]),
-        TriggerAbility(trigger=WhenDealtCombatDamage(), optional=True, effects=[hit]),
+        TriggerAbility(trigger=WhenDamageDealt(target="self", kind="unit"),
+                       optional=True, effects=[hit]),
     ]
 
 
@@ -2503,7 +2487,7 @@ def _valiant_commando_dive(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_defeat_unit, _apply_deal_damage
     victim = None
     for ps in state.players:
-        if ps.player_id != source_ci.owner_id and ps.base_instance is not None:
+        if ps.player_id != actor_of(state, source_ci) and ps.base_instance is not None:
             victim = ps.base_instance.instance_id
     state = _apply_defeat_unit(state, source_ci.instance_id)
     if victim is not None:
@@ -2581,7 +2565,7 @@ def _nemik_manifesto_burn(state, source_ci, target_id, event_ctx):
     is granted to it), which has already left play when this resolves — so every
     surviving friendly Rebel unit is "another"."""
     from swu.engine.traits import get_traits
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = sum(1 for u in ps.ground_arena + ps.space_arena
             if u.instance_id != source_ci.instance_id
             and "Rebel" in get_traits(state, u))
@@ -2633,7 +2617,7 @@ def _crosshair_friendly_fire(state, source_ci, target_id, event_ctx):
     state = _apply_deal_damage(state, target_id, 1, name,
                                dealer_id=source_ci.instance_id)
     for ps in state.players:
-        if ps.player_id != source_ci.owner_id and ps.base_instance is not None:
+        if ps.player_id != actor_of(state, source_ci) and ps.base_instance is not None:
             state = _apply_deal_damage(state, ps.base_instance.instance_id, 2,
                                        name, dealer_id=source_ci.instance_id)
     return state
@@ -2823,7 +2807,7 @@ def _lets_call_it_war_first(state, source_ci, target_id, event_ctx):
     # ConditionalEffect, because a ConditionalEffect cannot hold a TARGETED
     # sub-effect: without the initiative we simply do not stamp prior_target_id, so
     # the follow-up requires_prior_target finds no candidates and fizzles silently.
-    if state.initiative_holder == state.player_index(source_ci.owner_id):
+    if state.initiative_holder == state.player_index(actor_of(state, source_ci)):
         event_ctx["same_arena"] = ("space" if unit.zone == Zone.SPACE_ARENA
                                   else "ground")
         event_ctx["prior_target_id"] = target_id
@@ -2923,7 +2907,7 @@ def _elia_kane_has_enemy_resource(state, source_ci, event_ctx):
     may defeat 1 of them" when the opponent actually controls a resource (the
     Shadow Caster JTL_169 ``available_fn`` seam — a non-targeted CustomEffect is
     otherwise assumed to always do something)."""
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     return bool(opp.resources)
 
 
@@ -2935,7 +2919,7 @@ def _elia_kane_defeat_resource(state, source_ci, target_id, event_ctx):
     payoff live in one fn so "If you do" holds (nothing is ramped when there was no
     resource to defeat)."""
     from swu.engine.actions import _fire_defeat_own_resource, _resource_top_of_deck
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     if not opp.resources:
         return state
     _fire_defeat_own_resource(state, opp.player_id)
@@ -3038,7 +3022,7 @@ def _clandestine_connections_pay(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import _exhaust_resources
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if sum(1 for r in ps.resources if not r.exhausted) < 2:
         return state
     _exhaust_resources(ps, 2)
@@ -3089,13 +3073,13 @@ def _sabe_mill_defender_deck(state, source_ci, target_id, event_ctx):
     if leader.exhausted:
         return state
     leader.exhausted = True
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     push_deck_search(
         state, source_ci,
         count=1, window=2, up_to=False,
         eligible=lambda card_def: True,
         disposition="discard", rest_disposition="top",
-        decider_id=source_ci.owner_id, deck_owner_id=opp.player_id,
+        decider_id=actor_of(state, source_ci), deck_owner_id=opp.player_id,
     )
     return state
 
@@ -3213,7 +3197,7 @@ def _krennic_mill_and_maybe_recur(state, source_ci, target_id, event_ctx):
     from swu.engine.state import Zone
     from swu.engine.actions import push_return_from_discard, note_hand_or_deck_discard
     from swu.cards.models import Unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
     milled = ps.deck.pop(0)
@@ -3252,7 +3236,7 @@ def _renewed_friendship(state, source_ci, target_id, event_ctx):
     is never a downside, so no reachable state differs."""
     from swu.engine.actions import push_return_from_discard, _create_token_units
     from swu.cards.models import Unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     _create_token_units(state, ps, "Spy", 2)
     push_return_from_discard(
         state, source_ci, count=1,
@@ -3330,7 +3314,7 @@ def _convene_the_senate(state, source_ci, target_id, event_ctx):
     returns — the token is made either way."""
     from swu.engine.actions import push_deck_search, _create_token_units
     from swu.cards.models import Unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     _create_token_units(state, ps, "Spy", 1)
     push_deck_search(
         state, source_ci, count=2, window=8, up_to=True,
@@ -3377,7 +3361,7 @@ def _obi_wan_mill_and_permit(state, source_ci, target_id, event_ctx):
     defending player is the controller's opponent."""
     from swu.engine.state import Zone
     from swu.engine.actions import note_hand_or_deck_discard
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     if not opp.deck:
         return state
     milled = opp.deck.pop(0)
@@ -3385,7 +3369,7 @@ def _obi_wan_mill_and_permit(state, source_ci, target_id, event_ctx):
     opp.discard.append(milled)
     note_hand_or_deck_discard(state, milled)
     permitted = state.game_memory.foreign_discard_play_this_phase
-    permitted.setdefault(source_ci.owner_id, []).append(milled.instance_id)
+    permitted.setdefault(actor_of(state, source_ci), []).append(milled.instance_id)
     return state
 
 
@@ -3442,7 +3426,7 @@ def _cikatro_vizago_reveal(state, source_ci, target_id, event_ctx):
     name only, never its instance_id) so the decider sees what they are paying to
     stop.  With an empty deck there is nothing to draw and nothing is pushed."""
     from swu.engine.actions import push_say_no
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
     top = ps.deck[0]
@@ -3503,7 +3487,7 @@ def _kreias_whispers(state, source_ci, target_id, event_ctx):
     printed; each is the existing ``bottom_from_hand`` decision, the second in its
     new exclusive ``top_only`` mode."""
     from swu.engine.actions import _draw_cards, push_bottom_from_hand
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     _draw_cards(state, ps, 3)
     push_bottom_from_hand(state, source_ci, count=1)
     push_bottom_from_hand(state, source_ci, count=1, top_only=True)
@@ -3579,8 +3563,7 @@ def _leia_organa_sec():
     Both sides are the one ``CustomEffect`` onto the disclose, whose ``any_of``
     mode is the printed "or" (one card carrying ANY of the five satisfies it).  The
     payoff whitelists every in-play unit sharing no aspect with the revealed card
-    into a ``select_token`` (DOCUMENTED DEVIATION: select_token is an "up to", so
-    the gift may be declined)."""
+    into a ``mandatory`` ``select_token`` (the gift can't be declined)."""
     return [
         ActivatedAbility(
             costs=[PayResources(1), ExhaustSelf()],
@@ -3693,7 +3676,7 @@ def _bail_organa_recycle_resource(state, source_ci, target_id, event_ctx):
     convention); cost and payoff are bound in one fn so "If you do" holds."""
     from swu.engine.state import Zone
     from swu.engine.actions import _resource_top_of_deck
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.resources:
         return state
     res = next((r for r in ps.resources if r.face_down), ps.resources[0])
@@ -4035,7 +4018,8 @@ def _senate_warden_disclose(state, source_ci, target_id, event_ctx):
     push_disclose(state, source_ci, ["Vigilance"],
                   payoff="select_token",
                   payoff_args={"token_type": "Experience", "max_targets": 1,
-                               "controller": "any", "kind": "unit"})
+                               "controller": "any", "kind": "unit",
+                               "mandatory": True})
     return state
 
 
@@ -4050,8 +4034,8 @@ def _senate_warden():
     is prompted at all when the hand cannot cover the icon (``push_disclose``
     self-gates).  "Give an Experience token to a unit" reuses the existing
     ``select_token`` payoff arm (Vice Admiral Rampart SEC_85) with ``max_targets=1``
-    over every unit in play.  DOCUMENTED DEVIATION: ``select_token`` is an "up to",
-    so the printed mandatory gift can be declined after disclosing."""
+    over every unit in play, ``mandatory`` so the gift can't be declined after
+    disclosing."""
     return TriggerAbility(
         trigger=WhenDefeated(),
         effects=[CustomEffect(fn=_senate_warden_disclose)],
@@ -4218,7 +4202,7 @@ def _premor_carrier_experience(state, source_ci, target_id, event_ctx):
     unit (the Carrier itself counts when it landed in a ground arena)."""
     from swu.engine.state import Zone
     from swu.engine.tokens import attach_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = len(ps.ground_arena)
     host = state.find_instance(source_ci.instance_id)
     if host is None or n <= 0:
@@ -4309,7 +4293,7 @@ def _renowned_dignitaries_heal(state, source_ci, target_id, event_ctx):
     """Renowned Dignitaries SEC_102: heal 2 from the controller's base per friendly
     Official unit (the source itself is an Official and counts)."""
     from swu.engine.traits import has_trait
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = sum(1 for ci in list(ps.ground_arena) + list(ps.space_arena)
             if has_trait(state, ci, "Official"))
     if ps.base_instance is not None and n > 0:
@@ -4543,7 +4527,7 @@ def _dryden_vos_sec_137(state, source_ci, target_id, event_ctx):
         state.modifiers.append(_make_modifier(
             state, ci.instance_id, ci.instance_id,
             power=bonus, hp=0, duration=Duration.THIS_ATTACK))
-    ci.cannot_ready_this_round = True
+    state.game_memory.skip_next_ready.add(ci.instance_id)
     return state
 
 
@@ -4556,11 +4540,9 @@ def _dryden_vos_sec():
     An OPTIONAL ``OnAttack`` trigger — the "you may" — whose single ``CustomEffect``
     binds cost and payoff together ("if you do"): it adds a ``THIS_ATTACK`` stat
     modifier equal to Dryden's current effective power (doubling whatever he is
-    worth right now, buffs included) and sets ``cannot_ready_this_round``, the
-    existing keep-tapped flag ``_end_regroup`` honours (No Good to Me Dead SOR_186).
-    DOCUMENTED SIMPLIFICATION: that flag is round-scoped rather than
-    "next-regroup"-scoped, which coincides except under Max Rebo LAW_72's extra
-    regroup phase."""
+    worth right now, buffs included) and adds him to ``game_memory.skip_next_ready``,
+    which the next regroup's ready step uses up — so under Max Rebo LAW_72's extra
+    regroup he readies in the second one."""
     return TriggerAbility(
         trigger=OnAttack(),
         optional=True,
@@ -4724,7 +4706,7 @@ def _aggressive_negotiations_sec_179(state, source_ci, target_id, event_ctx):
     per card in the controller's hand, measured NOW (the event has already left the
     hand, so it never counts itself)."""
     from swu.engine.actions import push_granted_attack
-    hand = len(state.player_by_id(source_ci.owner_id).hand)
+    hand = len(state.player_by_id(actor_of(state, source_ci)).hand)
     push_granted_attack(state, source_ci, power_bonus=hand)
     return state
 
@@ -4772,12 +4754,13 @@ def _no_one_ever_knew_sec_196(state, source_ci, target_id, event_ctx):
     """No One Ever Knew SEC_196: exhaust one enemy unit per friendly Official."""
     from swu.engine.actions import push_select_token
     from swu.engine.traits import has_trait
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = sum(1 for ci in list(ps.ground_arena) + list(ps.space_arena)
             if has_trait(state, ci, "Official"))
     if n > 0:
         push_select_token(state, source_ci, token_type=None, max_targets=n,
-                          controller="enemy", kind="unit", exhaust=True)
+                          controller="enemy", kind="unit", exhaust=True,
+                          mandatory=True)
     return state
 
 
@@ -4790,9 +4773,8 @@ def _no_one_ever_knew():
     with the new ``exhaust`` payoff — the mirror of its existing ``ready`` mode, and
     it honours Protection exactly as the declarative ``ExhaustCard`` arm does.  The
     cap is the count of friendly Official units, read through ``has_trait`` so trait
-    grants count; with none the event fizzles with no prompt.  DOCUMENTED DEVIATION:
-    ``select_token`` is an "up to", so the printed mandatory exhausts can be stopped
-    early."""
+    grants count; with none the event fizzles with no prompt.  ``mandatory``: the
+    exhausts can't be stopped early while an enemy unit is still eligible."""
     return EventAbility(effects=[CustomEffect(fn=_no_one_ever_knew_sec_196)])
 
 
@@ -4960,7 +4942,7 @@ def _ready_exhausted_resources(state, ps, count):
 def _emissarys_sheathipede_sec_215(state, source_ci, target_id, event_ctx):
     """Emissary's Sheathipede SEC_215 When Defeated: each opponent readies one
     resource."""
-    own = source_ci.owner_id
+    own = actor_of(state, source_ci)
     for ps in state.players:
         if ps.player_id != own:
             _ready_exhausted_resources(state, ps, 1)
@@ -4986,7 +4968,7 @@ def _emissarys_sheathipede():
 
 def _regulations_bureaucrat_sec_216(state, source_ci, target_id, event_ctx):
     """Regulations Bureaucrat SEC_216: exhaust one ready ENEMY resource."""
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     for r in opp.resources:
         if not r.exhausted:
             r.exhausted = True
@@ -5056,7 +5038,7 @@ def _hired_slicer_sec_220(state, source_ci, target_id, event_ctx):
     of any unit sharing a trait with them, then bottom the two in random order."""
     from swu.engine.actions import push_select_token
     from swu.engine.traits import has_trait
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     revealed = opp.deck[:2]
     if not revealed:
         return state
@@ -5122,7 +5104,7 @@ def _unruly_astromech():
 def _synara_san_sec_225(state, source_ci, target_id, event_ctx):
     """Synara San SEC_225 On Attack: ready one friendly resource per friendly
     unit."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = len(ps.ground_arena) + len(ps.space_arena)
     return _ready_exhausted_resources(state, ps, n)
 
@@ -5205,7 +5187,7 @@ def _catch_unawares():
 
 def _the_wrong_ride_sec_235(state, source_ci, target_id, event_ctx):
     """The Wrong Ride SEC_235: exhaust 2 ready enemy resources."""
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     remaining = 2
     for r in opp.resources:
         if remaining <= 0:
@@ -5239,7 +5221,7 @@ def _undercover_operation_sec_236(state, source_ci, target_id, event_ctx):
         return state
     res[1].exhausted = False
     if int(getattr(res[1].card_def, "cost", None) or 0) <= 3:
-        _create_token_units(state, state.player_by_id(source_ci.owner_id), "Spy", 1)
+        _create_token_units(state, state.player_by_id(actor_of(state, source_ci)), "Spy", 1)
     return state
 
 
@@ -5300,7 +5282,7 @@ def _restore_freedom_sec_257(state, source_ci, target_id, event_ctx):
     """Restore Freedom SEC_257: play a unit from hand, 1 cheaper per Heroism aspect
     ICON among friendly units (duplicates count, the SEC_247 icon basis)."""
     from swu.engine.actions import push_play_from_hand
-    ctrl = state.player_by_id(source_ci.owner_id)
+    ctrl = state.player_by_id(actor_of(state, source_ci))
     icons = sum(
         1
         for arena in (ctrl.ground_arena, ctrl.space_arena)
@@ -5425,7 +5407,7 @@ def _condemn_on_attack(state, source_ci, target_id, event_ctx):
         duration="this_attack",
     ))
     defending_id = next((p.player_id for p in state.players
-                         if p.player_id != source_ci.owner_id), None)
+                         if p.player_id != actor_of(state, source_ci)), None)
     if defending_id is not None:
         push_disclose(
             state, source_ci, ["Vigilance", "Villainy"],
@@ -5608,7 +5590,7 @@ def _beloved_orator():
 def _trade_route_taxation(state, source_ci, target_id, event_ctx):
     """Trade Route Taxation SEC_126: if the controller has more units than the chosen
     opponent, lock that opponent out of playing events for this phase."""
-    ctrl_id = source_ci.owner_id
+    ctrl_id = actor_of(state, source_ci)
     opp = next((p for p in state.players if p.player_id != ctrl_id), None)
     if opp is None:
         return state
@@ -5646,19 +5628,15 @@ def _lets_talk():
     this event costs 3 resources less to play.  Each friendly unit captures an enemy
     non-leader unit in the same arena."
 
-    A ``CostReduction`` gated on ``CONTROLLER_UNIT_DEFEATED_THIS_PHASE`` (read by the
+    A ``CostReduction`` gated on ``CONTROLLER_UNIT_LEFT_PLAY_THIS_PHASE`` (read by the
     play-cost path, so it moves both affordability and the resources exhausted) plus
     one no-target ``CustomEffect`` onto ``push_multi_capture(mandatory=True)`` - the
     same pair-selection walk as Finalizer SHD_92, with the "any number" stop withheld
-    while a legal pair remains, which is exactly "EACH friendly unit captures".
-
-    DOCUMENTED SIMPLIFICATION: "left play" is read as the defeat ledger
-    ``defeated_controllers_this_round`` (the TWI_4 convention) - a friendly unit
-    bounced or captured this phase does not discount the event."""
+    while a legal pair remains, which is exactly "EACH friendly unit captures"."""
     return [
         CostReduction(
             amount=3,
-            condition=ConditionCheck(Condition.CONTROLLER_UNIT_DEFEATED_THIS_PHASE)),
+            condition=ConditionCheck(Condition.CONTROLLER_UNIT_LEFT_PLAY_THIS_PHASE)),
         EventAbility(effects=[CustomEffect(fn=_lets_talk_captures)]),
     ]
 
@@ -5714,7 +5692,7 @@ def _confidence_in_victory_choose(state, source_ci, target_id, event_ctx):
 
 def _schedule_sole_arena_win(state, source_ci, arena):
     state.game_memory.win_at_regroup_sole_arena.append(
-        {"player_id": source_ci.owner_id, "arena": arena})
+        {"player_id": actor_of(state, source_ci), "arena": arena})
     return state
 
 
@@ -5772,7 +5750,7 @@ def _luthens_haulcraft():
     you do, that opponent discards 2 cards from their hand."
 
     A ``WhenDefeated`` CustomEffect onto ``push_disclose`` with the new
-    ``opponent_discard`` payoff (the first-card discard convention, K-2SO SOR_145).
+    ``opponent_discard`` payoff (the opponent picks the cards).
     In two-player "choose an opponent" collapses to the single opponent.  The
     printed "you may" IS the disclose's own Decline, and nothing is pushed when the
     hand cannot cover the icons."""
@@ -5821,23 +5799,21 @@ def _ambitions_reward():
 
 
 def _pursue_the_lead_discard(state, source_ci, player_id):
-    """Discard the first card of ``player_id``'s hand; if its PRINTED cost is 3 or
-    less, the caster creates a Spy token."""
-    from swu.engine.actions import (
-        _create_token_units, note_hand_or_deck_discard, record_hand_discard,
-    )
-    from swu.engine.state import Zone
-    ps = state.player_by_id(player_id)
-    if not ps.hand:
-        return state
-    card = ps.hand.pop(0)
-    card.zone = Zone.DISCARD
-    ps.discard.append(card)
-    note_hand_or_deck_discard(state, card)
-    record_hand_discard(state, player_id, kind="discard")
-    if (getattr(card.card_def, "cost", None) or 0) <= 3:
-        _create_token_units(state, state.player_by_id(source_ci.owner_id), "Spy", 1)
+    """``player_id`` discards a card of their choice; if its PRINTED cost is 3 or
+    less, the caster creates a Spy token (the ``pursue_the_lead_spy`` payoff)."""
+    from swu.engine.actions import push_discard_of_choice
+    push_discard_of_choice(state, player_id, 1, source_id=source_ci.instance_id,
+                           after_idx=1 - state.player_index(actor_of(state, source_ci)),
+                           payoff="pursue_the_lead_spy",
+                           payoff_args={"caster_id": actor_of(state, source_ci)})
     return state
+
+
+@discard_payoff("pursue_the_lead_spy")
+def _pursue_the_lead_spy(state, source_id, discarded, args):
+    from swu.engine.actions import _create_token_units
+    if discarded and (getattr(discarded[0].card_def, "cost", None) or 0) <= 3:
+        _create_token_units(state, state.player_by_id(args["caster_id"]), "Spy", 1)
 
 
 def _pursue_the_lead_choose(state, source_ci, target_id, event_ctx):
@@ -5847,11 +5823,11 @@ def _pursue_the_lead_choose(state, source_ci, target_id, event_ctx):
 
 
 def _pursue_the_lead_self(state, source_ci, target_id, event_ctx):
-    return _pursue_the_lead_discard(state, source_ci, source_ci.owner_id)
+    return _pursue_the_lead_discard(state, source_ci, actor_of(state, source_ci))
 
 
 def _pursue_the_lead_opponent(state, source_ci, target_id, event_ctx):
-    opp = next((p for p in state.players if p.player_id != source_ci.owner_id), None)
+    opp = next((p for p in state.players if p.player_id != actor_of(state, source_ci)), None)
     if opp is None:
         return state
     return _pursue_the_lead_discard(state, source_ci, opp.player_id)
@@ -5868,8 +5844,8 @@ def _pursue_the_lead():
     both (the SOR aspect-event convention for an EVENT card).
     The choice is a REAL one - discarding your own cheap card guarantees the token,
     hitting the opponent costs them a card - so it does not collapse to an optimal
-    default.  The discard is the first-card convention (K-2SO SOR_145) and the cost
-    test reads the PRINTED cost, as the card's rules note requires."""
+    default.  The discarding player picks the card, and the cost test reads the
+    PRINTED cost, as the card's rules note requires."""
     return [
         EventAbility(effects=[CustomEffect(fn=_pursue_the_lead_choose)]),
         TriggerAbility(trigger=WhenPlayed(),
@@ -5962,7 +5938,7 @@ def _grand_moff_tarkin_steal(state, source_ci, target_id, event_ctx):
     if res is None:
         return state
     _, victim = res
-    change_control(state, victim, source_ci.owner_id)
+    change_control(state, victim, actor_of(state, source_ci))
     victim.control_linked_to = source_ci.instance_id
     return state
 
@@ -5992,7 +5968,7 @@ def _fully_armed_and_operational(state, source_ci, target_id, event_ctx):
     this phase - play a unit from hand, granting it Ambush for this phase."""
     from swu.engine.actions import push_play_from_hand
     attackers = state.game_memory.base_attackers_this_round.get(
-        source_ci.owner_id, [])
+        actor_of(state, source_ci), [])
     if not attackers:
         return state
     push_play_from_hand(state, source_ci, grant_keyword="Ambush")
@@ -6023,7 +5999,7 @@ def _arrest_capture(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import _apply_capture
     if target_id is None:
         return state
-    base = state.player_by_id(source_ci.owner_id).base_instance
+    base = state.player_by_id(actor_of(state, source_ci)).base_instance
     if base is None:
         return state
     state = _apply_capture(state, base.instance_id, target_id)

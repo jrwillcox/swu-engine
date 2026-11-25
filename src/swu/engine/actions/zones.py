@@ -30,6 +30,8 @@ Things that reliably surprise people:
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import re
 from typing import Optional
 
@@ -44,6 +46,7 @@ from swu.engine.events import (
 )
 from swu.engine.state import (
     CardInstance, GameState, Phase, PlayerState, Zone, ability_suppressed,
+    note_card_controller,
 )
 from swu.engine.tokens import attach_token
 from swu.engine.triggers import get_bus
@@ -705,6 +708,8 @@ def _attach_upgrade(
     if target_id is None:
         raise IllegalActionError("Upgrade requires a target")
     upgrade_ci.face_down = False
+    # The player who plays an upgrade controls it, even on an enemy unit.
+    note_card_controller(s, upgrade_ci, ps.player_id)
     fortify = _is_fortify(s, upgrade_ci)
     if fortify:
         # Fortify: the only legal host is the playing player's own base.
@@ -814,7 +819,7 @@ def _apply_capture(s: GameState, captor_id: str, target_id: str) -> GameState:
     captor_ps.capture_pile.append(target_ci)
     # The captured unit has left play: its own captives go home and any control
     # it took reverts (before this event, so the log reads in order).
-    _unit_left_play(s, target_ci)
+    _unit_left_play(s, target_ci, holder_ps.player_id)
 
     s.event_log.append(UnitCaptured(
         captor_instance_id=captor_ci.instance_id,
@@ -875,14 +880,45 @@ def _revert_linked_control(s: GameState, source_ci: CardInstance) -> None:
         change_control(s, ci, ci.owner_id)
 
 
-def _unit_left_play(s: GameState, ci: CardInstance) -> None:
+def _note_left_play(s: GameState, ci: CardInstance, controller: str) -> None:
+    """Record that ``ci`` left play this phase under ``controller`` — the ledger
+    behind "If a unit left play this phase" (every route: defeat and the
+    ``_unit_left_play`` ones)."""
+    s.game_memory.left_play_controllers_this_phase.append(controller)
+    if isinstance(ci.card_def, Leader):
+        s.game_memory.leader_left_play_controllers_this_phase.add(controller)
+
+
+def _unit_left_play(s: GameState, ci: CardInstance,
+                    controller: Optional[str] = None) -> None:
     """The leave-play linkage for a unit that left play WITHOUT being defeated
     (returned to hand, put on a deck, captured): the cards it captured are released
     and any control it took reverts — exactly what ``_defeat_unit`` does.  Before
     2026-11-23 only a defeat did this, so a bounced captor kept its captives and a
-    bounced Maul LAW_54 kept the unit it stole."""
+    bounced Maul LAW_54 kept the unit it stole.
+
+    ``controller`` is who controlled it as it left (default: its owner).  The exit
+    is recorded for "left play this phase" and fired as ``UnitLeftPlay`` for "When
+    a unit leaves play" observers (Boba Fett SOR_15)."""
+    ctrl = controller or ci.owner_id
     _release_captured_cards(s, ci)
     _revert_linked_control(s, ci)
+    # Its "while this unit is in play" effects end (Huyang TWI_110's buff, Cantwell
+    # Arrestor Cruiser SEC_37's ready lock).  The read-time source-in-play guard
+    # already makes them inert; dropping them stops a replayed card (same instance
+    # id) from reviving them.
+    s.modifiers = [
+        m for m in s.modifiers
+        if not (m.duration == "permanent" and m.source_instance_id == ci.instance_id)
+    ]
+    _note_left_play(s, ci, ctrl)
+    from swu.engine.events import UnitLeftPlay
+    from swu.abilities.resolver import fire_triggered_abilities
+    fire_triggered_abilities(
+        s, UnitLeftPlay(controller_id=ctrl, instance_id=ci.instance_id,
+                        card_name=ci.card_def.display_name),
+        after_all_player_idx=s.active_player_index,
+        event_ctx={"left_play_id": ci.instance_id})
 
 
 def _resolve_granted_bounty(s: GameState, collector_id: str, key: str) -> None:
@@ -952,6 +988,10 @@ def _defeat_unit(s: GameState, owner_ps: PlayerState, ci: CardInstance,
         if ci in arena:
             arena.remove(ci)
             break
+    # ``owner_ps`` is the arena that held it, i.e. its CONTROLLER: its When Defeated
+    # resolves for that player (last-known information, read by ``actor_id``).
+    note_card_controller(s, ci, owner_ps.player_id)
+    _note_left_play(s, ci, owner_ps.player_id)
 
     # The defeated unit is leaving play — any cards it has captured return to
     # their owners' arenas (The Mandalorian's Rifle SHD_251).
@@ -1138,7 +1178,7 @@ def _apply_put_on_deck(s: GameState, target_id: str, *, to_top: bool) -> GameSta
             break
     ci.zone = Zone.DECK
     ci.control_linked_to = None
-    _unit_left_play(s, ci)
+    _unit_left_play(s, ci, ps.player_id)
     owner_ps = s.player_by_id(ci.owner_id)
     if to_top:
         owner_ps.deck.insert(0, ci)  # deck[0] is the top (drawn via pop(0))
@@ -1247,9 +1287,9 @@ def push_bounty_recollect(s: GameState, source_ci: CardInstance, event_ctx: dict
     # Spend the once-per-round the moment the re-collection actually resolves (this fn
     # runs only on accept of Bossk's optional trigger).
     s.game_memory.bounty_recollect_used_this_round.add(source_ci.instance_id)
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="resolve_effects",
         context={
             "set_code": entry["set_code"],
@@ -1266,7 +1306,7 @@ def push_bounty_recollect(s: GameState, source_ci: CardInstance, event_ctx: dict
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="resolve_effects",
     ))
 
@@ -1335,6 +1375,9 @@ def _resolve_event_ability(
     Tracking is recorded on every event play so "first" is correct even for
     events with no registered ability.
     """
+    # The player who played it is "you" for its abilities, even when it came from
+    # another player's deck or discard (read by ``actor_id``).
+    note_card_controller(s, event_ci, ps.player_id)
     first_event = ps.player_id not in s.game_memory.events_played_this_round
     s.game_memory.events_played_this_round.add(ps.player_id)
     if first_event:

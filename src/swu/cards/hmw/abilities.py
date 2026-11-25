@@ -37,6 +37,8 @@ three shapes here:
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from swu.abilities.registry import (
     card_ability,
     TriggerAbility, ActivatedAbility, ConstantAbility, GrantedAbility, EventAbility,
@@ -56,6 +58,15 @@ from swu.abilities.registry import (
     ConditionCheck, Condition, Duration,
     TargetSpec, SELF, EACH_ENEMY, EACH_FRIENDLY,
 )
+from swu.engine.discard_payoffs import discard_payoff
+
+
+def _discard_choice(state, source_ci, player_id, count=1, **kw):
+    """``push_discard_of_choice`` for an ability of ``source_ci`` (hand-back to the
+    other player once it resolves)."""
+    from swu.engine.actions import push_discard_of_choice
+    push_discard_of_choice(state, player_id, count, source_id=source_ci.instance_id,
+                           after_idx=1 - state.player_index(actor_of(state, source_ci)), **kw)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -68,7 +79,7 @@ def _tarkin_victim_base(state, source_ci):
     either base, but defeating your own base loses the game, so only an
     opponent's base is ever a sane pick (two-player)."""
     for ps in state.players:
-        if ps.player_id == source_ci.owner_id:
+        if ps.player_id == actor_of(state, source_ci):
             continue
         base = ps.base_instance
         if base is None:
@@ -244,21 +255,11 @@ def _verdant_fortress():
 
 
 def _beast_lair_pitch(state, source_ci, target_id, event_ctx):
-    """Discard the first hand card and create a Beast token — one effect, so the
-    "If you do" cannot split (Bix Caleen LAW_236's shape, first-card convention)."""
-    from swu.engine.actions import (
-        _create_token_units, note_hand_or_deck_discard, record_hand_discard)
-    from swu.engine.state import Zone
-    ps = state.player_by_id(source_ci.owner_id)
-    if not ps.hand:
-        return state
-    card = ps.hand.pop(0)
-    card.zone = Zone.DISCARD
-    card.face_down = False
-    ps.discard.append(card)
-    note_hand_or_deck_discard(state, card)
-    record_hand_discard(state, ps.player_id)
-    _create_token_units(state, ps, "Beast", 1)
+    """Discard a card of the player's choice; the ``create_token_if_discarded``
+    payoff makes the Beast token (Bix Caleen LAW_236's shape)."""
+    _discard_choice(state, source_ci, actor_of(state, source_ci),
+                    payoff="create_token_if_discarded",
+                    payoff_args={"player_id": actor_of(state, source_ci), "token": "Beast"})
     return state
 
 
@@ -282,7 +283,7 @@ def _beast_lair():
 def _noxious_reveal(state, source_ci, target_id, event_ctx):
     """Reveal the top card (it stays on top); arm the damage only if it is
     Aggression — BT-1 LAW_173's "record then gate" shape, minus the mill."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
     top = ps.deck[0]
@@ -505,7 +506,7 @@ def _kelnacca_strike(state, source_ci, target_id, event_ctx):
     from swu.engine.actions.costs import _exhaust_resources
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if sum(1 for r in ps.resources if not r.exhausted) < 3:
         return state
     res = state.find_instance(source_ci.instance_id)
@@ -565,7 +566,7 @@ def _darth_vader_hmw():
 
 
 def _krrsantan_amount(state, source_ci) -> int:
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     return len(ps.resources) - 3
 
 
@@ -579,7 +580,7 @@ def _krrsantan_hit(state, source_ci, target_id, event_ctx):
     if target_id is None or amount <= 0:
         return state
     _apply_deal_damage(state, target_id, amount, source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id, source_id=source_ci.instance_id)
+                       dealer_id=actor_of(state, source_ci), source_id=source_ci.instance_id)
     return state
 
 
@@ -632,7 +633,7 @@ def _seismic_choose(state, source_ci, target_id, event_ctx):
 def _seismic_schedule(arena):
     def _fn(state, source_ci, target_id, event_ctx):
         state.game_memory.damage_at_regroup.append({
-            "player_id": source_ci.owner_id, "arena": arena, "amount": 3,
+            "player_id": actor_of(state, source_ci), "arena": arena, "amount": 3,
             "source_name": source_ci.card_def.display_name})
         return state
     return _fn
@@ -835,11 +836,11 @@ def _breach_strike(state, source_ci, target_id, event_ctx):
     victim_ps, victim = res
     excess = max(0, amount - (compute_hp(state, victim) - victim.damage))
     name = event_ctx.get("breach_name") or source_ci.card_def.display_name
-    _apply_deal_damage(state, target_id, amount, name, dealer_id=source_ci.owner_id,
+    _apply_deal_damage(state, target_id, amount, name, dealer_id=actor_of(state, source_ci),
                        source_id=event_ctx.get("breach_dealer"))
     if excess and event_ctx.get("breach_overwhelm") and victim_ps.base_instance is not None:
         _apply_deal_damage(state, victim_ps.base_instance.instance_id, excess, name,
-                           dealer_id=source_ci.owner_id,
+                           dealer_id=actor_of(state, source_ci),
                            source_id=event_ctx.get("breach_dealer"))
     return state
 
@@ -878,9 +879,9 @@ def _emerie_ping(state, source_ci, target_id, event_ctx):
     res = state.find_instance(target_id)
     if res is None:
         return state
-    friendly = res[0].player_id == source_ci.owner_id
+    friendly = res[0].player_id == actor_of(state, source_ci)
     _apply_deal_damage(state, target_id, 1, source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id, source_id=source_ci.instance_id)
+                       dealer_id=actor_of(state, source_ci), source_id=source_ci.instance_id)
     if friendly:
         state = execute_effect(state, NextPlayDiscount(None, 1), source_ci, None,
                                event_ctx)
@@ -936,7 +937,7 @@ def _arena_nexu_feed(state, source_ci, target_id, event_ctx):
     state.game_memory.activated_abilities_used_this_round.add(
         f"{source_ci.instance_id}:trig")
     _apply_deal_damage(state, target_id, 3, source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id, source_id=source_ci.instance_id)
+                       dealer_id=actor_of(state, source_ci), source_id=source_ci.instance_id)
     res = state.find_instance(source_ci.instance_id)
     if res is None or res[1].zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
         return state
@@ -991,7 +992,7 @@ def _maim(state, source_ci, target_id, event_ctx):
     if target_id is None:
         return state
     _apply_deal_damage(state, target_id, 1, source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id, source_id=source_ci.instance_id)
+                       dealer_id=actor_of(state, source_ci), source_id=source_ci.instance_id)
     res = state.find_instance(target_id)
     if res is not None and res[1].zone in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
         res[1].exhausted = True
@@ -1008,7 +1009,7 @@ def _maim_hmw():
 def _dont_touch_anything(state, source_ci, target_id, event_ctx):
     """3 damage to a RANDOM enemy unit — the seeded game rng (``state.make_rng``)."""
     from swu.abilities.resolver import _apply_deal_damage
-    foes = [u for ps in state.players if ps.player_id != source_ci.owner_id
+    foes = [u for ps in state.players if ps.player_id != actor_of(state, source_ci)
             for u in ps.ground_arena + ps.space_arena]
     if not foes:
         return state
@@ -1016,7 +1017,7 @@ def _dont_touch_anything(state, source_ci, target_id, event_ctx):
     victim = rng.choice(foes)
     state.rng_state = rng.getstate()
     _apply_deal_damage(state, victim.instance_id, 3, source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id, source_id=source_ci.instance_id)
+                       dealer_id=actor_of(state, source_ci), source_id=source_ci.instance_id)
     return state
 
 
@@ -1106,7 +1107,7 @@ def _gorax_push_choice(state, source_ci, target_id, event_ctx):
     """Hand the opponent the "chooses one" over option specs idx 2 and idx 3."""
     from swu.engine.actions import push_choose_modal
     opponent_id = next(p.player_id for p in state.players
-                       if p.player_id != source_ci.owner_id)
+                       if p.player_id != actor_of(state, source_ci))
     push_choose_modal(state, source_ci, option_indices=[2, 3], pick=1,
                       decider_id=opponent_id)
     return state
@@ -1115,7 +1116,7 @@ def _gorax_push_choice(state, source_ci, target_id, event_ctx):
 def _gorax_defeat_their_resource(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import _fire_defeat_own_resource
     for ps in state.players:
-        if ps.player_id != source_ci.owner_id:
+        if ps.player_id != actor_of(state, source_ci):
             _fire_defeat_own_resource(state, ps.player_id)
     return state
 
@@ -1308,28 +1309,27 @@ def _crosshair_hmw():
 
 
 def _gungi_discard_to_ready(state, source_ci, target_id, event_ctx):
-    """Discard (the first card — the K-2SO SOR_145 convention), then ready this
-    unit: one effect, so the ready needs the discard (the Razor Crest ASH_172
-    "if you do" binding)."""
-    from swu.engine.actions import (
-        _ready_forbidden, note_hand_or_deck_discard, note_unit_readied)
+    """Discard a card of the player's choice; the ``ready_source_if_discarded``
+    payoff readies this unit (the Razor Crest ASH_172 "if you do" binding)."""
+    _discard_choice(state, source_ci, actor_of(state, source_ci),
+                    payoff="ready_source_if_discarded")
+    return state
+
+
+@discard_payoff("ready_source_if_discarded")
+def _ready_source_if_discarded(state, source_id, discarded, args):
+    """"…If you do, ready this unit."""
+    from swu.engine.actions import _ready_forbidden, note_unit_readied
     from swu.engine.state import Zone
-    ps = state.player_by_id(source_ci.owner_id)
-    if not ps.hand:
-        return state
-    card = ps.hand.pop(0)
-    card.zone = Zone.DISCARD
-    ps.discard.append(card)
-    note_hand_or_deck_discard(state, card)
-    res = state.find_instance(source_ci.instance_id)
-    if res is None or res[1].zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
-        return state
+    res = state.find_instance(source_id or "")
+    if not discarded or res is None or res[1].zone not in (
+            Zone.GROUND_ARENA, Zone.SPACE_ARENA):
+        return
     me = res[1]
     if me.cannot_ready_this_round or _ready_forbidden(state, me):
-        return state
+        return
     note_unit_readied(state, me)
     me.exhausted = False
-    return state
 
 
 @card_ability("HMW", "166")
@@ -1548,7 +1548,7 @@ def _maul_play_then_defeat(state, source_ci, target_id, event_ctx):
 def _maul_replay_defeated(state, source_ci, target_id, event_ctx):
     from swu.cards.models import Unit
     from swu.engine.actions import push_play_from_hand
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     defeated = state.game_memory.units_defeated_this_round
     eligible = frozenset(ci.instance_id for ci in ps.discard
                          if isinstance(ci.card_def, Unit) and ci.instance_id in defeated)
@@ -1593,7 +1593,7 @@ _KEEPER = "Keeper of Skara Nal"
 def _keeper_discard_two(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import note_hand_or_deck_discard, record_hand_discard
     from swu.engine.state import Zone
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     for card in [c for c in ps.hand if getattr(c.card_def, "name", None) == _KEEPER][:2]:
         ps.hand.remove(card)
         card.zone = Zone.DISCARD
@@ -1745,7 +1745,7 @@ def _boga():
 def _local_support_reveal(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import _draw_cards
     from swu.engine.traits import has_trait
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
     traits = set(getattr(ps.deck[0].card_def, "traits", None) or ())
@@ -1809,7 +1809,7 @@ def _neebray_manta():
 def _nightbrother_replay(state, source_ci, target_id, event_ctx):
     from swu.cards.models import Unit
     from swu.engine.actions import push_play_from_hand
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     eligible = frozenset(ci.instance_id for ci in ps.discard
                          if isinstance(ci.card_def, Unit))
     if eligible:
@@ -1836,7 +1836,7 @@ def _l3_37_grant_replay(state, source_ci, target_id, event_ctx):
     state.game_memory.activated_abilities_used_this_round.add(
         f"{source_ci.instance_id}:trig")
     played_id = event_ctx.get("played_card_id")
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if played_id and any(c.instance_id == played_id for c in ps.discard):
         state.game_memory.free_discard_play_this_phase.add(played_id)
     return state
@@ -2096,7 +2096,7 @@ def _osha_play_from_resources(state, source_ci, target_id, event_ctx):
     ready it", unlike TS26_12).  The Action's own gate guarantees a candidate; the
     re-check covers a board that changed while costs were paid."""
     from swu.engine.actions import push_play_from_hand, push_resource_from_hand
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not _OSHA_CAN_PLAY.evaluate(state, source_ci):
         return state
     push_resource_from_hand(state, source_ci, count=1, enters_exhausted=True)
@@ -2199,7 +2199,7 @@ def _dooku_ready_and_heal(state, source_ci, target_id, event_ctx):
     note_unit_readied(state, ci)
     ci.exhausted = False
     cost = int(getattr(ci.card_def, "cost", 0) or 0)
-    base = state.player_by_id(source_ci.owner_id).base_instance
+    base = state.player_by_id(actor_of(state, source_ci)).base_instance
     if cost and base is not None:
         _apply_heal(state, source_ci, base.instance_id, cost)
     return state
@@ -2391,7 +2391,7 @@ def _fambaa_shield_wall(state, source_ci, target_id, event_ctx):
     from swu.cards.models import TokenUpgrade
     from swu.engine.tokens import attach_token
     res = state.find_instance(source_ci.instance_id)
-    ps = res[0] if res is not None else state.player_by_id(source_ci.owner_id)
+    ps = res[0] if res is not None else state.player_by_id(actor_of(state, source_ci))
     for unit in list(ps.ground_arena):
         if not any(isinstance(u.card_def, TokenUpgrade) and u.card_def.name == "Shield"
                    for u in unit.attached_upgrades):
@@ -2463,12 +2463,12 @@ def _resource_deck_top(state, ps, ready=False):
 
 
 def _ramp_one(state, source_ci, target_id, event_ctx):
-    _resource_deck_top(state, state.player_by_id(source_ci.owner_id))
+    _resource_deck_top(state, state.player_by_id(actor_of(state, source_ci)))
     return state
 
 
 def _deck_not_empty(state, source_ci, event_ctx):
-    return bool(state.player_by_id(source_ci.owner_id).deck)
+    return bool(state.player_by_id(actor_of(state, source_ci)).deck)
 
 
 def _ready_a_resource(state, source_ci, target_id, event_ctx):
@@ -2620,7 +2620,7 @@ def _hijacked_at_st():
 def _grakchawwaa_ramp(state, source_ci, target_id, event_ctx):
     """One READY resource per other friendly Wookiee unit, counted now."""
     from swu.engine.traits import has_trait
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = sum(1 for u in ps.ground_arena + ps.space_arena
             if u.instance_id != source_ci.instance_id and has_trait(state, u, "Wookiee"))
     for _ in range(n):
@@ -2778,7 +2778,7 @@ def _overgrowth_resource_self(state, source_ci, target_id, event_ctx):
     """"Resource this card" — the played event, now in its owner's discard, goes
     face down and exhausted into the resource row (Resupply SOR_126)."""
     from swu.engine.state import Zone
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     for i, ci in enumerate(ps.discard):
         if ci.instance_id == source_ci.instance_id:
             ps.discard.pop(i)
@@ -2935,7 +2935,7 @@ def _phee_tax(state, source_ci, target_id, event_ctx):
     player.  A leader deployed as a Pilot upgrade is not a unit to exhaust."""
     from swu.engine.actions.scheduling import push_pay_or_exhaust
     for p in state.players:
-        if p.player_id == source_ci.owner_id:
+        if p.player_id == actor_of(state, source_ci):
             continue
         ldr = p.leader_instance
         if ldr is not None and any(u.instance_id == ldr.instance_id
@@ -3084,7 +3084,7 @@ def _familiar_strategem():
 
 def _heal_own_base_3(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_heal
-    base = state.player_by_id(source_ci.owner_id).base_instance
+    base = state.player_by_id(actor_of(state, source_ci)).base_instance
     if base is not None:
         state = _apply_heal(state, source_ci, base.instance_id, 3)
     return state
@@ -3113,7 +3113,7 @@ def _warrior_play(state, source_ci, target_id, event_ctx):
     """Play a unit with 3 or less PRINTED power (it is in hand, nothing has buffed
     it) from hand, paying its cost, with Ambush for this phase."""
     from swu.engine.actions import push_play_from_hand, _playable_units_from_hand
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     ids = frozenset(ci.instance_id for ci in _playable_units_from_hand(state, ps, None)
                     if int(getattr(ci.card_def, "power", 0) or 0) <= 3)
     if ids:
@@ -3164,7 +3164,7 @@ def _lyonie_copy_token(state, source_ci, target_id, event_ctx):
     if not kinds:
         return state
     prefs: tuple[str, ...] = (("Experience", "Shield", "Advantage")
-                              if unit.owner_id == source_ci.owner_id
+                              if holder.player_id == actor_of(state, source_ci)
                               else ("Weakness",))
     pick = next((k for k in prefs if k in kinds), kinds[0])
     attach_token(state, holder, unit, pick)
@@ -3197,7 +3197,7 @@ def _nute_volley(state, source_ci, target_id, event_ctx):
     Documented simplifications: the picks are "up to" (taking fewer is never better
     here), and the damage is dealt by Nute's ability rather than per friendly unit."""
     from swu.engine.actions import push_select_damage
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = len(ps.ground_arena) + len(ps.space_arena)
     if n:
         push_select_damage(state, source_ci, max_targets=n, enemy_only=True)
@@ -3227,7 +3227,7 @@ def _first_legion_trait_names(state, controller_id):
 
 def _first_legion_name(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import push_name_a_card
-    names = _first_legion_trait_names(state, source_ci.owner_id)
+    names = _first_legion_trait_names(state, actor_of(state, source_ci))
     if names:
         push_name_a_card(state, source_ci, names=names,
                          then_payoff="revoke_trait_enemy_phase")
@@ -3523,7 +3523,7 @@ def _maz_play(state, source_ci, target_id, event_ctx):
     LOF_225's rider: it lands on the played unit)."""
     from swu.engine.actions import push_play_from_hand, _playable_units_from_hand
     from swu.engine.traits import has_trait
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     ids = frozenset(ci.instance_id for ci in _playable_units_from_hand(state, ps, None, 1)
                     if has_trait(state, ci, "Fringe") or has_trait(state, ci, "Underworld"))
     if ids:

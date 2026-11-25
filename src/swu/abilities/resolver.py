@@ -18,6 +18,8 @@ resolve_effects_actions(state, decision) -> list[Action]
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from typing import Optional, TYPE_CHECKING
 
 from swu.abilities.registry import (
@@ -172,9 +174,11 @@ def _damage_event_matches(trigger, state: "GameState", source_ci: "CardInstance"
     is_base = bool(entry.get("is_base"))
     if trigger.kind == "unit" and is_base:
         return False
+    if trigger.kind == "base" and not is_base:
+        return False
     if trigger.combat is not None and bool(entry.get("combat")) != trigger.combat:
         return False
-    me = source_ci.owner_id
+    me = actor_of(state, source_ci)
     if trigger.dealer == "you" and entry.get("dealer_player") != me:
         return False
     tid = entry.get("target_id")
@@ -270,6 +274,12 @@ def _trigger_matches(
         UnitEntersPlay, UnitDefeated, AttackDeclared, RoundStarted,
     )
 
+    # The second co-defender's fire of a two-unit attack (Darth Maul C24_6): only
+    # that defender's own "When this unit is attacked" may match — the attacker's On
+    # Attack and every attack observer already fired once, on the first defender.
+    if event_ctx.get("only_when_attacked") and not isinstance(trigger, WhenAttacked):
+        return False
+
     if isinstance(trigger, WhenPlayed):
         from swu.engine.events import UpgradePlayed
         if getattr(trigger, "as_upgrade", False):
@@ -320,8 +330,8 @@ def _trigger_matches(
         if not isinstance(event, LeaderDeployed):
             return False
         if getattr(trigger, "opponent", False):
-            return event.player_id != source_ci.owner_id
-        return event.player_id == source_ci.owner_id
+            return event.player_id != actor_of(state, source_ci)
+        return event.player_id == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenDefeated):
         return (
@@ -381,7 +391,7 @@ def _trigger_matches(
         if att is None:
             return False
         att_ps, attacker_ci = att
-        if att_ps.player_id == source_ci.owner_id:
+        if att_ps.player_id == actor_of(state, source_ci):
             return False
         from swu.engine.state import Zone
         arena = "space" if attacker_ci.zone == Zone.SPACE_ARENA else "ground"
@@ -393,6 +403,19 @@ def _trigger_matches(
         return True
 
     if isinstance(trigger, WhenUnitDefeated):
+        from swu.engine.events import UnitLeftPlay
+        if isinstance(event, UnitLeftPlay):
+            if not trigger.leaves_play:
+                return False
+            if event.instance_id == source_ci.instance_id:
+                return False
+            want = trigger.filter.controller
+            me = actor_of(state, source_ci)
+            if want == "enemy":
+                return event.controller_id != me
+            if want == "friendly":
+                return event.controller_id == me
+            return True
         if not isinstance(event, UnitDefeated):
             return False
         # The defeated unit must match the filter FROM the source card's perspective
@@ -417,7 +440,7 @@ def _trigger_matches(
         from swu.engine.events import InitiativeTaken
         if not isinstance(event, InitiativeTaken):
             return False
-        return event.player_id == source_ci.owner_id
+        return event.player_id == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenUnitEntersPlay):
         if not isinstance(event, UnitEntersPlay):
@@ -444,7 +467,7 @@ def _trigger_matches(
         if res is None:
             return False
         att_ps, _ = res
-        return att_ps.player_id == source_ci.owner_id
+        return att_ps.player_id == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenDealsCombatDamageToBase):
         # Fires after a base attack's combat damage, flagged in event_ctx.
@@ -482,7 +505,7 @@ def _trigger_matches(
         if res is None:
             return False
         hit_ps, hit_ci = res
-        if hit_ps.player_id != source_ci.owner_id:
+        if hit_ps.player_id != actor_of(state, source_ci):
             return False
         if trigger.traits:
             from swu.engine.traits import has_trait
@@ -512,7 +535,7 @@ def _trigger_matches(
         if not dealer_id or dealer_id == source_ci.instance_id:
             return False
         dres = state.find_instance(dealer_id)
-        if dres is None or dres[0].player_id != source_ci.owner_id:
+        if dres is None or dres[0].player_id != actor_of(state, source_ci):
             return False
         return True
 
@@ -539,7 +562,7 @@ def _trigger_matches(
         if att is None:
             return False
         res = state.find_instance(source_ci.instance_id)
-        controller = res[0].player_id if res is not None else source_ci.owner_id
+        controller = res[0].player_id if res is not None else actor_of(state, source_ci)
         if att[0].player_id != controller:
             return False
         if trigger.traits:
@@ -559,7 +582,7 @@ def _trigger_matches(
             return False
         if not getattr(trigger, "any_player", False):
             res = state.find_instance(source_ci.instance_id)
-            controller = res[0].player_id if res is not None else source_ci.owner_id
+            controller = res[0].player_id if res is not None else actor_of(state, source_ci)
             if event_ctx.get("entered_unit_player") != controller:
                 return False
         flt = getattr(trigger, "filter", None)
@@ -574,8 +597,12 @@ def _trigger_matches(
     if isinstance(trigger, WhenAttackEnds):
         # Fires for the attacker at the end of its attack, flagged in event_ctx;
         # the firing site only sets the key for an attacker still in play, so the
-        # "if this unit survived" clause is intrinsic (Vermillion LAW_215).
-        if event_ctx.get("attack_ended_survivor") != source_ci.instance_id:
+        # "if this unit survived" clause is intrinsic (Vermillion LAW_215).  An
+        # ``even_if_defeated`` trigger also matches an attacker defeated during its
+        # own attack (Chirrut Imwe LAW_46, Padmé Amidala TS26_4).
+        if event_ctx.get("attack_ended_survivor") != source_ci.instance_id and not (
+                getattr(trigger, "even_if_defeated", False)
+                and event_ctx.get("attack_ended_departed") == source_ci.instance_id):
             return False
         if getattr(trigger, "require_base_damage", False):
             # Maul LAW_54: only when this attack dealt combat damage to a base (the
@@ -602,7 +629,7 @@ def _trigger_matches(
         # damage (Boba Fett JTL_9).  The dealer's player id is drained from the
         # ledger into event_ctx by actions._fire_noncombat_damage_observers; "when
         # YOU deal" means it must equal the source's controller.
-        return event_ctx.get("noncombat_damage_dealer_id") == source_ci.owner_id
+        return event_ctx.get("noncombat_damage_dealer_id") == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenYouDraw):
         # Observer trigger fired at the settle-point from the ACTION-phase draw
@@ -624,22 +651,22 @@ def _trigger_matches(
             return drew_id is not None
         if getattr(trigger, "opponent", False):
             # "When an opponent draws" (Seasoned Fleet Admiral JTL_111).
-            return drew_id is not None and drew_id != source_ci.owner_id
-        return drew_id == source_ci.owner_id
+            return drew_id is not None and drew_id != actor_of(state, source_ci)
+        return drew_id == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenYouUseForce):
         # Observer trigger fired at the settle-point from the Force-use ledger
         # (event is None; Yoda LOF_101).  The spender's player id is drained into
         # event_ctx by actions._fire_force_observers; "when YOU use the Force"
         # means it must equal the source's controller.
-        return event_ctx.get("force_used_player_id") == source_ci.owner_id
+        return event_ctx.get("force_used_player_id") == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenYouRevealOrDiscard):
         # Observer trigger fired at the settle-point from the reveal/discard-from-hand
         # ledger (event is None; Padmé Amidala SEC_16).  The acting player's id is
         # drained into event_ctx by actions._fire_reveal_discard_observers; "when YOU
         # reveal or discard" means it must equal the source's controller.
-        return event_ctx.get("hand_reveal_discard_player_id") == source_ci.owner_id
+        return event_ctx.get("hand_reveal_discard_player_id") == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenPlayerDiscardsFromHand):
         # Observer trigger fired at the settle-point from the discard-only ledger
@@ -667,7 +694,7 @@ def _trigger_matches(
         if miller is None:
             return False
         res = state.find_instance(source_ci.instance_id)
-        controller = res[0].player_id if res is not None else source_ci.owner_id
+        controller = res[0].player_id if res is not None else actor_of(state, source_ci)
         return miller == controller
 
     if isinstance(trigger, WhenUnitHealed):
@@ -680,7 +707,7 @@ def _trigger_matches(
         # Observer trigger fired at the settle-point from the base-damage ledger
         # (event is None; The Daughter LOF_252).  "YOUR base" — the damaged base's
         # owner must be the source's controller.
-        return event_ctx.get("base_damaged_player_id") == source_ci.owner_id
+        return event_ctx.get("base_damaged_player_id") == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenDamageDealt):
         return _damage_event_matches(trigger, state, source_ci,
@@ -701,14 +728,14 @@ def _trigger_matches(
             if not readied_id or readied_id == source_ci.instance_id:
                 return False
             res = state.find_instance(readied_id) if state is not None else None
-            return res is not None and res[0].player_id != source_ci.owner_id
+            return res is not None and res[0].player_id != actor_of(state, source_ci)
         return readied_id == source_ci.instance_id
 
     if isinstance(trigger, WhenFriendlyUpgradeDefeated):
         # Observer trigger fired at the settle-point from the upgrade-defeat ledger
         # (event is None; Zeb Orrelios ASH_161).  "FRIENDLY" = the defeated upgrade's
         # controller (the host's controller) is the source's controller.
-        return event_ctx.get("upgrade_defeat_controller") == source_ci.owner_id
+        return event_ctx.get("upgrade_defeat_controller") == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenUpgradeAttached):
         # Observer trigger fired at the settle-point from the upgrade-attach ledger
@@ -721,20 +748,20 @@ def _trigger_matches(
         # Observer trigger fired at the settle-point from the token-creation ledger
         # (event is None; Moff Jerjerrod ASH_94).  "If YOU would create" — the
         # creating player must be the source's controller.
-        return event_ctx.get("token_creation_creator") == source_ci.owner_id
+        return event_ctx.get("token_creation_creator") == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenBountyCollected):
         # Observer trigger fired at the settle-point from the bounties-collected
         # ledger (event is None; Bossk SHD_10).  The collector's player id is drained
         # into event_ctx by actions._fire_bounty_observers; "when YOU collect a
         # bounty" means it must equal the source's controller.
-        return event_ctx.get("bounty_collector_id") == source_ci.owner_id
+        return event_ctx.get("bounty_collector_id") == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenYouPlayCard):
         from swu.engine.events import CardPlayed
         if not isinstance(event, CardPlayed):
             return False
-        if event.player_id != source_ci.owner_id:
+        if event.player_id != actor_of(state, source_ci):
             return False
         if trigger.exclude_self and event.instance_id == source_ci.instance_id:
             return False
@@ -830,7 +857,7 @@ def _trigger_matches(
         from swu.engine.events import CardPlayed
         if not isinstance(event, CardPlayed):
             return False
-        if event.player_id == source_ci.owner_id:
+        if event.player_id == actor_of(state, source_ci):
             return False  # a friendly play, not an opponent's
         count = state.game_memory.cards_played_this_phase.get(event.player_id, 0)
         return count == trigger.count
@@ -843,7 +870,7 @@ def _trigger_matches(
         from swu.engine.events import CardPlayed
         if not isinstance(event, CardPlayed):
             return False
-        if event.player_id == source_ci.owner_id:
+        if event.player_id == actor_of(state, source_ci):
             return False  # a friendly play, not an opponent's
         result = state.find_instance(event.instance_id)
         if trigger.card_type:
@@ -1164,6 +1191,40 @@ def _collect_triggers(
                         if spec.condition is None or spec.condition.evaluate(state, disc_ci):
                             results.append((disc_ci, disc_ci, idx, spec))
 
+    # An attacker defeated during its own attack: its "When Attack Ends" abilities
+    # that need no survival (``WhenAttackEnds(even_if_defeated=True)`` — Chirrut
+    # Imwe LAW_46, Padmé Amidala TS26_4, Fett's Firespray LAW_252) still resolve.
+    # The combat pipelines name it under ``attack_ended_departed``; find_instance
+    # reaches the discard pile.  Scoped to that trigger kind with the flag set, so
+    # a card in the discard never matches anything else.
+    departed_id = event_ctx.get("attack_ended_departed")
+    if departed_id:
+        res = state.find_instance(departed_id)
+        from swu.engine.state import ability_suppressed as _dep_suppressed
+        if res is not None and res[1] not in candidates and not _dep_suppressed(
+                state, res[1]):
+            dep_ci = res[1]
+            dsc = getattr(dep_ci.card_def, "set_code", None) or ""
+            dcn = getattr(dep_ci.card_def, "card_number", None) or ""
+            # A defeated LEADER is back in its base zone, undeployed — but it
+            # attacked as a deployed unit, so only its deployed-side triggers count
+            # (Padmé Amidala TS26_4).  A non-leader takes no side-gated trigger at
+            # all (a token unit shares its registry key with a leader).
+            dep_is_leader = isinstance(dep_ci.card_def, Leader)
+            if dsc and dcn:
+                for idx, spec in enumerate(get_abilities(dsc, dcn)):
+                    if not isinstance(spec, TriggerAbility):
+                        continue
+                    if not isinstance(spec.trigger, WhenAttackEnds):
+                        continue
+                    if spec.undeployed_only or bool(spec.deployed_only) != dep_is_leader:
+                        continue
+                    if not getattr(spec.trigger, "even_if_defeated", False):
+                        continue
+                    if _trigger_matches(spec.trigger, event, dep_ci, state, event_ctx):
+                        if spec.condition is None or spec.condition.evaluate(state, dep_ci):
+                            results.append((dep_ci, dep_ci, idx, spec))
+
     # A unit's own "When Defeated" trigger: by the time the UnitDefeated event
     # fires, _defeat_unit() has already pulled the unit out of its arena (and not
     # yet placed it in discard), so it is absent from _cards_in_play above.  The
@@ -1389,13 +1450,13 @@ def _acting_player_id(state: "GameState", source_ci: "CardInstance",
 
     A source that has just left play (a When Defeated / bounty resolving from limbo)
     uses its controller at the moment of defeat, which ``_defeat_unit`` records as
-    ``defeated_controller_id`` — last-known information."""
-    from swu.engine.state import controller_id
+    ``defeated_controller_id`` — last-known information — and ``actor_of`` covers
+    the rest (an event's player, an upgrade's controller)."""
     ctx = event_ctx or {}
     if (ctx.get("defeated_id") == source_ci.instance_id
             and ctx.get("defeated_controller_id")):
         return str(ctx["defeated_controller_id"])
-    return controller_id(state, source_ci)
+    return actor_of(state, source_ci)
 
 
 def _spec_matches_ci(
@@ -1414,7 +1475,7 @@ def _spec_matches_ci(
     # fizzle so an inactive conditional branch is skipped silently — Sabine's
     # Masterpiece JTL_250.
     if spec.require_controller_aspect is not None:
-        ctrl = state.player_by_id(source_ci.owner_id)
+        ctrl = state.player_by_id(actor_of(state, source_ci))
         aspect = spec.require_controller_aspect
         if not any(
             aspect in {a.name for a in (getattr(u.card_def, "aspects", None) or ())}
@@ -1578,7 +1639,7 @@ def _spec_matches_ci(
             # trivially ≥ its own cost).
             opp_id = None
             for p in state.players:
-                if p.player_id != source_ci.owner_id:
+                if p.player_id != actor_of(state, source_ci):
                     opp_id = p.player_id
                     break
             if opp_id is None or candidate.owner_id != opp_id:
@@ -1686,7 +1747,7 @@ def _spec_matches_ci(
             # yields NO candidates, so the follow-up fizzles without prompting (the
             # ``fewer_units_than_prior_target_controller`` shape).  Evaluated AFTER
             # the defeat, which is what makes the card's own kill able to satisfy it.
-            opp = state.players[1 - state.player_index(source_ci.owner_id)]
+            opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
             if opp.space_arena:
                 return False
         if pred == "controller_more_space_units_than_target_controller":
@@ -1700,7 +1761,7 @@ def _spec_matches_ci(
             if held is None:
                 return False
             held_by = held[0]       # the HOLDING player = the true controller
-            mine = state.players[state.player_index(source_ci.owner_id)]
+            mine = state.players[state.player_index(actor_of(state, source_ci))]
             if len(mine.space_arena) <= len(held_by.space_arena):
                 return False
         if pred == "defeated_upgraded":
@@ -1881,7 +1942,7 @@ def _spec_matches_ci(
             # (printed + granted) are compared.  No friendly leader, or no shared
             # trait ⇒ no match.
             from swu.engine.traits import get_traits
-            ctrl = state.player_by_id(source_ci.owner_id)
+            ctrl = state.player_by_id(actor_of(state, source_ci))
             leader = ctrl.leader_instance
             if leader is None:
                 return False
@@ -1910,7 +1971,7 @@ def _spec_matches_ci(
             cost = getattr(candidate.card_def, "cost", None)
             if cost is None:
                 return False
-            hand = state.player_by_id(source_ci.owner_id).hand
+            hand = state.player_by_id(actor_of(state, source_ci)).hand
             if not any(isinstance(c.card_def, _Unit)
                        and getattr(c.card_def, "cost", None) == cost for c in hand):
                 return False
@@ -1956,7 +2017,7 @@ def _spec_matches_ci(
                         break
                 if holder is not None:
                     break
-            if holder is None or holder.player_id != source_ci.owner_id:
+            if holder is None or holder.player_id != actor_of(state, source_ci):
                 return False
         if pred == "same_arena_as_played_card":
             # Candidate must stand in the same arena as the card whose play fired
@@ -2090,7 +2151,7 @@ def _spec_matches_ci(
             other_id = event_ctx.get("prior_target_controller")
             if not other_id:
                 return False
-            mine = state.players[state.player_index(source_ci.owner_id)]
+            mine = state.players[state.player_index(actor_of(state, source_ci))]
             theirs = state.players[state.player_index(other_id)]
             if (len(mine.ground_arena) + len(mine.space_arena)
                     >= len(theirs.ground_arena) + len(theirs.space_arena)):
@@ -2155,7 +2216,7 @@ def _spec_matches_ci(
             # Ephant Mon SHD_88).  ("this round" == "this phase" — base attacks
             # happen only in ACTION.)
             attackers = state.game_memory.base_attackers_this_round.get(
-                source_ci.owner_id, [])
+                actor_of(state, source_ci), [])
             if candidate.instance_id not in attackers:
                 return False
         if pred == "eligible_host_for_event_upgrade":
@@ -2210,7 +2271,7 @@ def _spec_matches_ci(
             # the card's printed rules note says the Action may still be USED when
             # the clause is unmet — it simply exhausts nothing, which is exactly
             # what an empty candidate set gives.
-            if (source_ci.owner_id
+            if (actor_of(state, source_ci)
                     not in state.game_memory.tokens_created_this_phase):
                 return False
         if pred == "no_initiative_claimed":
@@ -2252,7 +2313,7 @@ def _spec_matches_ci(
                 return False
             _MOST_POWER_EVALUATING.add(guard)
             try:
-                ps = state.player_by_id(source_ci.owner_id)
+                ps = state.player_by_id(actor_of(state, source_ci))
                 pool = list(ps.ground_arena) + list(ps.space_arena)
                 if not pool:
                     return False
@@ -2270,7 +2331,7 @@ def _spec_matches_ci(
             # controller`` TWI_55 shape): admit only the units at the maximum, so a
             # tie is still a real choice and a clear winner auto-resolves.
             from swu.engine.actions import compute_power
-            ps = state.player_by_id(source_ci.owner_id)
+            ps = state.player_by_id(actor_of(state, source_ci))
             pool = [u for u in ps.ground_arena + ps.space_arena
                     if "Villainy" in {a.name for a in
                                       (getattr(u.card_def, "aspects", None) or ())}]
@@ -2288,7 +2349,7 @@ def _spec_matches_ci(
             # ConditionalEffect cannot carry a targeted sub-effect, so the "if you
             # do" is expressed as a gate that yields NO candidates — the event
             # fizzles unprompted when the controller has no Force token.
-            if not getattr(state.player_by_id(source_ci.owner_id),
+            if not getattr(state.player_by_id(actor_of(state, source_ci)),
                            "has_force_token", False):
                 return False
         if pred.startswith("controller_has_planet_base:"):
@@ -2296,7 +2357,7 @@ def _spec_matches_ci(
             # (Overgrowth HMW_151) — the ``controller_has_force_token`` shape, the
             # planet riding after the colon.
             from swu.cards.base_planets import controls_planet_base
-            if not controls_planet_base(state.player_by_id(source_ci.owner_id),
+            if not controls_planet_base(state.player_by_id(actor_of(state, source_ci)),
                                         pred.split(":", 1)[1]):
                 return False
         if pred == "controller_nonleader_shares_leader_trait":
@@ -2305,7 +2366,7 @@ def _spec_matches_ci(
             # traits, the ``shares_trait_with_friendly_leader`` reading.
             from swu.cards.models import Leader as _LeaderCard
             from swu.engine.traits import get_traits
-            ctrl = state.player_by_id(source_ci.owner_id)
+            ctrl = state.player_by_id(actor_of(state, source_ci))
             leader = ctrl.leader_instance
             if leader is None:
                 return False
@@ -2356,7 +2417,7 @@ def _spec_matches_ci(
             # predicate string after the colon, so one arm serves any trait; PRINTED
             # traits, since a card in hand is not in play for the trait-grant layer.
             want = pred.split(":", 1)[1]
-            ps = state.player_by_id(source_ci.owner_id)
+            ps = state.player_by_id(actor_of(state, source_ci))
             if not any(want in (getattr(h.card_def, "traits", None) or ())
                        for h in ps.hand):
                 return False
@@ -2421,7 +2482,7 @@ def _spec_matches_ci(
             from swu.engine.actions import compute_power
             if candidate.zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
                 return False
-            own = state.player_by_id(source_ci.owner_id)
+            own = state.player_by_id(actor_of(state, source_ci))
             best_power = max((compute_power(state, ci)
                               for arena in (own.ground_arena, own.space_arena)
                               for ci in arena), default=None)
@@ -2454,7 +2515,7 @@ def _spec_matches_ci(
             from swu.engine.actions import compute_power, compute_hp
             if candidate.zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
                 return False
-            ps = state.player_by_id(source_ci.owner_id)
+            ps = state.player_by_id(actor_of(state, source_ci))
             ready = sum(1 for r in ps.resources if not r.exhausted)
             if compute_power(state, candidate) != ready:
                 return False
@@ -2496,8 +2557,10 @@ def _spec_matches_ci(
             # ``kind="upgrade"`` never offers them as the candidate.
             if source_ci is None:
                 return False
+            from swu.engine.state import controller_id as _ctrl
+            me = actor_of(state, source_ci)
             own_upgrades = [u for u in (getattr(source_ci, "attached_upgrades", None) or ())
-                            if u.owner_id == source_ci.owner_id]
+                            if _ctrl(state, u) == me]
             if (len(own_upgrades) != 1
                     or own_upgrades[0].instance_id != candidate.instance_id):
                 return False
@@ -2534,7 +2597,7 @@ def _spec_matches_ci(
     effective_cost_max = spec.cost_max
     if spec.cost_max_boost is not None:
         boost_aspects, boosted_cap = spec.cost_max_boost
-        ctrl = state.player_by_id(source_ci.owner_id)
+        ctrl = state.player_by_id(actor_of(state, source_ci))
         boost_set = set(boost_aspects)
         if any(
             boost_set & {a.name for a in (getattr(u.card_def, "aspects", None) or ())}
@@ -2558,7 +2621,7 @@ def _spec_matches_ci(
     # double-Villainy unit contributes 2 icons, so duplicates count.
     if getattr(spec, "cost_max_count", None) is not None:
         if spec.cost_max_count == "controller_villainy_aspect_icons":
-            ctrl = state.player_by_id(source_ci.owner_id)
+            ctrl = state.player_by_id(actor_of(state, source_ci))
             threshold = sum(
                 1
                 for arena in (ctrl.ground_arena, ctrl.space_arena)
@@ -2600,7 +2663,7 @@ def _spec_matches_ci(
         if candidate.zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
             return False  # only units have power
         if spec.power_max_count == "enemy_units_upgrade_count":
-            opp = state.players[1 - state.player_index(source_ci.owner_id)]
+            opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
             threshold = sum(len(u.attached_upgrades)
                             for u in (*opp.ground_arena, *opp.space_arena))
         else:
@@ -2820,7 +2883,7 @@ def execute_effect(
             if _target_protected(state, tid, source_ci, "damage"):
                 continue  # can't be damaged by enemy card abilities (SHD_187)
             state = _apply_deal_damage(state, tid, effect.amount, source_name,
-                                       dealer_id=source_ci.owner_id,
+                                       dealer_id=actor_of(state, source_ci),
                                        source_id=source_ci.instance_id)
         return state
 
@@ -2834,7 +2897,7 @@ def execute_effect(
         for tid, amount in amounts:
             if amount > 0 and not _target_protected(state, tid, source_ci, "damage"):
                 state = _apply_deal_damage(state, tid, amount, source_name,
-                                           dealer_id=source_ci.owner_id,
+                                           dealer_id=actor_of(state, source_ci),
                                            source_id=source_ci.instance_id)
         return state
 
@@ -2847,7 +2910,7 @@ def execute_effect(
         for tid in target_ids:
             if _target_protected(state, tid, source_ci, "defeat"):
                 continue
-            state = _apply_defeat_unit(state, tid, actor_id=source_ci.owner_id)
+            state = _apply_defeat_unit(state, tid, actor_id=actor_of(state, source_ci))
         return state
 
     if isinstance(effect, CaptureUnit):
@@ -2867,7 +2930,7 @@ def execute_effect(
                 continue
             if _target_protected(state, tid, source_ci, "defeat"):
                 continue
-            state = _apply_defeat_unit(state, tid, actor_id=source_ci.owner_id)
+            state = _apply_defeat_unit(state, tid, actor_id=actor_of(state, source_ci))
         return state
 
     if isinstance(effect, GiveToken):
@@ -3068,7 +3131,7 @@ def execute_effect(
         # source's controller as the dealer for any damage dealt synchronously here
         # (a pushed decision resolves later, outside this scope, and passes dealer_id
         # explicitly in its resolver) — Boba Fett JTL_9's WhenDealNonCombatDamage.
-        with _noncombat_dealer(source_ci.owner_id):
+        with _noncombat_dealer(actor_of(state, source_ci)):
             return effect.fn(state, source_ci, target_id, event_ctx)
 
     return state
@@ -3103,7 +3166,7 @@ def _scaling_magnitude(
     if count == "source_controller_discard_distinct_costs":
         if source_ci is None:
             return 0
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         # Read through getattr once: AnyCard is a union and Leader/Base/tokens
         # have no cost at all.
         costs = {cost for cost in (getattr(ci.card_def, "cost", None)
@@ -3116,7 +3179,7 @@ def _scaling_magnitude(
         # counting BOTH of the source controller's arenas and ignoring the target.
         if source_ci is None:
             return 0
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         return len(ps.ground_arena) + len(ps.space_arena)
 
     if count == "source_controller_units_damage":
@@ -3127,7 +3190,7 @@ def _scaling_magnitude(
         # and correctly contributes its own damage when it is friendly).
         if source_ci is None:
             return 0
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         return sum(int(ci.damage or 0) for ci in ps.ground_arena + ps.space_arena)
 
     if count == "source_controller_experience_tokens":
@@ -3138,7 +3201,7 @@ def _scaling_magnitude(
         # which is what makes the token it just handed out count.
         if source_ci is None:
             return 0
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         return sum(
             1
             for u in ps.ground_arena + ps.space_arena
@@ -3156,7 +3219,7 @@ def _scaling_magnitude(
             return 0
         return sum(
             1
-            for p in state.players if p.player_id != source_ci.owner_id
+            for p in state.players if p.player_id != actor_of(state, source_ci)
             for u in p.ground_arena + p.space_arena
             if int(getattr(u, "damage", 0) or 0) > 0
         )
@@ -3182,7 +3245,7 @@ def _scaling_magnitude(
         # resource row (available + spent).
         if source_ci is None:
             return 0
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         return len(ps.resources)
 
     if count == "source_controller_space_units":
@@ -3192,7 +3255,7 @@ def _scaling_magnitude(
         # "other").
         if source_ci is None:
             return 0
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         return len(ps.space_arena)
 
     if count == "source_controller_hand":
@@ -3201,14 +3264,14 @@ def _scaling_magnitude(
         # target-side ``target_controller_hand``.  Independent of target.
         if source_ci is None:
             return 0
-        return len(state.player_by_id(source_ci.owner_id).hand)
+        return len(state.player_by_id(actor_of(state, source_ci)).hand)
 
     if count == "source_controller_units_x2":
         # "Twice the number of units you control" (Yoda LOF_101) — total units in
         # both of the source controller's arenas, doubled.  Independent of target.
         if source_ci is None:
             return 0
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         return 2 * (len(ps.ground_arena) + len(ps.space_arena))
 
     if count == "source_damage":
@@ -3242,7 +3305,7 @@ def _scaling_magnitude(
             return 0
         gm = getattr(state, "game_memory", None)
         tally = getattr(gm, "cards_drawn_this_phase", None) or {}
-        return int(tally.get(source_ci.owner_id, 0))
+        return int(tally.get(actor_of(state, source_ci), 0))
 
     if count.startswith("source_controller_units_with_trait:"):
         # "1 damage to it for each friendly <Trait> unit" (Low Altitude Gunship
@@ -3253,7 +3316,7 @@ def _scaling_magnitude(
             return 0
         trait = count.split(":", 1)[1]
         from swu.engine.traits import has_trait
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         return sum(1 for u in (ps.ground_arena + ps.space_arena)
                    if has_trait(state, u, trait))
 
@@ -3285,7 +3348,7 @@ def _scaling_magnitude(
         if source_ci is None:
             return 0
         from swu.engine.state import Zone
-        src_ps = state.player_by_id(source_ci.owner_id)
+        src_ps = state.player_by_id(actor_of(state, source_ci))
         mult = 2 if count.endswith("_x2") else 1
         # Ferrix Uprising SEC_130 uses the doubled variant ("twice the number of
         # units you control in its arena"); Synchronized Strike TWI_99 the plain one.
@@ -3597,7 +3660,7 @@ def _target_protected(state, target_id: str, source_ci, kind: str) -> bool:
     if result is None:
         return False
     ps, ci = result
-    if source_ci is not None and source_ci.owner_id == ps.player_id:
+    if source_ci is not None and actor_of(state, source_ci) == ps.player_id:
         return False  # friendly ability — not an "enemy card ability"
     # Is the target itself currently attached to a host?  Distinguishes an
     # ``upgrade_only`` protection's one valid reading (Luke JTL_12) from the card
@@ -3758,7 +3821,7 @@ def _apply_return_to_hand(state: "GameState", target_id: str) -> "GameState":
     owner_ps.hand.append(ci)
     # It left play: release its captives and revert any control it took.
     from swu.engine.actions.zones import _unit_left_play
-    _unit_left_play(state, ci)
+    _unit_left_play(state, ci, ps.player_id)
     # A returned card no longer sources any "while this unit is in play" permanent
     # modifier it may have granted (Huyang TWI_110) — drop them for hygiene (the
     # compute-time source-in-play guard already makes them inert).
@@ -4008,7 +4071,7 @@ def push_borrowed_when_played(state: "GameState", source_ci: "CardInstance",
     can never lend to each other forever."""
     from swu.engine.decisions import PendingDecision
     from swu.engine.events import DecisionPushed
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(state, source_ci)
     owner_idx = state.player_index(controller_id)
     pushed = False
     for ability_idx in reversed(_when_played_ability_indices(state, lender)):
@@ -4080,7 +4143,7 @@ def _schedule_ability_redo(
     ability = unwrap_granted(specs[ability_idx])
     if not isinstance(ability, TriggerAbility):
         return state
-    owner_id = source_ci.owner_id
+    owner_id = actor_of(state, source_ci)
     redo_ctx_extra: dict = {}
 
     if isinstance(ability.trigger, WhenPlayed):
@@ -4380,7 +4443,7 @@ def _build_ability_decision(
 
     if ability.optional:
         return PendingDecision(
-            deciding_player_id=source_ci.owner_id,
+            deciding_player_id=actor_of(state, source_ci),
             kind="trigger_option",
             context={
                 "set_code": set_code,
@@ -4394,7 +4457,7 @@ def _build_ability_decision(
         )
     else:
         return PendingDecision(
-            deciding_player_id=source_ci.owner_id,
+            deciding_player_id=actor_of(state, source_ci),
             kind="resolve_effects",
             context={
                 "set_code": set_code,

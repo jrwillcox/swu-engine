@@ -690,10 +690,8 @@ class Condition(Enum):
                                       # (game_memory.defeated_controllers_this_round is
                                       # non-empty) — the controller-blind sibling of
                                       # ENEMY_UNIT_DEFEATED_THIS_PHASE.  Gates "If a unit
-                                      # left play this phase, …" (Yoda TWI_4); being
-                                      # defeated is the ledgered way a unit leaves play
-                                      # (a bounce/capture is not recorded), a documented
-                                      # simplification
+                                      # was defeated this phase" cards.  ("Left play"
+                                      # cards use ANY_UNIT_LEFT_PLAY_THIS_PHASE.)
     CONTROLLER_UNIT_DEFEATED_THIS_PHASE = "controller_unit_defeated_this_phase"
                                       # a unit the SOURCE'S CONTROLLER controlled was
                                       # defeated this phase — the friendly mirror of
@@ -701,6 +699,14 @@ class Condition(Enum):
                                       # defeated_controllers_this_round ledger ("If a
                                       # friendly unit was defeated this phase" — Wat
                                       # Tambor TWI_6, both sides)
+    # "If a unit LEFT PLAY this phase" — any route out of play (defeated, returned to
+    # hand, put on a deck, captured), read from ``game_memory.
+    # left_play_controllers_this_phase`` (one controller-at-exit entry per unit).
+    # The DEFEATED atoms above stay defeat-only for the cards that say "defeated".
+    ANY_UNIT_LEFT_PLAY_THIS_PHASE = "any_unit_left_play_this_phase"  # Yoda TWI_4
+    CONTROLLER_UNIT_LEFT_PLAY_THIS_PHASE = "controller_unit_left_play_this_phase"
+                                      # a friendly unit (Disturbance in the Force LOF_216)
+    ENEMY_UNIT_LEFT_PLAY_THIS_PHASE = "enemy_unit_left_play_this_phase"  # Boba SOR_15
     CONTROLLER_N_UNITS_DEFEATED_THIS_PHASE = "controller_n_units_defeated_this_phase"
                                       # param=N: at least N units the source's
                                       # controller controlled were defeated this phase.
@@ -1064,10 +1070,10 @@ class ConditionCheck:
     param: Any = None
 
     def evaluate(self, state: "GameState", source_ci: "CardInstance") -> bool:
-        # The source's CONTROLLER ("you" on the card) — a stolen unit's conditions
-        # read the thief's board (control fix 2026-11-23).
-        from swu.engine.state import controller_id
-        _me = controller_id(state, source_ci)
+        # "You" on the card (``actor_of``): a stolen unit's conditions read the
+        # thief's board; an event's, the player who played it.
+        from swu.engine.state import actor_of
+        _me = actor_of(state, source_ci)
         ps = state.player_by_id(_me)
         c = self.condition
         if c == Condition.ALL_OF:
@@ -1512,6 +1518,16 @@ class ConditionCheck:
             gm = getattr(state, "game_memory", None)
             controllers = getattr(gm, "defeated_controllers_this_round", None) or []
             return any(pid == _me for pid in controllers)
+        if c in (Condition.ANY_UNIT_LEFT_PLAY_THIS_PHASE,
+                 Condition.CONTROLLER_UNIT_LEFT_PLAY_THIS_PHASE,
+                 Condition.ENEMY_UNIT_LEFT_PLAY_THIS_PHASE):
+            gm = getattr(state, "game_memory", None)
+            left = getattr(gm, "left_play_controllers_this_phase", None) or []
+            if c == Condition.ANY_UNIT_LEFT_PLAY_THIS_PHASE:
+                return bool(left)
+            if c == Condition.CONTROLLER_UNIT_LEFT_PLAY_THIS_PHASE:
+                return any(pid == _me for pid in left)
+            return any(pid != _me for pid in left)
         if c == Condition.CONTROLLER_N_UNITS_DEFEATED_THIS_PHASE:
             # "If 2 or more friendly units were defeated this phase" (Nute Gunray
             # TWI_2).  One entry per defeat is appended to the ledger, so counting
@@ -1805,13 +1821,13 @@ class ConditionCheck:
             from swu.engine.actions import _reveal_ramp_candidates
             return bool(_reveal_ramp_candidates(state, ps.player_id))
         if c == Condition.CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_IGNORE_ASPECT_PENALTY:
-            # ≥1 affordable hand unit once one V/C/A/Cunning aspect penalty is
-            # waived (Daimyo's Palace LAW_20).  Reuses the same affordability
-            # filter the play-from-hand subsystem uses so the gate and the
-            # offered candidates never disagree.
-            from swu.engine.actions import _playable_units_from_hand
-            return bool(_playable_units_from_hand(
-                state, ps, None, ignore_aspect_penalty=True))
+            # ≥1 affordable hand CARD (unit, event or upgrade) once one
+            # V/C/A/Cunning aspect penalty is waived (Daimyo's Palace LAW_20).
+            # Reuses the play-from-hand subsystem's own candidate filter so the
+            # gate and the offered candidates never disagree.
+            from swu.engine.actions import _play_from_hand_candidates
+            return bool(_play_from_hand_candidates(
+                state, ps, {"ignore_aspect_penalty": True, "any_card": True}))
         if c == Condition.CONTROLLER_HAS_UNIT_COST_MAX:
             # ≥1 arena unit, ready or exhausted, printed cost ≤ `param` (Wicket HMW_14).
             # A leader unit prints no play cost, so it never counts.
@@ -2762,15 +2778,15 @@ class UseForce:
 @dataclass(frozen=True)
 class DiscardCardCost:
     """Cost: "discard a card from your hand" (Kylo Ren SHD_11's undeployed Action).
-    Payable only when the controller has ≥1 card in hand; paying it discards the
-    first card (the DiscardFromHand first-card simplification).  Handled at the
-    activated-ability cost sites in actions.py (UseAbility / legal_actions),
-    parallel to ExhaustSelf / PayResources / DefeatSelf / UseForce.
+    Payable only when the controller has ≥1 card in hand.  ``UseAbility`` pays the
+    other costs, then the player CHOOSES the card(s) (``push_discard_of_choice``,
+    no prompt when there is no choice) and the effects resolve after that, through
+    the ``resume_activated_ability`` discard payoff.
 
     ``cost_min`` narrows WHICH card may be discarded — "discard a card that costs 6
     or more from your hand" (Dryden Vos SEC_7): the ability is only offered while
-    the hand holds such a card, and paying discards the first one that qualifies.
-    ``count`` discards that many cards ("discard 2 cards from your hand")."""
+    the hand holds such a card.  ``count`` discards that many cards ("discard 2
+    cards from your hand")."""
     cost_min: Optional[int] = None
     count: int = 1
 
@@ -2939,7 +2955,8 @@ class WhenDamageDealt:
       damage to a unit or base", Darth Sidious HMW_11).
     * ``target`` — ``"self"`` (this card), ``"friendly"``, ``"other_friendly"``
       (a friendly unit other than this one), ``"enemy"``, or ``None`` (any).
-    * ``kind`` — ``"unit_or_base"`` or ``"unit"``.
+    * ``kind`` — ``"unit_or_base"``, ``"unit"`` or ``"base"`` ("When you deal damage
+      to an enemy base", Cassian Andor SOR_13).
     * ``min_amount`` — the instance's size ("4 or more").
     * ``combat`` — ``False`` = non-combat only (Cham Syndulla HMW_13), ``True`` =
       combat only, ``None`` = either.
@@ -2978,8 +2995,14 @@ class WhenEnemyAttacksYourBase:
 
 @dataclass(frozen=True)
 class WhenUnitDefeated:
-    """Fires when ANY unit matching filter is defeated, from the perspective of source card's controller."""
+    """Fires when ANY unit matching filter is defeated, from the perspective of source card's controller.
+
+    ``leaves_play=True`` widens it to "When a unit LEAVES PLAY" (Boba Fett SOR_15):
+    it also fires on the ``UnitLeftPlay`` event that a bounce, a put-on-deck or a
+    capture emits.  For that event only the filter's ``controller`` is checked, against
+    the unit's controller as it left (the card is no longer in an arena)."""
     filter: TargetSpec = field(default_factory=lambda: TargetSpec())
+    leaves_play: bool = False
 
 @dataclass(frozen=True)
 class WhenUnitEntersPlay:
@@ -3335,7 +3358,10 @@ class WhenBountyCollected:
 
 @dataclass(frozen=True)
 class OnAttackDefeatsUnit:
-    """Fires when this unit defeats a unit via combat damage."""
+    """Fires when this unit defeats a unit via combat damage (and survived the
+    combat).  A printed "When Attack Ends: If the defending unit was defeated, …"
+    needs no survival: that is ``WhenAttackEnds(require_defender_defeated=True,
+    even_if_defeated=True)`` (Fett's Firespray LAW_252)."""
 
 @dataclass(frozen=True)
 class WhenFriendlyUnitAttacksAndDefeatsUnit:
@@ -3551,9 +3577,17 @@ class WhenAttackEnds:
     that observer keys on ``attack_ended_attacker``, which this fire never sets, so
     the shared key cannot make either family fire twice.  A base attack sets no such
     key, so the clause correctly never fires there.
+
+    ``even_if_defeated`` also fires it when the attacker was defeated during its
+    own attack — a "When Attack Ends" ability whose rules note says the unit "does
+    not need to survive the attack" (Chirrut Imwe LAW_46, Padmé Amidala TS26_4).
+    The pipelines then set ``attack_ended_departed`` instead of
+    ``attack_ended_survivor`` (with the same extra keys), and ``_collect_triggers``
+    reaches the attacker in the discard pile.
     """
     require_base_damage: bool = False
     require_defender_defeated: bool = False
+    even_if_defeated: bool = False
 
 @dataclass(frozen=True)
 class WhenFriendlyUnitDealtCombatDamage:
@@ -3754,8 +3788,15 @@ class ConstantAbility:
                                     # pass in ``keywords.has_keyword`` /
                                     # ``keyword_value`` (gated on a cached registry
                                     # index, so that pass never runs for a board with
-                                    # no such card).  KEYWORD layers only — no card
-                                    # yet needs an undeployed StatBonus aura.
+                                    # no such card).  The constant-STAT scans honour
+                                    # it too (``actions._constant_spec_side_ok``).
+    both_sides: bool = False        # this aura is printed on BOTH sides of a LEADER
+                                    # ("Each friendly damaged unit gets +1/+0" —
+                                    # Director Krennic SOR_1; Gar Saxon SHD_1), so it
+                                    # applies while the leader is undeployed in
+                                    # ``base_zone`` as well as once deployed.  Read by
+                                    # the constant-STAT scans only (no both-sided
+                                    # keyword aura exists yet).
 
 @dataclass
 class ActivatedAbility:
@@ -4199,14 +4240,33 @@ class CostRoute:
     * ``"defeat_ready_resource"`` — defeat a ready resource you control (Greater
       Sarlacc HMW_49, ``discount=3``);
     * ``"damage_friendly_unit"`` — deal 1 damage to a friendly unit, each unit at
-      most once (The Marauder HMW_125, ``discount=1``).
+      most once (The Marauder HMW_125, ``discount=1``);
+    * ``"discard_aspect_card"`` — an ALTERNATIVE cost, once: "You may discard a
+      [``aspect``] card from your hand instead of paying this event's cost"
+      (Bamboozle SOR_199; ``discount`` unused).  After the discard the card costs
+      only what taxes add on top.
 
     Read at ``PlayCard`` (the card goes to ``PLAY_BUFFER`` and a ``cost_route``
     decision opens — the Exploit skeleton) and by ``legal_actions``' best-case
     affordability check.  Only the play-from-hand path reads it; other play paths
     pay the full price."""
     kind: str
-    discount: int
+    discount: int = 0
+    aspect: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class OutOfPlayTraitGrant:
+    """Passive marker on a unit: each card its controller OWNS that is not in play
+    (hand, deck, discard, resources …) and carries every printed trait in ``traits``
+    gains ``trait`` — "each Creature unit you own that isn't in play gains the
+    Underworld trait" (Malakili LAW_212).  ``units_only`` keeps it to unit cards.
+    Read by ``swu.engine.traits`` (``get_traits`` / ``has_trait``), so it reaches every
+    out-of-play read routed through the trait layer: play-from-hand trait filters and
+    pending "next <trait> unit" discounts (Khetanna LAW_158)."""
+    trait: str
+    traits: tuple = ()
+    units_only: bool = True
 
 
 @dataclass(frozen=True)
@@ -5174,15 +5234,17 @@ class AdditionalPilotSlots:
     standard one (Millennium Falcon JTL_249: "You may play or deploy 1 additional
     Pilot on this unit").
 
-    Read at the pilot-attach seam (``actions._eligible_leader_upgrade_targets`` via
-    ``_pilot_limit``): the host's Pilot limit becomes ``1 + count``.  Purely a read
-    there — no trigger, no decision.  NOTE: the engine does not enforce the standard
-    one-Pilot-per-Vehicle limit on the normal ``PilotPlay`` path (any Vehicle may
-    already receive multiple Pilot upgrades), so this marker's functional effect is
-    to relax the *leader-deploy-as-upgrade* limit (the one place a Pilot cap is
-    checked); the "play an additional Pilot" case is already free.  Mirrors the
-    ``IndirectDamageBonus`` passive-marker pattern."""
+    Read at the pilot-attach seam (``actions._pilot_slot_free`` via ``_pilot_limit``):
+    the host's Pilot limit becomes ``1 + count``.  Every way of attaching a Pilot —
+    ``PilotPlay``, Piloting through an ability (Wedge Antilles JTL_8) and a leader
+    deploying as an upgrade — checks that limit.  Purely a read; no trigger, no
+    decision.  Mirrors the ``IndirectDamageBonus`` passive-marker pattern.
+
+    ``self_exempt``: the card carrying the marker may itself be played as a Pilot
+    on a Vehicle whose slots are full (R2-D2 JTL_245: "This upgrade can be played on
+    a friendly Vehicle unit with a Pilot on it")."""
     count: int = 1
+    self_exempt: bool = False
 
 
 @dataclass(frozen=True)

@@ -6,61 +6,23 @@ the card or engine function it affects; search `src/` for `DEVIATION` or
 `simplification` to find them.
 
 The list was last audited on 2026-11-23, when all ~200 notes in the code were read
-and sorted. If you fix one, remove it from this page in the same change.
+and sorted, and updated on 2026-11-25. If you fix one, remove it from this page in the same change.
 
 ## Deviations that can change a game
 
 These can produce a different result from a real game.
 
-### Choices made for the player
-
-| What happens | Cards |
-|---|---|
-| A hand discard written as card-specific code takes the **first card in hand** instead of letting the discarding player choose. (The shared `DiscardFromHand` effect lets them choose. About 25 cards still do their own discard; search `hand.pop(0)`.) | Merrin LOF_160, Bail Organa SEC_198, Profundity JTL_154, Spark of Rebellion SOR_200, SOR_201, Force Throw SOR_167, SOR_175, Jedi in Hiding LOF_159, Zorii Bliss SHD_203 (regroup discard), ASH_147, ASH_148, LAW_186, LAW_203, LOF_138, SEC_88, JTL_216, G25_2, P26_42, SHD_194, and the discard cost of activated abilities (`DiscardCardCost`) |
-| A card that says "play a card" only offers units. | LAW_20, TWI_2; LOF_10 offers events but not upgrades |
-| Some "you may play it" plays are mandatory: the play-from-hand decision has no decline. | LOF_1, LOF_123, The Invisible Hand JTL_89 |
-| Some mandatory "give a token / exhaust" effects can be stopped early, because they reuse an "up to" decision. | SEC_4, SEC_59, SEC_196, SHD_68 |
-
 ### Timing and triggers
 
 | What happens | Cards |
 |---|---|
-| "If a unit left play this phase" counts only defeated units. Bounced or captured units are missed. | Yoda TWI_4, LOF_216, SEC_131, Fateful Goodbye ASH_211, SOR_15 |
-| "Use this ability only once each round" is not enforced. | Cad Bane SHD_14 (deployed), Cassian Andor SOR_13 (deployed), SOR_115 |
-| "When this unit is dealt damage" and similar observers fire on combat damage only, not ability or indirect damage. | Jabba the Hutt SEC_2, SEC_143 |
-| Base-damage ledgers count combat damage only. | Cassian Andor SOR_13, SOR_175, SEC_12 |
-| "When this unit attacks and defeats a unit" and "when this attack ends" need the attacker to survive the attack. | LAW_252, Chirrut LAW_46, Padmé TS26_2 |
-| A decision pushed in the middle of an ability resolves after that ability's remaining automatic effects. Cards whose order matters use a rider instead (Furtive Handmaiden SEC_197's draw follows its discard choice). | Any two-part ability where the second part reads the first |
+| A decision pushed in the middle of an ability resolves after that ability's remaining automatic effects. Cards whose order matters use a rider instead (Furtive Handmaiden SEC_197's draw follows its discard choice; "discard a card. If you do, …" cards use a discard payoff; a deck search's `then_discard`). Fixing it generally changes core resolution and needs its own design session. | Any two-part ability where the second part reads the first |
 
 ### Board state
 
 | What happens | Cards |
 |---|---|
-| A leader's constant ability printed on **both** sides applies only while the leader is deployed. | Director Krennic SOR_1, Moff Gideon SHD_1 |
-| A Vehicle can take more than one Pilot through an ordinary Pilot play. The one-Pilot limit is checked only when a leader deploys as a Pilot. | Any Piloting unit |
-| A keyword granted "while attacking a <kind of> unit" is shown on the unit at all times. Overwhelm only matters during an attack, so the effect is an attack on an undamaged or bounty-less defender gaining Overwhelm. | Moff Gideon SHD_7, Jango Fett SHD_138, SEC_139 |
-| A Saboteur or First Strike granted for one attack doesn't let the attacker ignore Sentinel when choosing a defender. | Swoop Down SHD_230, Shoot First |
-| "Can't ready while this unit is in play" lasts until the end of the round instead. | Cantwell Arrestor Cruiser SEC_37 |
-| A two-unit attack is always simultaneous: no First Strike, and only the first defender's "when attacked" fires. | Darth Maul C24_6 |
-| Some per-round flags carry through Max Rebo's extra regroup phase. | LAW_69, SEC_137 |
-
-### Control
-
-The target filters, the conditions and the shared effects all judge "friendly",
-"enemy" and "you" by who **controls** a card. Some older card-specific code still
-reads the card's **owner** instead. That only matters for a unit whose control has
-changed (Traitorous, Change of Heart, Stolen Landspeeder, Maul LAW_54). An event
-played from another player's deck also still resolves for its owner.
-
-### Costs and riders
-
-| What happens | Cards |
-|---|---|
-| Smuggle and Piloting costs ignore play discounts and taxes. Every other way of playing a card applies them. | Smuggle and Piloting cards |
-| Smuggle riders such as "deal 4 damage to a friendly unit" aren't charged. | First Light SHD_36, and the other Smuggle cards with a rider |
-| An alternative cost ("discard a Cunning card instead of paying") isn't offered. | SOR_199 |
-| An optional extra is left out. | Bossk SHD_10 (undeployed +1/+0), SHD_222 (play the found upgrade), Malakili LAW_212 (out-of-play Creatures gaining Underworld) |
-| Leia Organa's undeployed attack is optional, and the follow-up can repeat with every Rebel instead of once. | Leia Organa SOR_9 |
+| A Creature in your deck isn't Underworld to a deck search, because search filters read printed traits. In hand, discard and resources it is. | Malakili LAW_212 |
 
 ## Shortcuts that don't change a sensible game
 
@@ -80,6 +42,90 @@ is shown. They are documented at each card. The main patterns:
   can only miss (Chimaera SOR_185, Garindan SEC_186, SEC_210, SEC_260).
 - **Cosmetic order or timing.** Examples: a "reveal" read without showing the card
   (JTL_17), and a top-card peek after the regroup draw (TWI_40).
+
+## Fixed on 2026-11-25
+
+- Smuggle costs take every discount, tax and halving a hand play takes (pending and
+  standing discounts, the card's own reductions, aspect-penalty waivers, Del Meeko,
+  The Starhawk), and the discount is used up. Smuggle can also be paid with Credit
+  tokens. Piloting costs take upgrade discounts (Congress of Malastare SEC_64,
+  Guardian of the Whills SOR_61), per-name taxes and The Starhawk.
+- First Light SHD_36's Smuggle cost also deals 4 damage to a friendly unit of your
+  choice, and can't be smuggled without one.
+- "You may play it" can be declined: Directed by the Force LOF_123, The Invisible
+  Hand JTL_89, Old Daka LOF_36, Tear This Ship Apart LAW_66.
+- Mandatory gives and exhausts can't be stopped early: Leia Organa SEC_4, Senate
+  Warden SEC_59, No One Ever Knew SEC_196, Public Enemy SHD_68.
+- "When Attack Ends" abilities that don't need the attacker to survive now resolve
+  when it was defeated: Fett's Firespray LAW_252, Chirrut Îmwe LAW_46, Padmé Amidala
+  TS26_4.
+- Leia Organa SOR_9's undeployed attack is mandatory, and is followed by at most one
+  optional attack with another Rebel.
+- Cantwell Arrestor Cruiser SEC_37's "can't ready" lasts while it is in play, across
+  rounds, and ends when it leaves play.
+- A Saboteur granted for one attack ignores Sentinel when choosing the defender (Swoop
+  Down SHD_230 and the other "attack with a unit, it gains Saboteur" cards).
+- A two-unit attack (Darth Maul C24_6, TWI_135) handles First Strike per defender,
+  The Stranger's "defender deals damage first", a combat-damage redirect and each
+  defender's power debuffs, and both defenders' "when attacked" abilities fire.
+- "Doesn't ready during the next regroup phase" skips exactly one ready step, so
+  under Max Rebo's extra regroup the unit readies in the second one (Dryden Vos
+  SEC_137, Patient Hunter LAW_73; the list had named LAW_69).
+- Bamboozle SOR_199 can be played by discarding a Cunning card instead of paying.
+- Bossk SHD_10's undeployed "you may give it +1/+0 for this phase" is offered.
+- Bounty Posting SHD_228 offers to play the upgrade it found (the list had named
+  Enticing Reward SHD_222).
+- Enticing Reward SHD_222's collector discards after drawing the two cards, choosing
+  from the hand that holds them.
+- Malakili LAW_212: Creature units you own that aren't in play are Underworld (for
+  play-from-hand trait filters and "next Underworld unit" discounts).
+- Tear This Ship Apart LAW_66 can play an event or upgrade from the opponent's
+  resources, not only a unit.
+- Altering the Deal SHD_243 lets you choose the captured card; Reckless Sacrifice
+  ASH_163 lets you choose the unit to discard, and the 5 damage can't be skipped.
+
+## Fixed on 2026-11-24
+
+- Every "discard a card" now lets the discarding player choose: about 25 cards that
+  did their own discard (Merrin, Bail Organa, Profundity, Force Throw, Ninth
+  Sister, Gungi, Bix Caleen, Zorii Bliss's regroup discard, Luthen's Haulcraft,
+  Jedi in Hiding, and others), and the "discard a card" cost of activated abilities
+  (Kylo Ren SHD_11, Dryden Vos SEC_7, Krrsantan LAW_84). Syril Karn SEC_133 and
+  Kouhun Assassination TS26_33 now discard a chosen card, not a random one.
+- "Look at an opponent's hand and discard a card from it" now lets you pick the
+  card (Spark of Rebellion SOR_200, Bodhi Rook SOR_201).
+- "Use this ability only once each round" is enforced for Cad Bane SHD_14, Cassian
+  Andor SOR_13 and Agent Kallus SOR_115.
+- A leader ability printed on both sides now works while the leader is undeployed
+  (Director Krennic SOR_1, Gar Saxon SHD_1).
+- A Vehicle takes one Pilot, plus any extra slots, on every Pilot play. R2-D2
+  JTL_245 can join a piloted Vehicle and doesn't count against the limit (the
+  official ruling).
+- "You" in card-specific code is now the card's controller, not its owner (about
+  700 places). A stolen unit's abilities work for the player who took it, and its
+  When Defeated for the player who controlled it when it was defeated. An upgrade
+  stays under the control of the player who played it, even on an enemy unit (the
+  Comprehensive Rules). An event played from another player's cards resolves for
+  the player who played it.
+- "If a unit left play this phase" counts every way out of play: defeated,
+  returned to hand, put on a deck or captured (Yoda TWI_4, Chancellor Palpatine
+  TWI_203, Disturbance in the Force LOF_216, Let's Talk SEC_131, Fateful Goodbye
+  ASH_211). Boba Fett SOR_15's "When an enemy unit leaves play" fires on all of
+  them too.
+- "When damage is dealt to this unit" now sees ability and indirect damage, not only
+  combat damage (Jabba the Hutt SEC_2, The Elite Squad SEC_143). So do the
+  "damaged a base this phase" counts (Cassian Andor SOR_13 and SEC_12, Forced
+  Surrender SOR_175, Retaliation SEC_77), which also now count Overwhelm damage.
+  Cassian Andor SOR_13's "When you deal damage to an enemy base" fires for any of
+  your cards' damage, not only his own attacks.
+- "Play a card from your hand" offers events and upgrades as well as units
+  (Daimyo's Palace LAW_20 and the seven other LAW bases with the same Epic Action,
+  Agent Kallus LAW_3, From a Certain Point of View LAW_264, Count Dooku TWI_5).
+  Agent Kallus and From a Certain Point of View now ignore the card's whole aspect
+  penalty, not just one aspect.
+- A keyword granted "while attacking a (damaged / Bounty) unit" applies only to
+  that attack, not at all times (Moff Gideon SHD_7, Jango Fett SHD_138, Miraj
+  Scintel SEC_139).
 
 ## Fixed on 2026-11-23
 

@@ -3618,9 +3618,9 @@ class TestHoldOutBlasterTwi256:
 
 def _mark_unit_defeated_this_phase(state, controller_id="P1"):
     """Record that a unit controlled by ``controller_id`` was defeated this phase
-    (the ledger both ANY_UNIT_DEFEATED_THIS_PHASE and ENEMY_UNIT_DEFEATED_THIS_PHASE
-    read)."""
+    (both ledgers a real defeat writes: the defeat one and the left-play one)."""
     state.game_memory.defeated_controllers_this_round.append(controller_id)
+    state.game_memory.left_play_controllers_this_phase.append(controller_id)
 
 
 def _swap_base(state, owner_id, card_def):

@@ -61,6 +61,8 @@ Group ``jabba-the-hutt:04`` — Card advantage & disruption:
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from swu.abilities.registry import (
     card_ability,
     TriggerAbility, EventAbility, ActivatedAbility, ConstantAbility,
@@ -106,7 +108,7 @@ def _nlf_buff_and_record(state, source_ci, target_id, event_ctx):
 def _zeb_damage(state, source_ci, target_id, event_ctx):
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     boosted = any(
         ({"Command", "Cunning"} & {a.name for a in (getattr(u.card_def, "aspects", None) or ())})
         for arena in (ps.ground_arena, ps.space_arena) for u in arena
@@ -210,7 +212,7 @@ def _r2d2_search(state, source_ci, target_id, event_ctx):
     so its own aspects count — any unit sharing them qualifies)."""
     from swu.engine.actions import push_deck_search
     from swu.cards.models import Unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     friendly_aspects: set[str] = set()
     for arena in (ps.ground_arena, ps.space_arena):
         for u in arena:
@@ -299,7 +301,7 @@ def _leia_deploy_tokens(state, source_ci, target_id, event_ctx):
     if result is None:
         return state
     host_ps, unit = result
-    controller = state.player_by_id(source_ci.owner_id)
+    controller = state.player_by_id(actor_of(state, source_ci))
     aspects: set[str] = set()
     for arena in (controller.ground_arena, controller.space_arena):
         for u in arena:
@@ -356,7 +358,7 @@ def _ezra_heal(state, source_ci, target_id, event_ctx):
     conditional-magnitude pattern)."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     boosted = any(
         ({"Aggression", "Cunning"} & _aspect_names(u.card_def))
         for arena in (ps.ground_arena, ps.space_arena) for u in arena)
@@ -496,7 +498,7 @@ def _jaunty_tokens(state, source_ci, target_id, event_ctx):
     if res is None:
         return state
     host_ps, unit = res
-    controller = state.player_by_id(source_ci.owner_id)
+    controller = state.player_by_id(actor_of(state, source_ci))
     aspects: set[str] = set()
     for arena in (controller.ground_arena, controller.space_arena):
         for u in arena:
@@ -550,7 +552,7 @@ def _common_cause_buff(state, source_ci, target_id, event_ctx):
     it never counts itself)."""
     if target_id is None:
         return state
-    controller = state.player_by_id(source_ci.owner_id)
+    controller = state.player_by_id(actor_of(state, source_ci))
     aspects: set[str] = set()
     for arena in (controller.ground_arena, controller.space_arena):
         for u in arena:
@@ -583,11 +585,11 @@ def _common_cause():
 # ── Group leia-organa:05 — Miscellaneous abilities ────────────────────────────
 
 def _daimyo_play(state, source_ci, target_id, event_ctx):
-    """Adapter: push the play-from-hand decision with one V/C/A/Cunning aspect
-    penalty waived (the Energy Conversion Lab SOR_22 / Admiral Ozzel SOR_129
-    adapter pattern)."""
+    """Adapter: push the play-from-hand decision — any card type (``any_card``) —
+    with one V/C/A/Cunning aspect penalty waived (the Energy Conversion Lab SOR_22 /
+    Admiral Ozzel SOR_129 adapter pattern)."""
     from swu.engine.actions import push_play_from_hand
-    push_play_from_hand(state, source_ci, ignore_aspect_penalty=True)
+    push_play_from_hand(state, source_ci, ignore_aspect_penalty=True, any_card=True)
     return state
 
 
@@ -602,20 +604,16 @@ def _daimyos_palace():
     which waives one V/C/A/Cunning aspect-penalty pip — 2 resources, but only when
     the card actually carries such a penalty (a fully-matched card and
     Heroism/Villainy penalties are never discounted).  Gated by
-    ``CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_IGNORE_ASPECT_PENALTY`` so the
-    once-per-game epic is not wasted when nothing is playable (the Energy
-    Conversion Lab SOR_22 "don't offer a no-op epic" pattern).
-
-    DEVIATION (documented): "Play a **card**" is restricted to **units** — the
-    play-from-hand subsystem plays only units (events/upgrades would require the
-    PlayCard resolution path threaded through it, a larger change to core play
-    resolution, out of scope for a card batch).  The aspect-penalty waiver itself
-    is faithful.  Base activated/Epic abilities are enumerated via the existing
-    base_zone scan (Energy Conversion Lab SOR_22)."""
+    ``CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_IGNORE_ASPECT_PENALTY`` (which, despite its
+    name, counts any card type) so the once-per-game epic is not wasted when nothing
+    is playable (the Energy Conversion Lab SOR_22 "don't offer a no-op epic"
+    pattern).  ``any_card`` offers events and upgrades as well as units.  Base
+    activated/Epic abilities are enumerated via the existing base_zone scan (Energy
+    Conversion Lab SOR_22)."""
     return ActivatedAbility(
         costs=[],
         effects=[CustomEffect(fn=_daimyo_play)],
-        title="Epic Action: play a unit from hand, ignoring 1 aspect penalty",
+        title="Epic Action: play a card from hand, ignoring 1 aspect penalty",
         epic=True,
         condition=ConditionCheck(
             Condition.CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_IGNORE_ASPECT_PENALTY),
@@ -736,15 +734,13 @@ def _fetts_firespray():
     keyword layer): "When Attack Ends: If the defending unit was defeated, create
     a Credit token."
 
-    Modelled with the existing ``OnAttackDefeatsUnit`` trigger ("when this unit
-    defeats a unit in combat"), whose one mandatory effect creates a Credit token.
-    DEVIATION (documented): ``OnAttackDefeatsUnit`` fires only when the attacker
-    *survives* the combat (the engine's `not attacker_dead` guard), so if Fett's
-    Firespray trades and dies while defeating the defender, no credit is created —
-    the same simplification the existing "defeats a unit" trigger makes.  A base
-    attack defeats no unit, so it never creates a credit either way."""
+    ``WhenAttackEnds(require_defender_defeated=True, even_if_defeated=True)``: the
+    printed clause needs no survival, so a Firespray that trades with the defender
+    still creates the credit (the defeated attacker's trigger is collected from the
+    discard).  A base attack defeats no unit, so it never creates a credit."""
     return TriggerAbility(
-        trigger=OnAttackDefeatsUnit(),
+        trigger=WhenAttackEnds(require_defender_defeated=True,
+                               even_if_defeated=True),
         effects=[CreateCreditToken()],
     )
 
@@ -791,7 +787,7 @@ def _boba_pay_and_damage(state, source_ci, target_id, event_ctx):
     gate, but the fn re-checks defensively before paying."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 1:
         return state  # cannot pay → no damage ("if you do")
     from swu.engine.actions import _exhaust_resources
@@ -1164,19 +1160,20 @@ def _malakili():
     Sun Cabalist LAW_249's "another friendly Underworld unit" or Jabba the Hutt's
     "an Underworld unit".
 
-    DEVIATION (documented): the "and each Creature unit you own that isn't in play
-    gains the Underworld trait" clause is NOT implemented.  The trait query layer is
-    a read over *in-play* ``CardInstance``s, whereas out-of-play trait gates read a
-    card's printed ``card_def.traits`` directly (the play-from-hand ``trait`` filter,
-    the deck_search eligibility closures, etc.).  Routing every out-of-play trait
-    read through a state-aware ``has_trait`` is a broad change to those card-specific
-    paths, out of scope for a card batch; flagged for a future session if a card ever
-    needs a granted-while-out-of-play trait.  The in-play clause (the common, board-
-    relevant case) is faithful."""
-    return ConstantAbility(
-        target=TargetSpec(controller="friendly", kind="unit", traits=("Creature",)),
-        effects=[TraitGrant("Underworld")],
-    )
+    "Each Creature unit you own that isn't in play" is the ``OutOfPlayTraitGrant``
+    marker, read by the trait layer for cards outside the arenas — so a Creature in
+    hand is an Underworld unit for play-from-hand trait filters and "next Underworld
+    unit" discounts (Khetanna LAW_158).  DOCUMENTED NARROWING: deck-search
+    eligibility closures read printed traits, so a searched Creature is not seen as
+    Underworld."""
+    from swu.abilities.registry import OutOfPlayTraitGrant
+    return [
+        ConstantAbility(
+            target=TargetSpec(controller="friendly", kind="unit", traits=("Creature",)),
+            effects=[TraitGrant("Underworld")],
+        ),
+        OutOfPlayTraitGrant("Underworld", traits=("Creature",)),
+    ]
 
 
 def _vermillion_attack_ends(state, source_ci, target_id, event_ctx):
@@ -1264,7 +1261,7 @@ def _double_cross_exchange(state, source_ci, target_id, event_ctx):
     _, fci = fres
     _, eci = eres
 
-    my_id = source_ci.owner_id
+    my_id = actor_of(state, source_ci)
     opponent_id = state.players[1 - state.player_index(my_id)].player_id
     f_cost = int(getattr(fci.card_def, "cost", 0) or 0)
     e_cost = int(getattr(eci.card_def, "cost", 0) or 0)
@@ -1390,7 +1387,7 @@ def _daring_delve(state, source_ci, target_id, event_ctx):
     from swu.engine.state import Zone
     from swu.engine.actions import push_return_from_discard
 
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     milled_ids = []
     for _ in range(2):
         if not ps.deck:
@@ -1430,23 +1427,19 @@ def _interrogation_droid(state, source_ci, target_id, event_ctx):
     """Exhaust the chosen enemy unit; then, if it costs 3 or less, its controller
     (the opponent) discards a card from their hand.  Bound in one CustomEffect so
     the conditional discard keys off the same chosen unit (the "If you do and that
-    unit costs 3 or less" rider).  DEVIATION: the opponent discard uses the
-    established first-card simplification (K-2SO SOR_145 / Garindan SEC_186) — the
-    forced downside is faithful, the *which* card is not chosen."""
+    unit costs 3 or less" rider).  The opponent picks the card."""
     if target_id is None:
         return state
     result = state.find_instance(target_id)
     if result is None:
         return state
-    _, unit = result
+    unit_ps, unit = result
     unit.exhausted = True
     if (getattr(unit.card_def, "cost", 0) or 0) <= 3:
-        from swu.engine.state import Zone
-        opp = state.players[1 - state.player_index(source_ci.owner_id)]
-        if opp.hand:
-            ci = opp.hand.pop(0)
-            ci.zone = Zone.DISCARD
-            opp.discard.append(ci)
+        from swu.engine.actions import push_discard_of_choice
+        push_discard_of_choice(state, unit_ps.player_id, 1,
+                               source_id=source_ci.instance_id,
+                               after_idx=1 - state.player_index(actor_of(state, source_ci)))
     return state
 
 
@@ -1558,7 +1551,7 @@ def _backed_by_the_hutts_fn(state, source_ci, target_id, event_ctx):
     (``max_targets=1`` = "you may deal to a unit"; "up to 1" honours the "may")."""
     from swu.engine.tokens import create_credit_token
     from swu.engine.actions import push_select_damage
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     create_credit_token(state, ps)
     amount = len(ps.credits)
     if amount > 0:
@@ -1581,7 +1574,7 @@ def _rickety_quadjumper_law115(state, source_ci, target_id, event_ctx):
     """Reveal the top card of the controller's deck (read it in place — "leave it
     on top"); if it is NOT a unit, give an Experience token to another unit."""
     from swu.cards.models import Unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
     top = ps.deck[0]
@@ -1764,7 +1757,7 @@ def _luke_law80_push_modal(state, source_ci, target_id, event_ctx):
     and idx 2 (deal 5)."""
     from swu.engine.actions import push_choose_modal
     opponent_id = next(p.player_id for p in state.players
-                       if p.player_id != source_ci.owner_id)
+                       if p.player_id != actor_of(state, source_ci))
     push_choose_modal(state, source_ci, option_indices=[1, 2], pick=1,
                       decider_id=opponent_id)
     return state
@@ -1775,7 +1768,7 @@ def _luke_law80_opt_credit_ready(state, source_ci, target_id, event_ctx):
     themselves — "They create …"), and Luke is readied."""
     from swu.engine.tokens import create_credit_token
     opponent_ps = next(p for p in state.players
-                       if p.player_id != source_ci.owner_id)
+                       if p.player_id != actor_of(state, source_ci))
     create_credit_token(state, opponent_ps)
     res = state.find_instance(source_ci.instance_id)
     if res is not None:
@@ -1898,7 +1891,7 @@ def _maul_law54_take_control(state, source_ci, target_id, event_ctx):
     if result is None:
         return state
     _, ci = result
-    change_control(state, ci, source_ci.owner_id)
+    change_control(state, ci, actor_of(state, source_ci))
     ci.control_linked_to = source_ci.instance_id
     return state
 
@@ -2186,9 +2179,9 @@ def _taramyn_credit_for_experience(state, source_ci, target_id, event_ctx):
     exact; ``target_id`` is the "another friendly unit" the controller chose."""
     from swu.engine.tokens import attach_token
     from swu.engine.state import Zone
-    controller = state.player_by_id(source_ci.owner_id)
+    controller = state.player_by_id(actor_of(state, source_ci))
     opponent = next((p for p in state.players
-                     if p.player_id != source_ci.owner_id), None)
+                     if p.player_id != actor_of(state, source_ci)), None)
     donor = (opponent if opponent is not None and opponent.credits
              else (controller if controller.credits else None))
     if donor is None:
@@ -2236,7 +2229,7 @@ def _single_reactor_ignition(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import execute_effect, _apply_deal_damage
     from swu.cards.models import Base
     opponent = next((p for p in state.players
-                     if p.player_id != source_ci.owner_id), None)
+                     if p.player_id != actor_of(state, source_ci)), None)
     n = len(opponent.ground_arena) + len(opponent.space_arena) if opponent else 0
     state = execute_effect(state, DefeatAllUnits(), source_ci, None, event_ctx)
     if n and opponent is not None and opponent.base_zone:
@@ -2410,7 +2403,7 @@ def _skerris_defender_strafe(state, source_ci, target_id, event_ctx):
         return state
     state = _apply_deal_damage(state, target_id, 1,
                                source_ci.card_def.display_name,
-                               dealer_id=source_ci.owner_id,
+                               dealer_id=actor_of(state, source_ci),
                                source_id=source_ci.instance_id)
     still = state.find_instance(target_id)
     if still is not None:
@@ -2640,7 +2633,7 @@ def _defiant_scrapper_defeat_credit(state, source_ci, target_id, event_ctx):
     fallback, since this card may only take an ENEMY credit."""
     from swu.engine.state import Zone
     donor = next((p for p in state.players
-                  if p.player_id != source_ci.owner_id and p.credits), None)
+                  if p.player_id != actor_of(state, source_ci) and p.credits), None)
     if donor is None:
         return state
     credit = donor.credits.pop()
@@ -2800,7 +2793,7 @@ def _bt1_mill_and_arm(state, source_ci, target_id, event_ctx):
     fizzles with no prompt."""
     from swu.engine.state import Zone
     from swu.engine.actions import note_hand_or_deck_discard
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
     card = ps.deck.pop(0)
@@ -3020,9 +3013,9 @@ def _arvel_skeen_credit_burn(state, source_ci, target_id, event_ctx):
     fungible, so taking an opponent's is never worse) with the payoff bound into the
     same effect, so the "if you do" is exact and the controller is prompted once."""
     from swu.engine.state import Zone
-    controller = state.player_by_id(source_ci.owner_id)
+    controller = state.player_by_id(actor_of(state, source_ci))
     opponent = next((p for p in state.players
-                     if p.player_id != source_ci.owner_id), None)
+                     if p.player_id != actor_of(state, source_ci)), None)
     donor = (opponent if opponent is not None and opponent.credits
              else (controller if controller.credits else None))
     if donor is None:
@@ -3035,7 +3028,7 @@ def _arvel_skeen_credit_burn(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_deal_damage
     return _apply_deal_damage(state, target_id, 1,
                               source_ci.card_def.display_name,
-                              dealer_id=source_ci.owner_id,
+                              dealer_id=actor_of(state, source_ci),
                               source_id=source_ci.instance_id)
 
 
@@ -3088,7 +3081,7 @@ def _dogged_pursuers_pay_and_damage(state, source_ci, target_id, event_ctx):
     ``CONTROLLER_N_PLUS_READY_RESOURCES`` gate; the fn re-checks defensively."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 1:
         return state  # cannot pay -> no damage ("if you do")
     from swu.engine.actions import _exhaust_resources
@@ -3204,7 +3197,7 @@ def _attack_from_all_sides_damage(state, source_ci, target_id, event_ctx):
     documented simplification of a formality)."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     aspects = set()
     for arena in (ps.ground_arena, ps.space_arena):
         for ci in arena:
@@ -3314,13 +3307,13 @@ def _beckett_hand_over_unit(state, source_ci, target_id, event_ctx):
         return state
     _, unit = result
     opponent = next((p for p in state.players
-                     if p.player_id != source_ci.owner_id), None)
+                     if p.player_id != actor_of(state, source_ci)), None)
     if opponent is None:
         return state
     from swu.engine.actions import change_control
     from swu.engine.tokens import create_credit_token
     change_control(state, unit, opponent.player_id)
-    create_credit_token(state, state.player_by_id(source_ci.owner_id))
+    create_credit_token(state, state.player_by_id(actor_of(state, source_ci)))
     return state
 
 
@@ -3341,7 +3334,7 @@ def _beckett_reclaim_owned_units(state, source_ci, target_id, event_ctx):
     On an ordinary board the pool is empty, nothing is pushed, and the trigger is
     silent."""
     from swu.engine.actions import push_select_token
-    me = source_ci.owner_id
+    me = actor_of(state, source_ci)
     pool = [u.instance_id
             for ps in state.players if ps.player_id != me
             for u in ps.ground_arena + ps.space_arena
@@ -3448,7 +3441,7 @@ def _sebulba_mill_and_raid(state, source_ci, target_id, event_ctx):
     half-cost convention).  One effect also keeps cost and payoff atomic and costs
     exactly one prompt (the Kylo Ren SHD_141 shape)."""
     from swu.engine.actions import discard_from_deck
-    discard_from_deck(state, state.player_by_id(source_ci.owner_id), 1)
+    discard_from_deck(state, state.player_by_id(actor_of(state, source_ci)), 1)
     if target_id is None:
         return state
     from swu.abilities.resolver import _make_kw_modifier
@@ -3463,7 +3456,7 @@ def _sebulba_mill(state, source_ci, target_id, event_ctx):
     """"On Attack: Discard a card from your deck." (LAW_12, deployed) -- the same
     self-mill with no payoff attached."""
     from swu.engine.actions import discard_from_deck
-    discard_from_deck(state, state.player_by_id(source_ci.owner_id), 1)
+    discard_from_deck(state, state.player_by_id(actor_of(state, source_ci)), 1)
     return state
 
 
@@ -3510,7 +3503,7 @@ def _lando_choose_aspect_and_mill(state, source_ci, target_id, event_ctx):
     only one over which "choose an aspect" is a real choice at all."""
     from swu.engine.actions import discard_from_deck
     from swu.engine.tokens import create_credit_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
     counts: dict = {}
@@ -3537,7 +3530,7 @@ def _lando_credits_from_credit(state, source_ci, target_id, event_ctx):
     interchangeable, so WHICH one is not a choice."""
     from swu.engine.state import Zone
     from swu.engine.tokens import create_credit_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.credits:
         return state
     credit = ps.credits.pop()
@@ -3626,7 +3619,7 @@ def _citadel_research_ramp(state, source_ci, target_id, event_ctx):
     means no ramp."""
     from swu.engine.actions import _resource_top_of_deck
     from swu.engine.state import Zone
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.resources:
         return state
     res = max(ps.resources, key=lambda c: getattr(c.card_def, "cost", 0) or 0)
@@ -3684,7 +3677,7 @@ def _broken_horn_ramp(state, source_ci, target_id, event_ctx):
     """The second clause of Broken Horn LAW_83 — "resource the top card of your
     deck", the shared ``_resource_top_of_deck`` primitive."""
     from swu.engine.actions import _resource_top_of_deck
-    _resource_top_of_deck(state, state.player_by_id(source_ci.owner_id))
+    _resource_top_of_deck(state, state.player_by_id(actor_of(state, source_ci)))
     return state
 
 
@@ -4008,7 +4001,7 @@ def _sebulbas_podracer():
 
 def _bracca_mill(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import discard_from_deck
-    discard_from_deck(state, state.player_by_id(source_ci.owner_id), 1)
+    discard_from_deck(state, state.player_by_id(actor_of(state, source_ci)), 1)
     return state
 
 
@@ -4032,7 +4025,7 @@ def _doctor_aphra_mill(state, source_ci, target_id, event_ctx):
     INSTANCE id (`eligible_instance`) rather than by card def — a matching Underworld
     card already sitting in the discard from an earlier turn is not offered."""
     from swu.engine.actions import discard_from_deck, push_return_from_discard
-    milled = discard_from_deck(state, state.player_by_id(source_ci.owner_id), 3)
+    milled = discard_from_deck(state, state.player_by_id(actor_of(state, source_ci)), 3)
     ids = {ci.instance_id for ci in milled}
     if not ids:
         return state
@@ -4177,7 +4170,7 @@ def _golden_dice_roll(state, source_ci, target_id, event_ctx):
     """Mill one; an ODD printed cost pays a Credit.  `source_ci` is the HOST (this
     is a GrantedAbility), so "your deck" is the host's controller's deck."""
     from swu.engine.actions import discard_from_deck
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     milled = discard_from_deck(state, ps, 1)
     if not milled:
         return state
@@ -4239,22 +4232,15 @@ def _the_master_codebreaker():
 
 
 def _bix_caleen_pitch(state, source_ci, target_id, event_ctx):
-    """Discard the first hand card and take a Credit -- both in ONE effect, so the
-    "If you do" cannot be split (the Bright Hope SOR_99 binding).  First-card
-    discard is the standing convention (K-2SO SOR_145)."""
-    from swu.engine.actions import note_hand_or_deck_discard, record_hand_discard
-    from swu.engine.state import Zone
-    from swu.engine.tokens import create_credit_token
-    ps = state.player_by_id(source_ci.owner_id)
-    if not ps.hand:
-        return state
-    card = ps.hand.pop(0)
-    card.zone = Zone.DISCARD
-    card.face_down = False
-    ps.discard.append(card)
-    note_hand_or_deck_discard(state, card)
-    record_hand_discard(state, ps.player_id)
-    create_credit_token(state, ps)
+    """Discard a card of the player's choice; the ``create_credit_if_discarded``
+    payoff takes the Credit, so the "If you do" cannot be split (the Bright Hope
+    SOR_99 binding)."""
+    from swu.engine.actions import push_discard_of_choice
+    push_discard_of_choice(state, actor_of(state, source_ci), 1,
+                           source_id=source_ci.instance_id,
+                           after_idx=1 - state.player_index(actor_of(state, source_ci)),
+                           payoff="create_credit_if_discarded",
+                           payoff_args={"player_id": actor_of(state, source_ci)})
     return state
 
 
@@ -4427,14 +4413,13 @@ def _kallus_play_ignoring_aspects(state, source_ci, target_id, event_ctx):
     """"Play a card from your hand, ignoring its aspect penalties." (Agent Kallus
     LAW_3, both sides — the deployed one simply costs no exhaust.)
 
-    DOCUMENTED NARROWING: ``push_play_from_hand`` plays UNITS, so a card of another
-    type is not offered — the standing limit of that decision (Count Dooku TWI_5's
-    "a Separatist event/upgrade is not offered", Daimyo's Palace LAW_20's identical
-    aspect-waiver Epic Action).  The card's own printed rules note — "Abilities that
-    let you play a card require you to pay that card's cost unless specified
-    otherwise" — is the decision's default (``free=False``)."""
+    ``any_card`` offers units, events and upgrades; ``ignore_all_aspect_penalties``
+    waives the card's whole aspect penalty.  The card's own printed rules note —
+    "Abilities that let you play a card require you to pay that card's cost unless
+    specified otherwise" — is the decision's default (``free=False``)."""
     from swu.engine.actions import push_play_from_hand
-    push_play_from_hand(state, source_ci, ignore_aspect_penalty=True)
+    push_play_from_hand(state, source_ci, any_card=True,
+                        ignore_all_aspect_penalties=True)
     return state
 
 
@@ -4489,7 +4474,7 @@ def _vel_experience_then_opponent_credit(state, source_ci, target_id, event_ctx)
     host_ps, host_ci = found
     attach_token(state, host_ps, host_ci, "Experience")
     opponent = next((p for p in state.players
-                     if p.player_id != source_ci.owner_id), None)
+                     if p.player_id != actor_of(state, source_ci)), None)
     if opponent is not None:
         create_credit_token(state, opponent)
     return state
@@ -4540,7 +4525,7 @@ def _boba_law_exhaust_for_credit(state, source_ci, target_id, event_ctx):
     if found is None:
         return state
     found[1].exhausted = True
-    create_credit_token(state, state.player_by_id(source_ci.owner_id))
+    create_credit_token(state, state.player_by_id(actor_of(state, source_ci)))
     return state
 
 
@@ -4818,15 +4803,13 @@ def _chirrut_imwe_law():
     another unit."
 
     Saboteur is the keyword layer.  The trigger is Maul LAW_54's
-    ``WhenAttackEnds(require_base_damage=True)`` verbatim.  DOCUMENTED DEVIATION:
-    that trigger's firing site only runs for an attacker still in play, whereas the
-    card's rules note says "Chirrut does not need to survive the attack" — but a
-    base attack never damages the attacker, so the two readings differ only if
-    something else killed him during his own attack.  ``damaged`` keeps the "you
-    may" off the table when no other unit has any damage to heal (the
-    "don't offer a no-op" rule)."""
+    ``WhenAttackEnds(require_base_damage=True)`` plus ``even_if_defeated`` — the
+    card's rules note says "Chirrut does not need to survive the attack" (a base
+    attack never damages him, but another effect can defeat him during it).
+    ``damaged`` keeps the "you may" off the table when no other unit has any damage
+    to heal (the "don't offer a no-op" rule)."""
     return TriggerAbility(
-        trigger=WhenAttackEnds(require_base_damage=True),
+        trigger=WhenAttackEnds(require_base_damage=True, even_if_defeated=True),
         effects=[Heal(4, TargetSpec(controller="any", kind="unit",
                                     predicates=("not_self", "damaged")))],
         optional=True,
@@ -4846,7 +4829,7 @@ def _chopper_experience(state, source_ci, target_id, event_ctx):
     if found is None:
         return state
     ps, ci = found
-    controller = state.player_by_id(source_ci.owner_id)
+    controller = state.player_by_id(actor_of(state, source_ci))
     boosted = any(
         {"Cunning", "Vigilance"} & {a.name for a in (u.card_def.aspects or ())}
         for arena in (controller.ground_arena, controller.space_arena)
@@ -4918,7 +4901,7 @@ def _the_ghost_tokens(state, source_ci, target_id, event_ctx):
     ``select_token``'s always-legal finish, so no optional trigger is needed — one
     would prompt twice."""
     from swu.engine.actions import push_select_token
-    controller = state.player_by_id(source_ci.owner_id)
+    controller = state.player_by_id(actor_of(state, source_ci))
     boosted = any(
         {"Vigilance", "Aggression"} & {a.name for a in (u.card_def.aspects or ())}
         for arena in (controller.ground_arena, controller.space_arena)
@@ -4964,13 +4947,10 @@ def _patient_hunter_token_then_lock(state, source_ci, target_id, event_ctx):
     and the ready-lock must be atomic, and a leading fixed effect would consume a
     second ChooseTarget of its own (the Mandalorian SHD_18 wart).
 
-    The lock is the standing per-instance ``cannot_ready_this_round`` flag (No Good
-    to Me Dead SOR_186), which ``_ready_all_cards`` skips and the round rollover
-    clears.  This trigger fires at the START of the regroup phase — i.e. before
-    that phase's ready step and after the round's only other one — so "during this
-    regroup phase" and "this round" name exactly the same skipped ready.
-    DOCUMENTED DEVIATION: with Max Rebo LAW_72's *additional* regroup phase in play
-    the flag also holds through the second one.
+    The lock is ``game_memory.skip_next_ready``: this trigger fires at the START of
+    the regroup phase, so the next ready step ``_ready_all_cards`` reaches is this
+    phase's, which skips the unit once.  Under Max Rebo LAW_72 the additional regroup
+    readies it, as printed ("during THIS regroup phase").
     """
     if target_id is None:
         return state
@@ -4980,7 +4960,7 @@ def _patient_hunter_token_then_lock(state, source_ci, target_id, event_ctx):
     holder, unit = res
     from swu.engine.tokens import attach_token
     attach_token(state, holder, unit, "Experience")
-    unit.cannot_ready_this_round = True
+    state.game_memory.skip_next_ready.add(unit.instance_id)
     return state
 
 
@@ -5087,7 +5067,7 @@ def _anakin_return_and_heal(state, source_ci, target_id, event_ctx):
         return state          # defeated by the attack — nothing to return, no heal
     from swu.abilities.resolver import _apply_return_to_hand, _apply_heal
     _apply_return_to_hand(state, att_id)
-    controller = state.player_by_id(source_ci.owner_id)
+    controller = state.player_by_id(actor_of(state, source_ci))
     if controller is not None and controller.base_instance is not None:
         _apply_heal(state, source_ci, controller.base_instance.instance_id, 2)
     return state
@@ -5241,7 +5221,7 @@ def _shield_drive_pay_and_shield(state, source_ci, target_id, event_ctx):
     ``CONTROLLER_N_PLUS_READY_RESOURCES`` gate; the fn re-checks defensively."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 1:
         return state                       # cannot pay → no Shield ("if you do")
     res = state.find_instance(target_id)
@@ -5348,7 +5328,7 @@ def _lost_and_forgotten(state, source_ci, target_id, event_ctx):
         return state
     from swu.abilities.resolver import _apply_defeat_unit, _apply_heal
     _apply_defeat_unit(state, target_id)
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps is not None and ps.base_instance is not None:
         _apply_heal(state, source_ci, ps.base_instance.instance_id, 3)
     return state
@@ -5412,7 +5392,7 @@ def _phantom_heroism_units_in_hand(state, source_ci, event_ctx):
     controller's hand, so the optional trigger is never a dead prompt."""
     from swu.cards.models import Unit
     from swu.engine.actions.costs import _play_cost
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     budget = ps.available_resources + len(ps.credits)
     for c in ps.hand:
         cd = c.card_def
@@ -5458,7 +5438,7 @@ def _yt2400_pay_and_buff(state, source_ci, target_id, event_ctx):
     """"You may pay 1 resource.  If you do, this unit gets +1/+1 for this phase."
     (Smuggler's YT-2400 LAW_148.)  The Boba Fett LAW_214 binding, with no target to
     choose — the buff always lands on the source."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 1:
         return state
     res = state.find_instance(source_ci.instance_id)
@@ -5724,8 +5704,8 @@ def _enfys_nests_helmet():
 def _sharpshooter_pay_and_discard(state, source_ci, target_id, event_ctx):
     """"You may pay 1 resource.  If you do, an opponent discards a card from their
     hand." (Mid Rim Sharpshooter LAW_193.)  The Boba Fett LAW_214 binding; the
-    discard is the standard first-card simplification (K-2SO SOR_145)."""
-    ps = state.player_by_id(source_ci.owner_id)
+    opponent picks the card (``DiscardFromHand`` → ``push_discard_of_choice``)."""
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 1:
         return state
     from swu.engine.actions import _exhaust_resources
@@ -5808,7 +5788,7 @@ def _rocket_jumper_pay_and_shield(state, source_ci, target_id, event_ctx):
     """"You may pay 1 resource.  If you do, give a Shield token to this unit."
     (Rookie Rocket-jumper LAW_227.)  The Boba Fett LAW_214 binding with no target
     to choose."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 1:
         return state
     res = state.find_instance(source_ci.instance_id)
@@ -5882,7 +5862,7 @@ def _hidden_hand_supplier(state, source_ci, target_id, event_ctx):
     unit." (Hidden Hand Supplier LAW_257.)  The Boba Fett LAW_214 binding."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 1:
         return state
     res = state.find_instance(target_id)
@@ -6032,11 +6012,11 @@ def _law_aspect_waiver_base(name: str):
     (LAW_21/22/24/25/27/28/30): "Epic Action: Play a card from your hand, ignoring
     1 of its Vigilance, Command, Aggression, or Cunning aspect penalties."
 
-    Same adapter, same gate, same documented units-only narrowing."""
+    Same adapter, same gate."""
     return ActivatedAbility(
         costs=[],
         effects=[CustomEffect(fn=_daimyo_play)],
-        title="Epic Action: play a unit from hand, ignoring 1 aspect penalty",
+        title="Epic Action: play a card from hand, ignoring 1 aspect penalty",
         epic=True,
         condition=ConditionCheck(
             Condition.CONTROLLER_CAN_PLAY_UNIT_FROM_HAND_IGNORE_ASPECT_PENALTY),
@@ -6127,7 +6107,7 @@ def _dengar_credit_once(state, source_ci, target_id, event_ctx):
     from swu.engine.tokens import create_credit_token
     state.game_memory.activated_abilities_used_this_round.add(
         f"{source_ci.instance_id}:trig")
-    create_credit_token(state, state.player_by_id(source_ci.owner_id))
+    create_credit_token(state, state.player_by_id(actor_of(state, source_ci)))
     return state
 
 
@@ -6190,17 +6170,18 @@ def _tear_this_ship_apart(state, source_ci, target_id, event_ctx):
     ``then_owner_resources_deck_top`` is the printed "If you do" — settled inside
     the play, so a fizzle (no eligible resource) pays them nothing.
 
-    DOCUMENTED NARROWINGS, both standing limits of that decision: only UNIT
-    resources are offered (Daimyo's Palace LAW_20 / Count Dooku TWI_5), and the
-    "you may" collapses to mandatory-if-able — taking a free unit off an opponent
-    is never worse than declining (The Invisible Hand JTL_89)."""
+    ``up_to=True`` is the printed "you may": declining also spares the opponent
+    the replacement resource.  ``any_card``: an event resolves straight away (to its
+    owner's discard), an upgrade goes to the host choice; the replacement resource
+    follows any real play."""
     from swu.engine.actions import push_play_from_hand
-    opp = next((p for p in state.players if p.player_id != source_ci.owner_id), None)
+    opp = next((p for p in state.players if p.player_id != actor_of(state, source_ci)), None)
     if opp is None:
         return state
     push_play_from_hand(state, source_ci, free=True,
                         resources_of=opp.player_id,
-                        then_owner_resources_deck_top=True)
+                        then_owner_resources_deck_top=True, up_to=True,
+                        any_card=True)
     return state
 
 
@@ -6212,7 +6193,7 @@ def _tear_this_ship_apart_law():
 
 def _max_rebo_band_credit(state, source_ci, target_id, event_ctx):
     from swu.engine.tokens import create_credit_token
-    create_credit_token(state, state.player_by_id(source_ci.owner_id))
+    create_credit_token(state, state.player_by_id(actor_of(state, source_ci)))
     return state
 
 
@@ -6252,7 +6233,7 @@ def _troig_hand_over_for_credits(state, source_ci, target_id, event_ctx):
     right seat after the hand-over."""
     from swu.engine.actions import change_control
     from swu.engine.tokens import create_credit_token
-    owner_id = source_ci.owner_id
+    owner_id = actor_of(state, source_ci)
     opp = next((p for p in state.players if p.player_id != owner_id), None)
     if opp is None:
         return state
@@ -6302,7 +6283,7 @@ def _conveyex_security_captain():
 
 def _canto_bight_security_credit(state, source_ci, target_id, event_ctx):
     from swu.engine.tokens import create_credit_token
-    create_credit_token(state, state.player_by_id(source_ci.owner_id))
+    create_credit_token(state, state.player_by_id(actor_of(state, source_ci)))
     return state
 
 
@@ -6375,7 +6356,7 @@ def _targeted_for_removal_bounty(state, source_ci, target_id, event_ctx):
     if count <= 0:
         return state
     opp = next((p for p in state.players
-                if p.player_id != source_ci.owner_id), None)
+                if p.player_id != actor_of(state, source_ci)), None)
     if opp is None:
         return state
     for _ in range(count):
@@ -6431,7 +6412,7 @@ def _rey_law():
 def _law22_credit(state, source_ci, target_id, event_ctx):
     """Create one Credit token for the source's controller."""
     from swu.engine.tokens import create_credit_token
-    create_credit_token(state, state.player_by_id(source_ci.owner_id))
+    create_credit_token(state, state.player_by_id(actor_of(state, source_ci)))
     return state
 
 
@@ -6458,7 +6439,7 @@ def _hunter_for_hire_take_control(state, source_ci, target_id, event_ctx):
     ``event_ctx["ability_user_id"]``, which ``UseAbility`` threads for exactly this
     (Mercenary Gunship SHD_256)."""
     from swu.engine.actions import change_control
-    user_id = event_ctx.get("ability_user_id") or source_ci.owner_id
+    user_id = event_ctx.get("ability_user_id") or actor_of(state, source_ci)
     res = state.find_instance(source_ci.instance_id)
     if res is None:
         return state
@@ -6603,7 +6584,7 @@ def _gorn_steal_credit(state, source_ci, target_id, event_ctx):
     relocated from the opponent's pile to the controller's, ``owner_id`` untouched
     exactly as at every other control seam.  With an empty enemy pile nothing
     happens."""
-    owner_id = source_ci.owner_id
+    owner_id = actor_of(state, source_ci)
     opp = next((p for p in state.players if p.player_id != owner_id), None)
     if opp is None or not opp.credits:
         return state
@@ -6712,7 +6693,7 @@ def _fire_across_the_galaxy(state, source_ci, target_id, event_ctx):
     than one."""
     from swu.engine.actions import push_select_token, _select_token_targets
     ctx = {"source_id": source_ci.instance_id,
-           "controller_id": source_ci.owner_id,
+           "controller_id": actor_of(state, source_ci),
            "controller": "friendly", "kind": "unit",
            "traits": ["Spectre"], "predicates": ["has_when_played_ability"],
            "chosen": []}
@@ -6754,7 +6735,7 @@ def _criminal_contact_pay_for_credit(state, source_ci, target_id, event_ctx):
     ``CONTROLLER_N_PLUS_READY_RESOURCES(2)`` so it is never offered unaffordable."""
     from swu.engine.actions import _exhaust_resources
     from swu.engine.tokens import create_credit_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 2:
         return state
     _exhaust_resources(ps, 2)
@@ -6786,12 +6767,9 @@ def _from_a_certain_point_of_view():
     """LAW_264 — From a Certain Point of View (Event, Learned, cost 1): "Play a
     card from your hand, ignoring its aspect penalties."
 
-    Agent Kallus LAW_3's adapter verbatim — the same printed clause, the same
-    ``push_play_from_hand(ignore_aspect_penalty=True)``, and the same two
-    DOCUMENTED NARROWINGS: the decision plays UNITS only (Daimyo's Palace LAW_20 /
-    Count Dooku TWI_5), and ``ignore_aspect_penalty`` waives one V/C/A/Cunning pip
-    rather than the whole penalty.  The card's own rules note — "Abilities that let
-    you play a card require you to pay that card's cost unless specified
+    Agent Kallus LAW_3's adapter verbatim — the same printed clause: any card type,
+    with the whole aspect penalty waived.  The card's own rules note — "Abilities
+    that let you play a card require you to pay that card's cost unless specified
     otherwise" — is the decision's default (``free=False``)."""
     return EventAbility(
         effects=[CustomEffect(fn=_kallus_play_ignoring_aspects)])

@@ -28,6 +28,8 @@ this one" falls out for free.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from swu.abilities.registry import (
     card_ability,
     TriggerAbility, ConstantAbility, ActivatedAbility, EventAbility, GrantedAbility,
@@ -49,6 +51,7 @@ from swu.abilities.registry import (
     TargetSpec, ConditionCheck, Condition,
     SELF, DEFENDER, EACH_ENEMY, EACH_FRIENDLY, EACH_IN_PLAY,
 )
+from swu.engine.discard_payoffs import discard_payoff
 
 # The Coordinate gate: "while you control 3 or more units".
 _COORDINATE = ConditionCheck(Condition.CONTROLLER_N_PLUS_UNITS, 3)
@@ -701,7 +704,7 @@ def _private_manufacturing_bottom(state, source_ci, target_id, event_ctx):
     downside is skipped entirely."""
     from swu.cards.models import TokenUnit
     from swu.engine.actions import push_bottom_from_hand
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     controls_token_unit = any(
         isinstance(u.card_def, TokenUnit)
         for u in ps.ground_arena + ps.space_arena
@@ -1468,7 +1471,7 @@ def _unnatural_life_play(state, source_ci, target_id, event_ctx):
     costs 2 less, enters play ready, and is defeated at the start of regroup."""
     from swu.engine.actions import push_play_from_hand
     from swu.cards.models import Unit
-    ctrl = state.player_by_id(source_ci.owner_id)
+    ctrl = state.player_by_id(actor_of(state, source_ci))
     defeated = set(state.game_memory.units_defeated_this_round)
     eligible = frozenset(
         c.instance_id for c in ctrl.discard
@@ -1598,7 +1601,7 @@ def _mace_windu_burn(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_deal_damage
     name = source_ci.card_def.display_name
     _apply_deal_damage(state, target_id, 1, source_name=name,
-                       dealer_id=source_ci.owner_id,
+                       dealer_id=actor_of(state, source_ci),
                        source_id=source_ci.instance_id)
     res = state.find_instance(target_id)
     if res is None:          # already defeated by the first point
@@ -1606,7 +1609,7 @@ def _mace_windu_burn(state, source_ci, target_id, event_ctx):
     _, hit = res
     if hit.damage >= 5:
         _apply_deal_damage(state, target_id, 1, source_name=name,
-                           dealer_id=source_ci.owner_id,
+                           dealer_id=actor_of(state, source_ci),
                            source_id=source_ci.instance_id)
     return state
 
@@ -1727,7 +1730,7 @@ def _quinlan_vos_exhaust_and_burn(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_deal_damage
     _apply_deal_damage(state, target_id, 1,
                        source_name=source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id,
+                       dealer_id=actor_of(state, source_ci),
                        source_id=source_ci.instance_id)
     return state
 
@@ -1823,11 +1826,11 @@ def _lethal_crackdown(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_defeat_unit, _apply_deal_damage
     power = max(0, compute_power(state, res[1]))
     _apply_defeat_unit(state, target_id)
-    own_base = state.player_by_id(source_ci.owner_id).base_instance
+    own_base = state.player_by_id(actor_of(state, source_ci)).base_instance
     if power and own_base is not None:
         _apply_deal_damage(state, own_base.instance_id, power,
                            source_name=source_ci.card_def.display_name,
-                           dealer_id=source_ci.owner_id,
+                           dealer_id=actor_of(state, source_ci),
                            source_id=source_ci.instance_id)
     return state
 
@@ -1858,7 +1861,7 @@ def _kashyyyk_defender(state, source_ci, target_id, event_ctx):
     _apply_heal(state, source_ci, target_id, healed)
     _apply_deal_damage(state, source_ci.instance_id, healed,
                        source_name=source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id,
+                       dealer_id=actor_of(state, source_ci),
                        source_id=source_ci.instance_id)
     return state
 
@@ -1890,10 +1893,10 @@ def _aethersprite_strafe(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_deal_damage
     name = source_ci.card_def.display_name
     _apply_deal_damage(state, source_ci.instance_id, 1, source_name=name,
-                       dealer_id=source_ci.owner_id,
+                       dealer_id=actor_of(state, source_ci),
                        source_id=source_ci.instance_id)
     _apply_deal_damage(state, target_id, 2, source_name=name,
-                       dealer_id=source_ci.owner_id,
+                       dealer_id=actor_of(state, source_ci),
                        source_id=source_ci.instance_id)
     return state
 
@@ -2079,11 +2082,11 @@ def _steela_gerrera_search(state, source_ci, target_id, event_ctx):
     a seeded-random order)."""
     from swu.engine.actions import push_deck_search
     from swu.abilities.resolver import _apply_deal_damage
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.base_instance is not None:
         _apply_deal_damage(state, ps.base_instance.instance_id, 2,
                            source_name=source_ci.card_def.display_name,
-                           dealer_id=source_ci.owner_id,
+                           dealer_id=actor_of(state, source_ci),
                            source_id=source_ci.instance_id)
 
     def eligible(cd):
@@ -2161,7 +2164,7 @@ def _resolute_strike(state, source_ci, target_id, event_ctx):
         return state
     _, chosen = res
     name = getattr(chosen.card_def, "name", None)
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     same_name = [u.instance_id for u in (opp.ground_arena + opp.space_arena)
                  if u.instance_id != target_id
                  and getattr(u.card_def, "name", None) == name]
@@ -2171,7 +2174,7 @@ def _resolute_strike(state, source_ci, target_id, event_ctx):
     for hit_id in [target_id] + same_name:
         if state.find_instance(hit_id) is not None:
             _apply_deal_damage(state, hit_id, 2, source_name=src_name,
-                               dealer_id=source_ci.owner_id,
+                               dealer_id=actor_of(state, source_ci),
                                source_id=source_ci.instance_id)
     return state
 
@@ -2230,7 +2233,7 @@ def _twice_the_pride(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_deal_damage
     _apply_deal_damage(state, host_id, 2,
                        source_name=source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id,
+                       dealer_id=actor_of(state, source_ci),
                        source_id=source_ci.instance_id)
     return state
 
@@ -2268,7 +2271,7 @@ def _unlimited_power_apply(state, source_ci, target_id, event_ctx):
     for hit_id, amount in (event_ctx or {}).get("unlimited_power_hits", []):
         if state.find_instance(hit_id) is not None:
             _apply_deal_damage(state, hit_id, amount, source_name=name,
-                               dealer_id=source_ci.owner_id,
+                               dealer_id=actor_of(state, source_ci),
                                source_id=source_ci.instance_id)
     return state
 
@@ -2347,7 +2350,7 @@ def _reckless_torrent_friendly_hit(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_deal_damage
     _apply_deal_damage(state, target_id, 2,
                        source_name=source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id,
+                       dealer_id=actor_of(state, source_ci),
                        source_id=source_ci.instance_id)
     return state
 
@@ -2443,7 +2446,7 @@ def _guerilla_insurgency(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import (_fire_defeat_own_resource,
                                     push_discard_excess_from_hand)
     from swu.abilities.resolver import _apply_deal_damage
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(state, source_ci)
     order = ([controller_id]
              + [p.player_id for p in state.players if p.player_id != controller_id])
     for pid in order:
@@ -2480,7 +2483,7 @@ def _sabine_wren_mill(state, source_ci, target_id, event_ctx):
     from swu.engine.state import Zone
     from swu.engine.actions import note_hand_or_deck_discard
     from swu.abilities.resolver import _apply_deal_damage
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     card_aspects = set()
     if ps.deck:
         card = ps.deck.pop(0)
@@ -2497,7 +2500,7 @@ def _sabine_wren_mill(state, source_ci, target_id, event_ctx):
         return state
     return _apply_deal_damage(state, target_id, 2,
                               source_name=source_ci.card_def.display_name,
-                              dealer_id=source_ci.owner_id,
+                              dealer_id=actor_of(state, source_ci),
                               source_id=source_ci.instance_id)
 
 
@@ -2549,7 +2552,7 @@ def _jar_jar_random_hit(state, source_ci, target_id, event_ctx):
     state.rng_state = rng.getstate()
     return _apply_deal_damage(state, pick.instance_id, 2,
                               source_name=source_ci.card_def.display_name,
-                              dealer_id=source_ci.owner_id,
+                              dealer_id=actor_of(state, source_ci),
                               source_id=source_ci.instance_id)
 
 
@@ -2570,7 +2573,7 @@ def _freelance_assassin_pay(state, source_ci, target_id, event_ctx):
     ``CONTROLLER_N_PLUS_READY_RESOURCES(2)`` gate, re-checked defensively."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 2:
         return state  # cannot pay → no damage
     from swu.engine.actions import _exhaust_resources
@@ -2578,7 +2581,7 @@ def _freelance_assassin_pay(state, source_ci, target_id, event_ctx):
     _exhaust_resources(ps, 2)
     return _apply_deal_damage(state, target_id, 2,
                               source_name=source_ci.card_def.display_name,
-                              dealer_id=source_ci.owner_id,
+                              dealer_id=actor_of(state, source_ci),
                               source_id=source_ci.instance_id)
 
 
@@ -2623,7 +2626,7 @@ def _execute_order_66(state, source_ci, target_id, event_ctx):
     for _pid, iid in victims:
         if state.find_instance(iid) is not None:
             _apply_deal_damage(state, iid, 6, source_name=name,
-                               dealer_id=source_ci.owner_id,
+                               dealer_id=actor_of(state, source_ci),
                                source_id=source_ci.instance_id)
     for pid, iid in victims:
         ps = state.player_by_id(pid)
@@ -2671,7 +2674,7 @@ def _hold_out_blaster_shot(state, source_ci, target_id, event_ctx):
             shooter = result[1]
     _apply_deal_damage(state, target_id, 1,
                        source_name=shooter.card_def.display_name,
-                       dealer_id=source_ci.owner_id,
+                       dealer_id=actor_of(state, source_ci),
                        source_id=shooter.instance_id)
     return state
 
@@ -2724,7 +2727,7 @@ def _yoda_twi_4_mill(state, source_ci, target_id, event_ctx):
     actually discarded.  An empty deck records nothing and the defeat never fires."""
     from swu.engine.state import Zone
     from swu.engine.actions import note_hand_or_deck_discard
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
     card = ps.deck.pop(0)
@@ -2746,9 +2749,8 @@ def _yoda_sensing_darkness():
 
     Undeployed: "Action [Exhaust]: If a unit left play this phase, draw a card, then
     put a card from your hand on the top or bottom of your deck."  An
-    ``undeployed_only`` ActivatedAbility gated by the new
-    ``ANY_UNIT_DEFEATED_THIS_PHASE`` atom (the controller-blind sibling of
-    ENEMY_UNIT_DEFEATED_THIS_PHASE — "a unit", either side's), so the exhaust is never
+    ``undeployed_only`` ActivatedAbility gated by ``ANY_UNIT_LEFT_PLAY_THIS_PHASE``
+    ("a unit", either side's, by any route out of play), so the exhaust is never
     spent on a no-op; its two effects are a plain draw and the top-or-bottom decision.
 
     Deployed: "When Deployed: You may discard a card from your deck.  If you do,
@@ -2765,7 +2767,7 @@ def _yoda_sensing_darkness():
                      CustomEffect(fn=_yoda_twi_4_top_or_bottom)],
             title="Draw a card, then top/bottom a card from your hand",
             undeployed_only=True,
-            condition=ConditionCheck(Condition.ANY_UNIT_DEFEATED_THIS_PHASE),
+            condition=ConditionCheck(Condition.ANY_UNIT_LEFT_PLAY_THIS_PHASE),
         ),
         TriggerAbility(
             trigger=WhenDeployed(),
@@ -2855,7 +2857,7 @@ def _morgan_elsbeth_twi_35(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_defeat_unit
     from swu.engine.actions import _draw_cards
     _apply_defeat_unit(state, target_id)
-    _draw_cards(state, state.player_by_id(source_ci.owner_id), 1)
+    _draw_cards(state, state.player_by_id(actor_of(state, source_ci)), 1)
     return state
 
 
@@ -2922,7 +2924,7 @@ def _foresight_twi_68(state, source_ci, target_id, event_ctx):
     equivalent in expectation, so the deviation is unobservable in play."""
     from collections import Counter
     from swu.engine.actions import _draw_cards
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
     counts = Counter(ci.card_def.display_name for ci in ps.deck)
@@ -3328,19 +3330,21 @@ def _shadowed_intentions():
 
 
 def _unmasking_the_conspiracy_effect(state, source_ci, target_id, event_ctx):
-    from swu.engine.state import Zone
-    from swu.engine.actions import (push_name_and_discard, note_hand_or_deck_discard,
-                                    record_hand_discard)
-    ps = state.player_by_id(source_ci.owner_id)
-    if not ps.hand:
-        return state          # can't pay the cost → no payoff ("If you do")
-    ci = ps.hand.pop(0)
-    ci.zone = Zone.DISCARD
-    ps.discard.append(ci)
-    note_hand_or_deck_discard(state, ci)
-    record_hand_discard(state, ps.player_id)
-    push_name_and_discard(state, source_ci)
+    from swu.engine.actions import push_discard_of_choice
+    push_discard_of_choice(state, actor_of(state, source_ci), 1,
+                           source_id=source_ci.instance_id,
+                           after_idx=1 - state.player_index(actor_of(state, source_ci)),
+                           payoff="unmasking_strip_opponent")
     return state
+
+
+@discard_payoff("unmasking_strip_opponent")
+def _unmasking_strip_opponent(state, source_id, discarded, args):
+    """"If you do, look at an opponent's hand and discard a card from it.\""""
+    from swu.engine.actions import push_name_and_discard
+    res = state.find_instance(source_id or "")
+    if discarded and res is not None:
+        push_name_and_discard(state, res[1])
 
 
 @card_ability("TWI", "223")
@@ -3348,8 +3352,9 @@ def _unmasking_the_conspiracy():
     """TWI_223 — Unmasking the Conspiracy (Event, Gambit): "Discard a card from your
     hand.  If you do, look at an opponent's hand and discard a card from it."
 
-    ONE CustomEffect so the cost and its payoff stay atomic — with an empty hand
-    nothing is discarded and the opponent's hand is never seen.  The payoff is the
+    The controller picks their own discard; the ``unmasking_strip_opponent``
+    payoff runs only if a card went — with an empty hand nothing is discarded and
+    the opponent's hand is never seen.  The payoff is the
     existing ``name_and_discard`` decision, which already carries the opponent's hand
     identities to the controller and offers only names actually present: that IS
     "look at their hand and discard a card from it" (Chimaera SOR_185)."""
@@ -3358,7 +3363,7 @@ def _unmasking_the_conspiracy():
 
 def _aggrieved_parliamentarian_effect(state, source_ci, target_id, event_ctx):
     from swu.engine.state import Zone
-    idx = state.player_index(source_ci.owner_id)
+    idx = state.player_index(actor_of(state, source_ci))
     opp = state.players[1 - idx]          # two-player: "an opponent" is THE opponent
     if not opp.discard:
         return state
@@ -3530,11 +3535,11 @@ def _anakin_twi_12_attack(state, source_ci, target_id, event_ctx):
     """Pay the printed "deal 2 damage to your base" cost, then grant the attack."""
     from swu.abilities.resolver import _apply_deal_damage
     from swu.engine.actions import push_granted_attack
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.base_instance is not None:
         _apply_deal_damage(state, ps.base_instance.instance_id, 2,
                            source_name=source_ci.card_def.display_name,
-                           dealer_id=source_ci.owner_id,
+                           dealer_id=actor_of(state, source_ci),
                            source_id=source_ci.instance_id)
     push_granted_attack(state, source_ci, power_bonus=2, bonus_if_defender_unit=True)
     return state
@@ -3769,7 +3774,7 @@ def _luminara_heal_base(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_heal
     if not target_id:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     units = len(ps.ground_arena) + len(ps.space_arena)
     if units <= 0:
         return state
@@ -3998,7 +4003,7 @@ def _guarding_the_way(state, source_ci, target_id, event_ctx):
         GrantKeyword("Sentinel", value=0, target=TargetSpec(),
                      duration=Duration.THIS_PHASE),
         source_ci, target_id, event_ctx)
-    if state.initiative_holder == state.player_index(source_ci.owner_id):
+    if state.initiative_holder == state.player_index(actor_of(state, source_ci)):
         state = execute_effect(
             state,
             ModifyStats(power=2, hp=2, target=TargetSpec(),
@@ -4048,7 +4053,7 @@ def _kalani_on_attack(state, source_ci, target_id, event_ctx):
     itself is mandatory (an optional trigger would prompt twice).  ``not_self`` =
     "another unit"; ``controller="any"`` because the card does not say friendly."""
     from swu.engine.actions import push_select_token
-    has_init = state.initiative_holder == state.player_index(source_ci.owner_id)
+    has_init = state.initiative_holder == state.player_index(actor_of(state, source_ci))
     push_select_token(
         state, source_ci,
         token_type=None, power_bonus=2, hp_bonus=2, duration="this_phase",
@@ -4539,7 +4544,7 @@ def _rush_clovis():
 
 def _ziro_exhaust_resource(state, source_ci, target_id, event_ctx):
     """Exhaust one ready resource controlled by the source's opponent."""
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     for r in opp.resources:
         if not r.exhausted:
             r.exhausted = True
@@ -4578,8 +4583,8 @@ def _san_hill_ready_resources(state, source_ci, target_id, event_ctx):
     """Ready one friendly resource per friendly unit defeated this phase."""
     gm = state.game_memory
     n = sum(1 for pid in (getattr(gm, "defeated_controllers_this_round", None) or [])
-            if pid == source_ci.owner_id)
-    ps = state.player_by_id(source_ci.owner_id)
+            if pid == actor_of(state, source_ci))
+    ps = state.player_by_id(actor_of(state, source_ci))
     readied = 0
     for r in ps.resources:
         if readied >= n:
@@ -4710,7 +4715,7 @@ def _chancellor_palpatine_twi203():
     create" says.  It is the standing version of the per-effect
     ``CreateTokenUnit(enters_ready=True)`` (On the Doorstep TWI_190).
 
-    The second is a mandatory ``OnAttack`` gated by ``ANY_UNIT_DEFEATED_THIS_PHASE``
+    The second is a mandatory ``OnAttack`` gated by ``ANY_UNIT_LEFT_PLAY_THIS_PHASE``
     (Yoda TWI_4) — "a unit left play", whoever owned it, so trading in combat before
     he swings arms it.  Together they read as one card: he manufactures a body that
     can act immediately, so the token is tempo rather than a wall."""
@@ -4719,7 +4724,7 @@ def _chancellor_palpatine_twi203():
         TriggerAbility(
             trigger=OnAttack(),
             effects=[CreateTokenUnit("Clone Trooper", count=1)],
-            condition=ConditionCheck(Condition.ANY_UNIT_DEFEATED_THIS_PHASE),
+            condition=ConditionCheck(Condition.ANY_UNIT_LEFT_PLAY_THIS_PHASE),
         ),
     ]
 
@@ -4736,7 +4741,7 @@ def _impropriety_swap(state, source_ci, target_id, event_ctx):
     theirs_id = event_ctx.get("impropriety_theirs")
     if theirs_id is None or target_id is None:
         return state          # "If you do" — one side had no legal pick
-    me = source_ci.owner_id
+    me = actor_of(state, source_ci)
     opp = state.players[1 - state.player_index(me)].player_id
     theirs = state.find_instance(theirs_id)
     mine = state.find_instance(target_id)
@@ -4815,7 +4820,7 @@ def _sly_moore_steal_token(state, source_ci, target_id, event_ctx):
     if res is None:
         return state
     _, token_ci = res
-    change_control(state, token_ci, source_ci.owner_id)
+    change_control(state, token_ci, actor_of(state, source_ci))
     token_ci.exhausted = False                                # "and ready it"
     token_ci.return_control_to_owner_at_regroup = True        # delayed revert
     return state
@@ -4968,17 +4973,14 @@ def _dooku_exploit_play(state, source_ci, target_id, event_ctx):
     pricing knobs: choose up to 1 friendly unit, then play a Separatist card at 2
     less per unit given up, the chosen unit dying only if the play happens.  With
     no friendly unit to give up there is nothing to choose, so the play is pushed
-    directly at full price.
-
-    DEVIATION: ``push_play_from_hand`` plays UNITS, so a Separatist event/upgrade is
-    not offered here (the card says "a Separatist card").
-    """
+    directly at full price.  ``any_card``: a Separatist event or upgrade is offered
+    too ("a Separatist card")."""
     from swu.engine.actions import push_combined_power_play, push_play_from_hand
     before = len(state.pending_decisions)
     push_combined_power_play(state, source_ci, trait="Separatist",
-                             max_units=1, cost_reduction_per_unit=2)
+                             max_units=1, cost_reduction_per_unit=2, any_card=True)
     if len(state.pending_decisions) == before:
-        push_play_from_hand(state, source_ci, trait="Separatist")
+        push_play_from_hand(state, source_ci, trait="Separatist", any_card=True)
     return state
 
 
@@ -4987,7 +4989,7 @@ def _dooku_grant_exploit_3(state, source_ci, target_id, event_ctx):
     gains Exploit 3" — one pending grant, consumed by the Exploit seam in
     ``PlayCard`` at the next matching play (the pending_play_discounts shape)."""
     state.game_memory.pending_exploit_grants.append(
-        {"player_id": source_ci.owner_id, "trait": "Separatist", "amount": 3})
+        {"player_id": actor_of(state, source_ci), "trait": "Separatist", "amount": 3})
     return state
 
 
@@ -5379,7 +5381,7 @@ def _high_ground_debuff(state, source_ci, target_id, event_ctx):
     if target_id is None:
         return state
     from swu.engine.state import Modifier
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     for ci in opp.ground_arena + opp.space_arena:
         state.modifiers.append(Modifier(
             modifier_id=state.alloc_modifier_id(),
@@ -5766,7 +5768,7 @@ def _clear_the_field(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_return_to_hand
     from swu.cards.models import Leader
     name = res[1].card_def.display_name
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     also = [ci.instance_id for ci in opp.ground_arena + opp.space_arena
             if ci.instance_id != target_id
             and not isinstance(ci.card_def, Leader)
@@ -5871,7 +5873,7 @@ def _now_there_are_two_of_them(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import push_play_from_hand
     from swu.engine.traits import get_traits
     from swu.cards.models import Unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     units = list(ps.ground_arena) + list(ps.space_arena)
     if len(units) != 1:
         return state
@@ -5932,7 +5934,7 @@ def _prisoner_of_war_capture(state, source_ci, target_id, event_ctx):
     _apply_capture(state, captor_id, target_id)
     if (prey_cost is not None and captor_cost is not None
             and prey_cost < captor_cost):
-        _create_token_units(state, state.player_by_id(source_ci.owner_id),
+        _create_token_units(state, state.player_by_id(actor_of(state, source_ci)),
                             "Battle Droid", 2)
     return state
 

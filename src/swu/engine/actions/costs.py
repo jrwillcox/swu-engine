@@ -367,6 +367,13 @@ def _shares_keyword_with_a_unit(state: GameState, ci: CardInstance,
     return False
 
 
+def _card_traits(state: GameState, ci: CardInstance) -> set:
+    """The effective traits of a card being played, through the trait layer — so a
+    card out of play that gains a trait counts (Malakili LAW_212's Creatures)."""
+    from swu.engine.traits import get_traits
+    return set(get_traits(state, ci))
+
+
 def _play_discount_entry_matches(entry: dict, ci: CardInstance, ps: PlayerState,
                                  traits: set, via_plot: bool = False,
                                  state: Optional[GameState] = None) -> bool:
@@ -430,21 +437,33 @@ def _pending_play_discount(state: GameState, ci: CardInstance, ps: PlayerState,
     the discount; the entry is consumed separately at the real play site
     (``_consume_play_discount``).  ``via_plot`` lets a plot_only discount (SEC_1)
     apply to a Plot play."""
-    traits = set(getattr(ci.card_def, "traits", ()) or ())
+    traits = _card_traits(state, ci)
     for entry in state.game_memory.pending_play_discounts:
         if _play_discount_entry_matches(entry, ci, ps, traits, via_plot, state):
             return _play_discount_entry_amount(entry, ci, ps, state)
     return 0
 
 
-def _card_matches_standing_discount(card_def, applies_to: str) -> bool:
+def _card_matches_standing_discount(card_def, applies_to: str,
+                                    as_upgrade: bool = False) -> bool:
     """Whether the card being played satisfies a ``StandingPlayDiscount``'s
     ``applies_to`` predicate.  Only ``"has_when_defeated_ability"`` today (Director
     Krennic JTLP_1): the card is a Unit whose printed text carries a "When Defeated"
     ability.  Read from the DB text (not the registered specs) so it holds regardless
     of whether the played card is itself encoded.  DEVIATION: a Bounty is rules-wise
     a When-Defeated ability but is printed "Bounty —", so it does not match — a rare,
-    documented corner."""
+    documented corner.
+
+    ``as_upgrade`` is set for a unit card played as a Pilot upgrade (Piloting): it is
+    then an UPGRADE being played, not a unit, so the unit arms miss and the upgrade
+    arms ("the first upgrade you play each phase" — Congress of Malastare SEC_64)
+    hit."""
+    if as_upgrade:
+        if applies_to in ("upgrade", "upgrade_not_on_source", "upgrade_on_source"):
+            return True
+        if applies_to.startswith("card_trait:"):
+            return applies_to.split(":", 1)[1] in (getattr(card_def, "traits", ()) or ())
+        return False
     if applies_to == "has_when_defeated_ability":
         if not isinstance(card_def, Unit):
             return False
@@ -526,7 +545,8 @@ def _standing_discount_key(src: CardInstance, ps: PlayerState) -> str:
 
 def _standing_play_discount_sources(state: GameState, ci: CardInstance,
                                     ps: PlayerState,
-                                    target_host_id: Optional[str] = None) -> list[CardInstance]:
+                                    target_host_id: Optional[str] = None,
+                                    as_upgrade: bool = False) -> list[CardInstance]:
     """In-play units controlled by ``ps`` carrying a ``StandingPlayDiscount`` marker
     that currently applies to playing ``ci`` (predicate matches AND, if
     ``once_per_round``, the source has not yet spent its discount this round).  Used
@@ -549,7 +569,7 @@ def _standing_play_discount_sources(state: GameState, ci: CardInstance,
             cn = getattr(src.card_def, "card_number", None) or ""
             for spec in get_abilities(sc, cn):
                 if isinstance(spec, StandingPlayDiscount) and _card_matches_standing_discount(
-                    ci.card_def, spec.applies_to
+                    ci.card_def, spec.applies_to, as_upgrade
                 ):
                     # "on this unit" host gate — the upgrade must attach to the source.
                     if spec.applies_to == "upgrade_on_source" and target_host_id != src.instance_id:
@@ -571,23 +591,28 @@ def _standing_play_discount_sources(state: GameState, ci: CardInstance,
 
 
 def _standing_play_discount(state: GameState, ci: CardInstance, ps: PlayerState,
-                            target_host_id: Optional[str] = None) -> int:
+                            target_host_id: Optional[str] = None,
+                            as_upgrade: bool = False) -> int:
     """Sum of the amounts of every applicable, un-spent ``StandingPlayDiscount``
     sourced by an in-play unit ``ps`` controls (Director Krennic JTLP_1) — read-only,
     does NOT consume.  Read by ``_play_cost`` so affordability and payment agree; the
     per-round marker is spent separately at the real play site
-    (``_consume_standing_discount``)."""
+    (``_consume_standing_discount``).  ``as_upgrade``: a Piloting play (see
+    ``_card_matches_standing_discount``)."""
     from swu.abilities.registry import get_abilities, StandingPlayDiscount
     total = 0
-    for src in _standing_play_discount_sources(state, ci, ps, target_host_id):
+    for src in _standing_play_discount_sources(state, ci, ps, target_host_id,
+                                               as_upgrade):
         sc = getattr(src.card_def, "set_code", None) or ""
         cn = getattr(src.card_def, "card_number", None) or ""
         for spec in get_abilities(sc, cn):
             if isinstance(spec, StandingPlayDiscount) and _card_matches_standing_discount(
-                ci.card_def, spec.applies_to
+                ci.card_def, spec.applies_to, as_upgrade
             ):
                 total += spec.amount
                 break
+    if as_upgrade:
+        return total  # not a unit play, so no "Nth unit you play" discount
     return total + _nth_unit_play_discount(state, ci, ps)
 
 
@@ -620,7 +645,8 @@ def _nth_unit_play_discount(state: GameState, ci: CardInstance,
     return total
 
 
-def _opponent_play_tax(state: GameState, ci: CardInstance, ps: PlayerState) -> int:
+def _opponent_play_tax(state: GameState, ci: CardInstance, ps: PlayerState,
+                       as_upgrade: bool = False) -> int:
     """Extra resources ``ps`` must pay to play ``ci`` because an ENEMY in-play unit
     carries an ``OpponentPlayTax`` marker matching the card's type (Del Meeko
     SOR_34: "Each event an opponent plays costs 1 resource more").  Read by
@@ -631,11 +657,14 @@ def _opponent_play_tax(state: GameState, ci: CardInstance, ps: PlayerState) -> i
     ``game_memory.unit_play_tax_this_phase`` ("Each unit that opponent plays this
     phase costs 1 resource more" — Moff Gideon JTL_188), which is recorded against a
     player rather than derived from a card in play and so survives the source
-    leaving play, exactly as printed."""
+    leaving play, exactly as printed.
+
+    ``as_upgrade`` (a unit card played as a Pilot upgrade) skips the unit surcharge:
+    that play is an upgrade, not a unit."""
     from swu.abilities.registry import (
         get_abilities, OpponentPlayTax, NamedCardPlayTax)
     total = 0
-    if isinstance(ci.card_def, Unit):
+    if isinstance(ci.card_def, Unit) and not as_upgrade:
         total += int(
             state.game_memory.unit_play_tax_this_phase.get(ps.player_id, 0) or 0)
     name = getattr(ci.card_def, "name", None)
@@ -1079,7 +1108,7 @@ def _consume_play_discount(state: GameState, ci: CardInstance, ps: PlayerState,
     Called once at the real play site so each discount applies to exactly one
     subsequent matching card.  ``via_plot`` lets a plot_only discount (SEC_1) be
     consumed by a Plot play."""
-    traits = set(getattr(ci.card_def, "traits", ()) or ())
+    traits = _card_traits(state, ci)
     for i, entry in enumerate(state.game_memory.pending_play_discounts):
         if _play_discount_entry_matches(entry, ci, ps, traits, via_plot, state):
             amt = _play_discount_entry_amount(entry, ci, ps, state)
@@ -1089,7 +1118,8 @@ def _consume_play_discount(state: GameState, ci: CardInstance, ps: PlayerState,
 
 
 def _consume_standing_discount(state: GameState, ci: CardInstance, ps: PlayerState,
-                               target_host_id: Optional[str] = None) -> None:
+                               target_host_id: Optional[str] = None,
+                               as_upgrade: bool = False) -> None:
     """Mark each ``once_per_round`` ``StandingPlayDiscount`` source that discounted
     playing ``ci`` as spent for the round (Director Krennic JTLP_1: "the first unit
     you play each round …").  Called once at the real play site, mirroring
@@ -1097,12 +1127,14 @@ def _consume_standing_discount(state: GameState, ci: CardInstance, ps: PlayerSta
     discount (Guardian of the Whills SOR_61)."""
     from swu.abilities.registry import get_abilities, StandingPlayDiscount
     used = state.game_memory.standing_play_discounts_used_this_round
-    for src in _standing_play_discount_sources(state, ci, ps, target_host_id):
+    for src in _standing_play_discount_sources(state, ci, ps, target_host_id,
+                                               as_upgrade):
         sc = getattr(src.card_def, "set_code", None) or ""
         cn = getattr(src.card_def, "card_number", None) or ""
         for spec in get_abilities(sc, cn):
             if isinstance(spec, StandingPlayDiscount) and spec.once_per_round and (
-                _card_matches_standing_discount(ci.card_def, spec.applies_to)
+                _card_matches_standing_discount(ci.card_def, spec.applies_to,
+                                                as_upgrade)
             ):
                 used.add(_standing_discount_key(src, ps))
                 break
@@ -1143,11 +1175,41 @@ def _ignorable_aspect_penalty(card: AnyCard, ps: PlayerState,
     return 0
 
 
-def _smuggle_cost(state: GameState, ci: CardInstance, ps: PlayerState) -> Optional[int]:
-    """Total effective resource cost to play ``ci`` via Smuggle (base + aspect
-    penalty), or None if it cannot be smuggled.  See ``_smuggle_cost_parts``."""
+def _smuggle_cost(state: GameState, ci: CardInstance, ps: PlayerState,
+                  target_host_id: Optional[str] = None,
+                  extra_reduction: int = 0) -> Optional[int]:
+    """Resources to play ``ci`` via Smuggle, or None if it cannot be smuggled.
+
+    The Smuggle cost (``_smuggle_cost_parts``: bracketed cost + its aspect penalty)
+    replaces the printed cost, and every modifier a hand play gets then applies to
+    it, exactly as in ``_play_cost``: the card's own reductions, pending and standing
+    play discounts, aspect-penalty waivers (capped at the Smuggle cost's own
+    penalty), opponent taxes and The Starhawk's halving.  ``extra_reduction`` is a
+    playing ability's own discount (Lando Calrissian SHD_17's "it costs 2 less").
+    Before 2026-11-25 a Smuggle play ignored all of these (a known deviation)."""
     parts = _smuggle_cost_parts(state, ci, ps)
-    return None if parts is None else parts[0] + parts[1]
+    if parts is None:
+        return None
+    base, penalty = parts
+    waiver = min(penalty, max(_host_waives_aspect_penalty(state, ci, ps, target_host_id),
+                              _controller_waives_aspect_penalty(state, ci, ps)))
+    reduction = (_play_cost_reduction(state, ci, target_host_id)
+                 + _pending_play_discount(state, ci, ps)
+                 + _standing_play_discount(state, ci, ps, target_host_id)
+                 + waiver)
+    tax = _opponent_play_tax(state, ci, ps)
+    return resource_cost_for(
+        state, ps,
+        max(0, base + penalty - reduction - int(extra_reduction or 0) + tax))
+
+
+def smuggle_rider_damage(ci: CardInstance) -> int:
+    """Damage a printed Smuggle cost also charges to a friendly unit — "Smuggle [7
+    resources Vigilance Villainy, deal 4 damage to a friendly unit]" (First Light
+    SHD_36) — or 0.  Paid with the resources, so a Smuggle play with a rider needs a
+    friendly unit to take it."""
+    from swu.engine.keywords import parse_smuggle_rider_damage
+    return parse_smuggle_rider_damage(getattr(ci.card_def, "text", None))
 
 
 def _piloting_discount_entry(state: GameState, ci: CardInstance,
@@ -1159,7 +1221,7 @@ def _piloting_discount_entry(state: GameState, ci: CardInstance,
     Pilot card you play this phase costs 1 resource less.  (This includes Piloting
     costs.)" (Wedge Antilles JTL_8).  Otherwise the ordinary hand-play discount
     would silently apply twice, once per play mode."""
-    traits = set(getattr(ci.card_def, "traits", ()) or ())
+    traits = _card_traits(state, ci)
     for i, entry in enumerate(state.game_memory.pending_play_discounts):
         if not entry.get("applies_to_piloting", False):
             continue
@@ -1168,10 +1230,19 @@ def _piloting_discount_entry(state: GameState, ci: CardInstance,
     return None
 
 
-def _piloting_cost(state: GameState, ci: CardInstance, ps: PlayerState) -> Optional[int]:
-    """Total effective resource cost to play ``ci`` as a Pilot (base + aspect
-    penalty, less any pending Piloting-aware discount), or None if it cannot be
-    piloted (no Piloting keyword in epic_action).
+def _piloting_cost(state: GameState, ci: CardInstance, ps: PlayerState,
+                   target_host_id: Optional[str] = None,
+                   extra_reduction: int = 0) -> Optional[int]:
+    """Total effective resource cost to play ``ci`` as a Pilot, or None if it cannot
+    be piloted (no Piloting keyword in epic_action).
+
+    The Piloting cost (bracket + its aspect penalty) less any pending Piloting-aware
+    discount (Wedge Antilles JTL_8) and any standing UPGRADE discount (the card is
+    played as an upgrade: Congress of Malastare SEC_64, Guardian of the Whills
+    SOR_61 on ``target_host_id``), plus a per-name tax (Qi'ra SHD_202), less
+    ``extra_reduction``, halved by The Starhawk JTL_105.  Unit-only discounts and
+    taxes do not apply, since this is not a unit play.  Before 2026-11-25 only the
+    Wedge discount applied (a known deviation).
 
     Read at BOTH the enumeration and the payment site, so a pending discount can
     never make an offered PilotPlay unaffordable; ``PilotPlay`` consumes the entry."""
@@ -1185,7 +1256,20 @@ def _piloting_cost(state: GameState, ci: CardInstance, ps: PlayerState) -> Optio
     if idx is not None:
         total -= int(
             state.game_memory.pending_play_discounts[idx].get("amount", 0) or 0)
-    return max(0, total)
+    total -= _standing_play_discount(state, ci, ps, target_host_id, as_upgrade=True)
+    total -= int(extra_reduction or 0)
+    total += _opponent_play_tax(state, ci, ps, as_upgrade=True)
+    return resource_cost_for(state, ps, max(0, total))
+
+
+def _spend_piloting_discounts(state: GameState, ci: CardInstance, ps: PlayerState,
+                              target_host_id: Optional[str]) -> None:
+    """Spend what ``_piloting_cost`` counted: the pending Piloting-aware discount and
+    every once-per-round standing upgrade discount."""
+    idx = _piloting_discount_entry(state, ci, ps)
+    if idx is not None:
+        del state.game_memory.pending_play_discounts[idx]
+    _consume_standing_discount(state, ci, ps, target_host_id, as_upgrade=True)
 
 
 def _vehicle_has_pilot(host: CardInstance) -> bool:
@@ -1220,6 +1304,33 @@ def _pilot_limit(host: CardInstance) -> int:
     for upg in getattr(host, "attached_upgrades", None) or ():
         extra += _extra(upg.card_def)
     return 1 + extra
+
+
+def _ignores_pilot_limit(ci: CardInstance) -> bool:
+    """R2-D2 JTL_245's ``AdditionalPilotSlots.self_exempt``: "This upgrade can be
+    played on a friendly Vehicle unit with a Pilot on it"."""
+    from swu.abilities.registry import get_abilities, AdditionalPilotSlots
+    sc = getattr(ci.card_def, "set_code", None) or ""
+    cn = getattr(ci.card_def, "card_number", None) or ""
+    return bool(sc and cn) and any(
+        isinstance(spec, AdditionalPilotSlots) and spec.self_exempt
+        for spec in get_abilities(sc, cn))
+
+
+def _pilot_slot_free(host: CardInstance, pilot_ci: Optional[CardInstance] = None) -> bool:
+    """Whether a Pilot may be played or deployed onto ``host``.
+
+    The Pilots on ``host`` that ignore the limit (R2-D2) are not counted, so a
+    Vehicle carrying R2-D2 still takes another Pilot whichever came first (the
+    official JTL ruling: "If R2-D2 is attached to a unit, another Pilot still can
+    be played or deployed on that unit").  A ``pilot_ci`` that ignores the limit
+    always fits."""
+    if pilot_ci is not None and _ignores_pilot_limit(pilot_ci):
+        return True
+    counted = sum(1 for upg in host.attached_upgrades
+                  if "Pilot" in (getattr(upg.card_def, "traits", ()) or ())
+                  and not _ignores_pilot_limit(upg))
+    return counted < _pilot_limit(host)
 
 
 def _discard_cost_candidates(ps: PlayerState, cost) -> list:

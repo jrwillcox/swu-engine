@@ -123,12 +123,63 @@ def _copied_leader_traits(state: "GameState", ci: "CardInstance") -> tuple[str, 
                  if t not in exclude)
 
 
+_out_of_play_granter_keys: "set | None" = None
+
+
+def _out_of_play_traits(state: "GameState", ci: "CardInstance") -> tuple[str, ...]:
+    """Traits granted to a card that is NOT in play by an ``OutOfPlayTraitGrant``
+    marker on a unit its OWNER controls — "each Creature unit you own that isn't in
+    play gains the Underworld trait" (Malakili LAW_212).  Printed traits decide the
+    match ("Creature"), so this never re-enters the grant layer.  Gated on a cached
+    index of the registry keys carrying the marker, so the hot path is one zone
+    test plus, rarely, a scan of one player's arenas."""
+    global _out_of_play_granter_keys
+    from swu.engine.state import Zone
+    if ci.zone in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
+        return ()
+    if _out_of_play_granter_keys is None:
+        try:
+            from swu.abilities.registry import get_all_registered, OutOfPlayTraitGrant
+        except ImportError:
+            return ()
+        _out_of_play_granter_keys = {
+            key for key, specs in get_all_registered().items()
+            if any(isinstance(sp, OutOfPlayTraitGrant) for sp in specs)}
+    if not _out_of_play_granter_keys:
+        return ()
+    from swu.abilities.registry import get_abilities, OutOfPlayTraitGrant
+    from swu.cards.models import Unit
+    from swu.engine.state import ability_suppressed
+    try:
+        owner = state.player_by_id(ci.owner_id)
+    except Exception:
+        return ()
+    printed = set(getattr(ci.card_def, "traits", None) or ())
+    out: list[str] = []
+    for src in (*owner.ground_arena, *owner.space_arena):
+        cd = src.card_def
+        key = (getattr(cd, "set_code", None) or "", getattr(cd, "card_number", None) or "")
+        if key not in _out_of_play_granter_keys or ability_suppressed(state, src):
+            continue
+        for sp in get_abilities(*key):
+            if not isinstance(sp, OutOfPlayTraitGrant):
+                continue
+            if sp.units_only and not isinstance(ci.card_def, Unit):
+                continue
+            if not printed.issuperset(sp.traits):
+                continue
+            if sp.trait not in out:
+                out.append(sp.trait)
+    return tuple(out)
+
+
 def get_traits(state: "GameState", ci: "CardInstance") -> tuple[str, ...]:
     """Return the effective traits of ``ci`` — printed plus granted, minus any
     revoked — preserving printed order and appending any granted trait not already
     present."""
     printed = tuple(getattr(ci.card_def, "traits", None) or ())
-    granted = _granted_traits(state, ci) + _copied_leader_traits(state, ci)
+    granted = (_granted_traits(state, ci) + _copied_leader_traits(state, ci)
+               + _out_of_play_traits(state, ci))
     revoked = _revoked_traits(state, ci)
     out = [t for t in printed if t not in revoked]
     for t in granted:
@@ -145,6 +196,8 @@ def has_trait(state: "GameState", ci: "CardInstance", trait: str) -> bool:
     if trait in (getattr(ci.card_def, "traits", None) or ()):
         return True
     if trait in _copied_leader_traits(state, ci):   # Zam Wesell HMW_134
+        return True
+    if trait in _out_of_play_traits(state, ci):     # Malakili LAW_212
         return True
     # Fast path: if no registered card can ever grant this trait, skip the
     # (potentially board-wide) granted-trait scan — the overwhelming majority of

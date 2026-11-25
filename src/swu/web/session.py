@@ -43,7 +43,7 @@ _PROMPTS: dict[str, str] = {
     "resolve_effects": "Choose a target for the resolving ability.",
     "pre_attack": "Continue the attack.",
     "granted_attack": "Choose a unit to attack with — it gets a bonus for this attack.",
-    "play_from_hand": "Play an Imperial unit from your hand — it enters play ready.",
+    "play_from_hand": "Play a card from your hand, as the ability says.",
     "play_event_from_hand": "Play an event from your hand — it costs 1 resource less.",
     "play_via_smuggle": "Play a card from your resources using Smuggle — it costs 2 less; then defeat a resource you own.",
     "play_via_piloting": "Play a card from your hand using Piloting — choose the pilot and the friendly Vehicle it rides.",
@@ -92,14 +92,14 @@ _PROMPTS: dict[str, str] = {
     "resource_from_hand": "You may resource cards from your hand — each enters your resource row ready. Pick one at a time, or stop.",
     "discard_excess_from_hand": "Discard from your hand — choose which card(s) to discard, one at a time.",
     "name_and_discard": "Name a card in the opponent's revealed hand — one copy of it is discarded.",
-    "may_discard": "An opponent's effect: discard a random card from your hand, or decline (and suffer the effect).",
+    "may_discard": "An opponent's effect: discard a card from your hand, or decline (and suffer the effect).",
     "disclose": "You may disclose — reveal cards from your hand bearing the required aspect icons for a bonus, or decline.",
     "exhaust_for_base_damage": "Exhaust any number of friendly units — each deals 1 damage to the defending base. Pick one at a time, or finish.",
     "exhaust_combined_cost": "Exhaust any number of units with combined cost 6 or less — pick one at a time, or finish.",
     "capture_combined_hp": "Capture any number of enemy non-leader units with combined remaining HP 7 or less — pick one at a time, or finish.",
     "rescue_guarded": "You may rescue one of your cards guarded by the attacking unit — but if you do, its controller draws cards.",
     "multi_capture_pairing": "Choose any number of your units — each captures an enemy non-leader unit in the same arena. Pick a captor and its prey, one pair at a time, or finish.",
-    "cost_route": "While playing this unit you may pay part of its cost another way — pay one step at a time, then play it at the reduced cost.",
+    "cost_route": "While playing this card you may pay part or all of its cost another way — pay one step at a time, then play it at the reduced cost.",
     "combined_power_play": "Choose any number of your units. Their combined power is the most a unit you then play from hand for free may cost — and the chosen units are defeated afterwards.",
     "play_captured_card": "Choose a captured card guarded by one of your units — you may play it for free under your control, or decline.",
     "play_resource_units": "Reveal any number of your resources — play each revealed unit for free, one at a time, or stop.",
@@ -190,10 +190,16 @@ class GameSession:
                 base = (f"Defeat any number of non-leader units with combined "
                         f"remaining HP {budget} or less — pick one at a time, or "
                         f"finish.")
+        elif top.kind == "play_captured_card" and top.context.get("mode") == "discard":
+            base = ("Choose a captured card guarded by one of your units — it goes to "
+                    "its owner's discard pile.")
         elif top.kind == "cost_route":
             ctx = top.context
             n = int(ctx.get("discount", 0))
-            if ctx.get("route_kind") == "defeat_ready_resource":
+            if ctx.get("route_kind") == "discard_aspect_card":
+                base = (f"You may discard a {ctx.get('aspect', '')} card from your hand "
+                        f"instead of paying this card's cost, or pay it as usual.")
+            elif ctx.get("route_kind") == "defeat_ready_resource":
                 base = (f"You may defeat ready resources you control — each makes this "
                         f"unit cost {n} less. Defeat one at a time, then play it.")
             else:
@@ -411,6 +417,11 @@ class GameSession:
             CullRevealedCard: "Discard",
             DrawRevealedCard: "Draw",
         }
+        top = self.state.pending_decisions[-1] if self.state.pending_decisions else None
+        if (isinstance(action, SelectCapturedToPlay) and top is not None
+                and top.context.get("mode") == "discard"):
+            # Altering the Deal SHD_243 reuses the decision to discard a captive.
+            return f"Discard captured {self._card_name(action.instance_id) or 'card'}"
         for cls, verb in _verbs.items():
             if isinstance(action, cls):
                 name = self._card_name(action.instance_id)
@@ -421,6 +432,10 @@ class GameSession:
             # resolve the smuggled card's name, and (for an upgrade) its host.
             name = self._card_name(action.instance_id) or "card"
             host = self._card_name(action.upgrade_target_id) if action.upgrade_target_id else None
+            if host and self._smuggle_rider(action.instance_id):
+                # A unit with a Smuggle rider (First Light SHD_36): the target is the
+                # friendly unit that takes the rider's damage, not a host.
+                return f"Smuggle {name}, dealing {self._smuggle_rider(action.instance_id)} damage to {host}"
             return f"Smuggle {name}" + (f" onto {host}" if host else "")
         if isinstance(action, PlotPlay):
             name = self._card_name(action.instance_id) or "card"
@@ -477,6 +492,10 @@ class GameSession:
             name = self._card_name(action.target_id)
             if name:
                 return f"Exhaust {name}"
+        from swu.engine.actions import DiscardChosenCard
+        if isinstance(action, DiscardChosenCard):
+            name = self._card_name(action.instance_id)
+            return f"Discard {name}" if name else "Discard a card"
         from swu.engine.actions import KeepUniqueCopy
         if isinstance(action, KeepUniqueCopy):
             name = self._card_name(action.instance_id)
@@ -549,6 +568,13 @@ class GameSession:
     def _card_name(self, instance_id: str) -> str | None:
         found = self.state.find_instance(instance_id)
         return found[1].card_def.display_name if found is not None else None
+
+    def _smuggle_rider(self, instance_id: str) -> int:
+        """The friendly-unit damage a card's Smuggle cost charges (First Light
+        SHD_36), or 0."""
+        from swu.engine.actions.costs import smuggle_rider_damage
+        found = self.state.find_instance(instance_id)
+        return smuggle_rider_damage(found[1]) if found is not None else 0
 
     def _visible_card_name(self, instance_id: str) -> str | None:
         """The card's name, or None if the human can't see it (the opponent's

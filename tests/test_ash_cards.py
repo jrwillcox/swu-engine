@@ -1434,15 +1434,29 @@ class TestRecklessSacrificeASH163:
         assert small.card_def.cost <= cheap.card_def.cost < pricey.card_def.cost
 
         state, _evt = _play_event_from_hand(state, repo, "ASH", "163")
-        from swu.engine.actions import legal_actions, apply
-        state = apply(state, legal_actions(state)[0])    # resolve the leading discard
+        from swu.engine.actions import (
+            legal_actions, apply, FinishSelectDamage, SelectDamageTarget)
+        # One unit in hand: no choice, discarded inline; the payoff's mandatory
+        # select_damage follows.
         assert any(c.instance_id == cheap.instance_id
                    for c in state.player_by_id("P0").discard)
-        offered = _target_ids(state)
+        acts = legal_actions(state)
+        offered = {a.target_id for a in acts if isinstance(a, SelectDamageTarget)}
         assert pricey.instance_id in offered
         assert small.instance_id not in offered
-        state = _drive(state, _accept_and_target(pricey))
+        assert not any(isinstance(a, FinishSelectDamage) for a in acts), "mandatory"
+        state = _drive(apply(state, SelectDamageTarget(pricey.instance_id)))
         assert _find_instance(state, pricey.instance_id).damage == 5
+
+    def test_ASH_163_the_player_chooses_which_unit_to_discard(self, repo):
+        from swu.engine.actions import legal_actions
+        state = _make_state()
+        _to_hand(state, "P0", _get_card(repo, *VANILLA_SPACE))
+        _to_hand(state, "P0", _get_card(repo, "ASH", "148"))
+        _place(state, "P1", _get_card(repo, "ASH", "148"), "ground")
+        state, _evt = _play_event_from_hand(state, repo, "ASH", "163")
+        assert state.pending_decisions[-1].kind == "discard_excess_from_hand"
+        assert len(legal_actions(state)) == 2           # either unit may go
 
 
 # ══ ash-set:07 — direct damage & removal ════════════════════════════════════
@@ -5302,10 +5316,10 @@ class TestFatefulGoodbyeASH211:
     def _setup(self, repo, *, lost_unit=False, lost_leader=False):
         state = _make_state()
         _place(state, "P0", _get_card(repo, *VANILLA_GROUND), "ground")
-        if lost_unit and "P0" not in state.game_memory.defeated_controllers_this_round:
-            state.game_memory.defeated_controllers_this_round.append("P0")
+        if lost_unit:
+            state.game_memory.left_play_controllers_this_phase.append("P0")
         if lost_leader:
-            state.game_memory.leader_unit_defeat_controllers_this_phase.add("P0")
+            state.game_memory.leader_left_play_controllers_this_phase.add("P0")
         return _play_event_from_hand(state, repo, "ASH", "211")[0]
 
     def test_ASH_211_fizzles_when_nothing_left_play(self, repo):

@@ -37,9 +37,6 @@ from swu.engine.actions.zones import (
 from swu.engine.actions.flow import (
     _check_game_over,
 )
-from swu.engine.actions.combat import (
-    note_hand_or_deck_discard, record_hand_discard,
-)
 from swu.engine.actions.observers import (
     _fire_action_phase_start_triggers, _fire_defeat_own_resource, _fire_scheduled_action_phase_effects, note_unit_readied,
 )
@@ -226,6 +223,13 @@ def _ready_forbidden(state: GameState, ci: CardInstance) -> bool:
     for upg in ci.attached_upgrades:
         if _blocks(upg.card_def):
             return True
+    # "That unit can't ready while this unit is in play" (Cantwell Arrestor Cruiser
+    # SEC_37): a ``ready_lock`` modifier, live only while its source is in play.
+    from swu.engine.actions.stats import _modifier_source_in_play
+    for mod in state.modifiers:
+        if (mod.kind == "ready_lock" and mod.target_instance_id == ci.instance_id
+                and _modifier_source_in_play(state, mod.source_instance_id)):
+            return True
     return False
 
 
@@ -400,24 +404,19 @@ def _enter_regroup(s: GameState) -> None:
                         change_control(s, ci, ci.owner_id)
     # "At the start of the regroup phase, discard a card from your hand" — scheduled
     # per-attack by Zorii Bliss SHD_203 (``discard_from_hand_at_regroup`` counter).
-    # The unit's CONTROLLER discards that many cards (first-card simplification, the
-    # DiscardFromHand convention); the counter is then cleared.  Skipped for a unit
-    # that has left play by regroup (the per-instance delayed-flag convention).
+    # The unit's CONTROLLER discards that many cards of their choice; the counter is
+    # then cleared.  Skipped for a unit that has left play by regroup (the
+    # per-instance delayed-flag convention).
     if not s.is_terminal():
+        from swu.engine.actions import push_discard_of_choice
         for ps in list(s.players):
             for ci in list(ps.ground_arena) + list(ps.space_arena):
                 n = getattr(ci, "discard_from_hand_at_regroup", 0)
                 if n and _find_in_arenas(ps, ci.instance_id) is not None:
                     ci.discard_from_hand_at_regroup = 0
-                    for _ in range(n):
-                        if not ps.hand:
-                            break
-                        card = ps.hand.pop(0)
-                        card.zone = Zone.DISCARD
-                        card.face_down = False
-                        ps.discard.append(card)
-                        note_hand_or_deck_discard(s, card)
-                        record_hand_discard(s, ps.player_id)
+                    push_discard_of_choice(s, ps.player_id, int(n),
+                                           source_id=ci.instance_id,
+                                           after_idx=s.initiative_holder)
     # "When the regroup phase starts" triggers (Contracted Hunter JTL_216:
     # "Defeat this unit").  Fire after the regroup draws and after the active
     # player is set to the initiative holder, so any inline self-defeat lands on a
@@ -465,10 +464,18 @@ def _ready_all_cards(s: GameState) -> None:
     Rebo's extra regroup it runs twice, which is why ``cannot_ready_this_round`` is
     SKIPPED but NOT cleared here (a unit kept tapped "this round" must stay tapped
     through BOTH regroups); that flag and phase-granted bounties are cleared at the
-    round rollover (``_regroup_rollover``)."""
+    round rollover (``_regroup_rollover``).
+
+    ``game_memory.skip_next_ready`` is the one-regroup version ("doesn't ready during
+    the next regroup phase", Dryden Vos SEC_137): skipped here once, then dropped, so
+    Max Rebo's second regroup readies it."""
+    skip_once = s.game_memory.skip_next_ready
     for ps in s.players:
         for zone_list in (ps.resources, ps.ground_arena, ps.space_arena, ps.base_zone):
             for ci in zone_list:
+                if ci.instance_id in skip_once:
+                    skip_once.discard(ci.instance_id)
+                    continue
                 # No Good to Me Dead SOR_186: a unit that "can't ready this round
                 # (including during the regroup phase)" stays exhausted through every
                 # regroup this round.  Skip it here (the flag is cleared at rollover

@@ -429,7 +429,10 @@ class TestCantwellArrestorCruiser:
         assert not state.pending_decisions
         victim = _find_instance(state, victim.instance_id)
         assert victim.exhausted is True
-        assert victim.cannot_ready_this_round is True   # "can't ready while in play"
+        # "can't ready while this unit is in play" — the ready lock, not a round flag.
+        from swu.engine.actions.turn import _ready_forbidden
+        assert _ready_forbidden(state, victim)
+        assert victim.cannot_ready_this_round is False
 
     def test_sec_37_decline_disclose_no_exhaust(self, repo):
         state, cantwell, victim = self._setup(repo)

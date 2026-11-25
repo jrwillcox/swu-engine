@@ -31,6 +31,8 @@ oracle's round-trip check exists to catch.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass, field
 from typing import Optional
@@ -58,7 +60,7 @@ from swu.engine.actions.shared import (
     _find_in_arenas_any, spend_force_token,
 )
 from swu.engine.actions.combat import (
-    note_hand_or_deck_discard,
+    note_hand_or_deck_discard, record_hand_discard,
 )
 
 
@@ -149,7 +151,7 @@ def push_regroup_upkeep(s: GameState, source_ci: CardInstance, *, amount: int = 
     regardless of the exact firing instant within regroup."""
     if s.find_instance(source_ci.instance_id) is None:
         return
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     dec = PendingDecision(
         deciding_player_id=controller_id,
         kind="regroup_upkeep",
@@ -175,7 +177,7 @@ def push_eye_of_aldhani_schedule(s: GameState, source_ci: CardInstance) -> None:
     action phase (the effect resolves later, when the source is long gone to
     discard — so the caster's id is recorded, not the instance)."""
     s.scheduled_action_phase_effects.append(
-        {"kind": "eye_of_aldhani", "controller_id": source_ci.owner_id})
+        {"kind": "eye_of_aldhani", "controller_id": actor_of(s, source_ci)})
 
 
 def push_pay_or_exhaust(
@@ -219,7 +221,7 @@ def push_defeat_own_resource_schedule(s: GameState, source_ci: CardInstance) -> 
     """Schedule "defeat a resource you control" for the START of the next action
     phase (the source's controller is recorded; the source may be long gone)."""
     s.scheduled_action_phase_effects.append(
-        {"kind": "defeat_own_resource", "controller_id": source_ci.owner_id})
+        {"kind": "defeat_own_resource", "controller_id": actor_of(s, source_ci)})
 
 
 def _pay_or_exhaust_current(state: GameState, ctx: dict) -> str:
@@ -322,48 +324,82 @@ class DiscardRandomCard(Action):
                 or state.pending_decisions[-1].kind != "may_discard"):
             raise IllegalActionError("No may_discard decision pending")
         s = copy.deepcopy(state)
-        top = s.pending_decisions.pop()
-        ctx = top.context
-        ps = s.player_by_id(ctx["opponent_id"])
+        top = s.pending_decisions[-1]
+        if top.context.get("chosen"):
+            raise IllegalActionError("This discard is of the player's choice")
+        ps = s.player_by_id(top.context["opponent_id"])
         if not ps.hand:
             raise IllegalActionError("No card to discard")
         rng = s.make_rng()
         idx = rng.randrange(len(ps.hand))
         s.rng_state = rng.getstate()
-        card = ps.hand.pop(idx)
-        card.zone = Zone.DISCARD
-        ps.discard.append(card)
-        choice = "discarded a random card"
-        # THEN-arm (Kouhun Assassination TS26_33): unlike every other may_discard
-        # card the payoff sits on the ACCEPT branch — "If they DO, give a
-        # non-Vehicle unit -8/-8 for this phase" — landing on the unit the source's
-        # controller pinned into the decision before it was pushed.
-        deb = ctx.get("then_debuff")
-        if deb and ctx.get("target_id"):
-            if s.find_instance(ctx["target_id"]) is not None:
-                from swu.engine.state import Modifier
-                s.modifiers.append(Modifier(
-                    modifier_id=s.alloc_modifier_id(),
-                    source_instance_id=ctx.get("source_id"),
-                    target_instance_id=ctx["target_id"],
-                    kind="stats",
-                    value={"power": int(deb.get("power", 0)),
-                           "hp": int(deb.get("hp", 0))},
-                    duration=str(deb.get("duration", "this_phase")),
-                ))
-                choice = (f"discarded a random card — the chosen unit takes "
-                          f"{deb.get('power', 0)}/{deb.get('hp', 0)}")
-        s.event_log.append(DecisionResolved(
-            deciding_player_id=top.deciding_player_id,
-            kind="may_discard",
-            choice=choice,
-        ))
-        if not s.is_terminal() and not s.pending_decisions:
-            s.active_player_index = top.after_resolve_player_index
-        return s
+        return _accept_may_discard(s, ps.hand[idx], "discarded a random card")
 
     def describe(self) -> str:
         return "Discard a random card"
+
+
+@dataclass
+class DiscardChosenCard(Action):
+    """Resolve a 'may_discard' decision whose discard is of the decider's choice
+    ("unless its controller discards a card from their hand" — Syril Karn SEC_133;
+    "may discard a card" — Kouhun Assassination TS26_33)."""
+    instance_id: str
+
+    def apply(self, state: GameState) -> GameState:
+        if (not state.pending_decisions
+                or state.pending_decisions[-1].kind != "may_discard"
+                or not state.pending_decisions[-1].context.get("chosen")):
+            raise IllegalActionError("No chosen-card may_discard decision pending")
+        s = copy.deepcopy(state)
+        ps = s.player_by_id(s.pending_decisions[-1].context["opponent_id"])
+        card = next((c for c in ps.hand if c.instance_id == self.instance_id), None)
+        if card is None:
+            raise IllegalActionError(f"{self.instance_id} is not in that hand")
+        return _accept_may_discard(s, card, f"discarded {card.card_def.display_name}")
+
+    def describe(self) -> str:
+        return f"Discard {self.instance_id}"
+
+
+def _accept_may_discard(s: GameState, card: CardInstance, choice: str) -> GameState:
+    """The accept arm of a 'may_discard' decision: discard ``card`` (already chosen,
+    randomly or by the decider) and apply the THEN-arm, if any."""
+    top = s.pending_decisions.pop()
+    ctx = top.context
+    ps = s.player_by_id(ctx["opponent_id"])
+    ps.hand.remove(card)
+    card.zone = Zone.DISCARD
+    ps.discard.append(card)
+    note_hand_or_deck_discard(s, card)
+    record_hand_discard(s, ps.player_id)
+    # THEN-arm (Kouhun Assassination TS26_33): unlike every other may_discard
+    # card the payoff sits on the ACCEPT branch — "If they DO, give a
+    # non-Vehicle unit -8/-8 for this phase" — landing on the unit the source's
+    # controller pinned into the decision before it was pushed.
+    deb = ctx.get("then_debuff")
+    if deb and ctx.get("target_id"):
+        if s.find_instance(ctx["target_id"]) is not None:
+            from swu.engine.state import Modifier
+            s.modifiers.append(Modifier(
+                modifier_id=s.alloc_modifier_id(),
+                source_instance_id=ctx.get("source_id"),
+                target_instance_id=ctx["target_id"],
+                kind="stats",
+                value={"power": int(deb.get("power", 0)),
+                       "hp": int(deb.get("hp", 0))},
+                duration=str(deb.get("duration", "this_phase")),
+            ))
+            choice = (f"{choice} — the chosen unit takes "
+                      f"{deb.get('power', 0)}/{deb.get('hp', 0)}")
+    s.event_log.append(DecisionResolved(
+        deciding_player_id=top.deciding_player_id,
+        kind="may_discard",
+        choice=choice,
+    ))
+    if not s.is_terminal() and not s.pending_decisions:
+        s.active_player_index = top.after_resolve_player_index
+    return s
 
 
 @dataclass
@@ -556,7 +592,10 @@ def _resolve_unique_actions(state: GameState, top: PendingDecision) -> list[Acti
 #    Pressure TWI_222) ──────────────────────────────────────────────────────
 def _may_discard_actions(state: GameState, top: PendingDecision) -> list[Action]:
     acts: list[Action] = []
-    if state.player_by_id(top.context["opponent_id"]).hand:
+    hand = state.player_by_id(top.context["opponent_id"]).hand
+    if top.context.get("chosen"):
+        acts.extend(DiscardChosenCard(ci.instance_id) for ci in hand)
+    elif hand:
         acts.append(DiscardRandomCard())
     acts.append(DeclineDiscard())
     return acts
@@ -621,7 +660,7 @@ def _apply_name_a_card_payoff(s: GameState, source_ci: CardInstance,
         from swu.engine.state import Modifier
         source_ci.named_card = None
         for p in s.players:
-            if p.player_id == source_ci.owner_id:
+            if p.player_id == actor_of(s, source_ci):
                 continue
             pool: list = []
             for zone in (p.hand, p.deck, p.discard, p.resources, p.base_zone,
@@ -647,7 +686,7 @@ def _apply_name_a_card_payoff(s: GameState, source_ci: CardInstance,
         return
     if kind in ("experience_per_hand_copy", "token_per_hand_copy"):
         opponent = next(
-            (p for p in s.players if p.player_id != source_ci.owner_id), None)
+            (p for p in s.players if p.player_id != actor_of(s, source_ci)), None)
         if opponent is None:
             return
         copies = sum(1 for ci in opponent.hand
@@ -656,17 +695,17 @@ def _apply_name_a_card_payoff(s: GameState, source_ci: CardInstance,
             return
         if kind == "experience_per_hand_copy":
             from swu.engine import tokens
-            ps = s.player_by_id(source_ci.owner_id)
+            ps = s.player_by_id(actor_of(s, source_ci))
             for _ in range(copies):
                 tokens.attach_token(s, ps, source_ci, "Experience")
         else:
-            _create_token_units(s, s.player_by_id(source_ci.owner_id),
+            _create_token_units(s, s.player_by_id(actor_of(s, source_ci)),
                                 raw or "Spy", copies)
         return
     if kind != "mill_defender_match_buff":
         return
     from swu.engine.state import Zone, Modifier
-    defender = next((p for p in s.players if p.player_id != source_ci.owner_id), None)
+    defender = next((p for p in s.players if p.player_id != actor_of(s, source_ci)), None)
     if defender is None or not defender.deck:
         return
     milled = defender.deck.pop(0)
@@ -696,7 +735,7 @@ def push_name_a_card(s: GameState, source_ci: CardInstance,
     exists (with none the naming fizzles).  ``from_hand`` names from the opponent's
     HAND instead of their public zones — "look at an opponent's hand, then name a
     card" (Qi'ra SHD_202); the optimal-play collapse to a card actually present."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     if names is None:
         names = (_opponent_hand_names(s, controller_id) if from_hand
                  else _name_a_card_names(s, controller_id))
@@ -817,7 +856,7 @@ def push_may_discard_else_tokens(
     Handed to the OPPONENT (the say_no SOR_233 deciding-player-shift precedent).
     When the opponent's hand is empty they cannot discard ("if they don't"), so the
     tokens are created inline with no decision pushed."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     opponent_id = next(p.player_id for p in s.players if p.player_id != controller_id)
     opp = s.player_by_id(opponent_id)
     if not opp.hand:
@@ -861,7 +900,7 @@ def push_may_discard_for_debuff(
     arm, which makes the choice real; here the payoff harms the decider, so a rational
     opponent always declines.  Implemented as printed — flipping the clause would be a
     rules judgement, not an encoding one."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     owner_idx = s.player_index(controller_id)
     opp = s.players[1 - owner_idx]
     if not opp.hand:
@@ -873,6 +912,7 @@ def push_may_discard_for_debuff(
             "source_id": source_ci.instance_id,
             "controller_id": controller_id,
             "opponent_id": opp.player_id,
+            "chosen": True,              # "may discard a card" — their pick
             "target_id": target_id,
             "then_debuff": {"power": int(power), "hp": int(hp),
                             "duration": str(duration)},
@@ -891,8 +931,7 @@ def push_may_discard_else_damage(
 ) -> None:
     """Push a 'may_discard' decision whose else-effect deals ``amount`` damage to
     ``target_id`` (Syril Karn SEC_133): the target's controller may discard a card
-    (the established first-card/random discard simplification) to prevent the
-    damage; if they don't, it is dealt.
+    of their choice to prevent the damage; if they don't, it is dealt.
 
     Handed to the target's controller (the say_no SOR_233 deciding-player shift).
     When that player's hand is empty they cannot discard ("unless … discards"), so
@@ -905,7 +944,7 @@ def push_may_discard_else_damage(
         return
     target_ps, _ = result
     decider_id = target_ps.player_id
-    controller_id = (source_ci.owner_id if source_ci is not None
+    controller_id = (actor_of(s, source_ci) if source_ci is not None
                      else next(p.player_id for p in s.players
                                if p.player_id != decider_id))
     if not s.player_by_id(decider_id).hand:
@@ -919,6 +958,7 @@ def push_may_discard_else_damage(
             "source_id": source_ci.instance_id if source_ci is not None else None,
             "controller_id": controller_id,
             "opponent_id": decider_id,   # whose hand is at risk / who decides
+            "chosen": True,              # "discards a card" — their pick
             "else_effect": "damage",
             "target_id": target_id,
             "amount": int(amount),
@@ -990,7 +1030,7 @@ def push_use_force(
     friendly unit when ``allow_exhaust_friendly``); otherwise nothing happens
     (the whole clause is "you may") — except the ``decline_penalty``, which is
     applied inline when there is no cost to offer."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ps = s.player_by_id(controller_id)
     options: list[str] = []
     if getattr(ps, "has_force_token", False):
@@ -1074,16 +1114,15 @@ def _resolve_use_force_payoff(s: GameState, top) -> GameState:
         return _pop_use_force(s, top, "used the Force")
     if payoff == "opponents_discard":
         # "…If you do, each opponent discards a card from their hand" (Jedi In
-        # Hiding LOF_159).  No target, so the decision pops immediately.
-        # DEVIATION: the established first-card discard simplification (K-2SO
-        # SOR_145) — the opponent loses a card, just not one of their choosing.
+        # Hiding LOF_159) — of their choice, pushed after this decision pops.
+        from swu.engine.actions import push_discard_of_choice
+        s = _pop_use_force(s, top, "used the Force")
         for pl in s.players:
-            if pl.player_id != ctx["controller_id"] and pl.hand:
-                card = pl.hand.pop(0)
-                card.zone = Zone.DISCARD
-                pl.discard.append(card)
-                note_hand_or_deck_discard(s, card)
-        return _pop_use_force(s, top, "used the Force")
+            if pl.player_id != ctx["controller_id"]:
+                push_discard_of_choice(s, pl.player_id, 1,
+                                       source_id=ctx.get("source_id"),
+                                       after_idx=top.after_resolve_player_index)
+        return s
     if payoff == "exhaust_enemy_draw":
         ctrl = s.player_by_id(ctx["controller_id"])
         _draw_cards(s, ctrl, 1)

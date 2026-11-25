@@ -27,6 +27,8 @@ which state.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass
 from typing import Optional
@@ -312,7 +314,10 @@ class AssignIndirectDamage(Action):
 
 def _select_damage_actions(state: GameState, top: PendingDecision) -> list[Action]:
     acts = [SelectDamageTarget(tid) for tid in _select_damage_targets(state, top.context)]
-    acts.append(FinishSelectDamage())  # "up to" — stopping early is always legal
+    # "up to" — stopping early is legal, unless the clause is mandatory and a target
+    # remains (Reckless Sacrifice ASH_163); never leaves legal_actions empty.
+    if not (top.context.get("mandatory") and acts):
+        acts.append(FinishSelectDamage())
     return acts
 
 
@@ -479,7 +484,7 @@ def push_assign_indirect_damage(
 
     All three are inert by default, so every existing caller is unchanged.
     """
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     receiving_id = next(p.player_id for p in s.players if p.player_id != controller_id)
     amount = int(amount)
     # Static "indirect damage you deal is increased by N" markers (Hunting
@@ -589,9 +594,9 @@ def _resolve_assign_indirect_damage(s: GameState, top) -> GameState:
 # ── Player-directed damage distribution push helpers ──────────────────────────
 
 def _push_distribute_decision(s: GameState, source_ci: CardInstance, ctx: dict) -> None:
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="distribute_damage",
         context=ctx,
         after_resolve_player_index=1 - owner_idx,
@@ -599,7 +604,7 @@ def _push_distribute_decision(s: GameState, source_ci: CardInstance, ctx: dict) 
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="distribute_damage",
     ))
 
@@ -646,7 +651,7 @@ def push_distribute_damage(
     """
     ctx = {
         "source_id": source_ci.instance_id,
-        "controller_id": source_ci.owner_id,
+        "controller_id": actor_of(s, source_ci),
         "mode": "pool",
         "pool": int(amount),
         "up_to": bool(up_to),
@@ -686,7 +691,7 @@ def push_distribute_heal(
     """
     ctx = {
         "source_id": source_ci.instance_id,
-        "controller_id": source_ci.owner_id,
+        "controller_id": actor_of(s, source_ci),
         "mode": "pool",
         "heal": True,
         "include_bases": bool(include_bases),
@@ -726,7 +731,7 @@ def push_distribute_source_power(
     """
     ctx = {
         "source_id": source_ci.instance_id,
-        "controller_id": source_ci.owner_id,
+        "controller_id": actor_of(s, source_ci),
         "mode": "source_pool",
         "stage": "pick_source",
         "source_controller": source_controller,
@@ -768,7 +773,7 @@ def push_sequence_damage(
     """
     ctx = {
         "source_id": source_ci.instance_id,
-        "controller_id": source_ci.owner_id,
+        "controller_id": actor_of(s, source_ci),
         "mode": "sequence",
         "stage": "pick_target",
         "source_controller": source_controller,
@@ -1010,7 +1015,7 @@ def push_plot_ability(s: GameState, source_ci: CardInstance, *,
     Pushed only when the controller has a Plot card in their resources they can
     actually afford right now; otherwise a no-op (you did not play a card, so no
     ramp)."""
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     plot_ids = [] if s.is_terminal() else _plot_eligible_resource_ids(s, ps)
     if not (plot_ids and _plot_play_actions(s, ps, set(plot_ids))):
         return

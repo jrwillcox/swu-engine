@@ -17,6 +17,8 @@ Group ``qui-gon-jinn:03`` — Combat tricks, buffs & tempo:
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from swu.abilities.registry import (
     card_ability,
     TriggerAbility, EventAbility, GrantedAbility, ConstantAbility, ActivatedAbility,
@@ -37,12 +39,21 @@ from swu.abilities.registry import (
     AttackRestriction, HalvePaidCosts,
     TargetSpec, ConditionCheck, Condition, SELF, DEFENDER, EACH_FRIENDLY,
 )
+from swu.engine.discard_payoffs import discard_payoff
+
+
+def _discard_choice(state, source_ci, player_id, count=1, **kw):
+    """``push_discard_of_choice`` for an ability of ``source_ci`` (hand-back to the
+    other player once it resolves)."""
+    from swu.engine.actions import push_discard_of_choice
+    push_discard_of_choice(state, player_id, count, source_id=source_ci.instance_id,
+                           after_idx=1 - state.player_index(actor_of(state, source_ci)), **kw)
 
 
 def _sabine_cunning(state, source_ci, target_id, event_ctx):
     """Cunning clause: if the controller controls a Cunning unit, exhaust or ready
     a resource (a fungible 'modal' choice).  No-op otherwise."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     has_cunning = any(
         "Cunning" in {a.name for a in (getattr(u.card_def, "aspects", None) or ())}
         for arena in (ps.ground_arena, ps.space_arena) for u in arena
@@ -108,23 +119,22 @@ def _contracted_hunter():
 # ── qui-gon-jinn:03 — Combat tricks, buffs & tempo ────────────────────────────
 
 def _jtl_ahsoka_when_played(state, source_ci, target_id, event_ctx):
-    """Opponent discards the first card from their hand (the established first-card
-    discard simplification — K-2SO SOR_145 / Garindan SEC_186).  If it was a Unit,
-    push a 'you may exhaust a unit' decision (the generalised
-    ``push_exhaust_combined_cost`` with ``max_units=1`` and no cost cap — the
-    controller may exhaust any one unit, pointing it at an enemy, or take 0)."""
-    from swu.cards.models import Unit
-    from swu.engine.state import Zone
-    from swu.engine.actions import push_exhaust_combined_cost
-    opp_idx = 1 - state.player_index(source_ci.owner_id)
-    opp = state.players[opp_idx]
-    if opp.hand:
-        ci = opp.hand.pop(0)
-        ci.zone = Zone.DISCARD
-        opp.discard.append(ci)
-        if isinstance(ci.card_def, Unit):
-            push_exhaust_combined_cost(state, source_ci, budget=None, max_units=1)
+    """Opponent discards a card of their choice.  If it was a Unit, the
+    ``ahsoka_exhaust_if_unit`` payoff pushes a 'you may exhaust a unit' decision (the
+    generalised ``push_exhaust_combined_cost`` with ``max_units=1`` and no cost cap —
+    the controller may exhaust any one unit, pointing it at an enemy, or take 0)."""
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
+    _discard_choice(state, source_ci, opp.player_id, payoff="ahsoka_exhaust_if_unit")
     return state
+
+
+@discard_payoff("ahsoka_exhaust_if_unit")
+def _ahsoka_exhaust_if_unit(state, source_id, discarded, args):
+    from swu.cards.models import Unit
+    from swu.engine.actions import push_exhaust_combined_cost
+    res = state.find_instance(source_id or "")
+    if res is not None and any(isinstance(c.card_def, Unit) for c in discarded):
+        push_exhaust_combined_cost(state, res[1], budget=None, max_units=1)
 
 
 @card_ability("JTL", "201")
@@ -620,7 +630,7 @@ def _shuttle_tydirium_on_attack(state, source_ci, target_id, event_ctx):
     deck is a clean no-op."""
     from swu.engine.state import Zone
     from swu.engine.actions import push_select_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
     card = ps.deck.pop(0)
@@ -659,7 +669,7 @@ def _boshek_when_played_as_upgrade(state, source_ci, target_id, event_ctx):
     two with an odd cost to hand (mandatory — no player choice).  Resolves inline;
     an empty deck yields fewer/zero milled cards."""
     from swu.engine.state import Zone
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     milled = []
     for _ in range(2):
         if not ps.deck:
@@ -703,7 +713,7 @@ def _han_reveal_and_attack(state, source_ci, target_id, event_ctx):
     chosen attacker have *different odd* costs (``bonus_if_odd_cost_diff_from``).
     An empty deck reveals nothing (cost ``None`` -> the bonus never applies)."""
     from swu.engine.actions import push_granted_attack
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     revealed_cost = getattr(ps.deck[0].card_def, "cost", None) if ps.deck else None
     push_granted_attack(state, source_ci, power_bonus=1,
                         bonus_if_odd_cost_diff_from=revealed_cost)
@@ -714,7 +724,7 @@ def _han_ready_resources_for_odd(state, source_ci, target_id, event_ctx):
     """Han Solo JTL_17 "When deployed as an upgrade": for each friendly unit or
     upgrade with an odd cost, ready a resource.  ``source_ci`` is the leader-upgrade
     (resolves from itself); its owner is the controller."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     count = 0
     for u in ps.ground_arena + ps.space_arena:
         c = getattr(u.card_def, "cost", None)
@@ -803,7 +813,7 @@ def _blue_leader_when_played(state, source_ci, target_id, event_ctx):
     from swu.engine.state import Zone
     from swu.engine.tokens import attach_token
     from swu.engine.actions import _exhaust_resources
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     _exhaust_resources(ps, 2)
     for arena in (ps.ground_arena, ps.space_arena):
         if source_ci in arena:
@@ -875,7 +885,7 @@ def _tandem_assault(state, source_ci, target_id, event_ctx):
     last (resolves 1st via LIFO) — so the mandatory space attack precedes the
     ground attack and "if you do" holds (with no space unit nothing is pushed)."""
     from swu.engine.actions import push_granted_attack, _enumerate_attacks
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     opp = state.players[1 - state.player_index(ps.player_id)]
     space_ids = {u.instance_id for u in ps.space_arena}
     if not any(a.attacker_id in space_ids
@@ -904,7 +914,7 @@ def _tandem_assault_jtl_124():
 def _its_a_trap(state, source_ci, target_id, event_ctx):
     """It's a Trap JTL_209: if the opponent controls more space units than you,
     ready each of your space units (set ``exhausted=False``)."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     opp = state.players[1 - state.player_index(ps.player_id)]
     if len(opp.space_arena) > len(ps.space_arena):
         for u in ps.space_arena:
@@ -1052,17 +1062,14 @@ def _r2d2_jtl_245():
          Attached unit gains: 'You may play or deploy 1 additional Pilot on this
          unit.'"
 
-    Only the second clause needs an ability; the first is already free — the engine
-    does not enforce the "without a Pilot" restriction on the normal Piloting/
-    PilotPlay path (``_eligible_pilot_targets`` returns every friendly Vehicle), so
-    R2-D2 can already attach to a Vehicle that has a Pilot.
-
-    The granted extra slot is the ``AdditionalPilotSlots(1)`` passive marker (from
-    han-solo:05, Millennium Falcon): ``_pilot_limit`` now also scans a host's
-    attached upgrades for the marker, so a Vehicle carrying R2-D2 may host one Pilot
-    beyond R2-D2 itself (the leader-deploy-as-upgrade cap is the one place a Pilot
-    limit is checked — the "play an additional Pilot" case is already free)."""
-    return AdditionalPilotSlots(count=1)
+    One ``AdditionalPilotSlots(1, self_exempt=True)`` marker (from han-solo:05,
+    Millennium Falcon).  ``self_exempt`` is the first clause: R2-D2 may be played
+    as a Pilot on a Vehicle whose Pilot slots are full, and is never counted
+    against a limit.  The extra slot is the second: ``_pilot_limit`` scans a host's
+    attached upgrades for the marker.  So Pilot + R2-D2 + Pilot fits, in either
+    order (the official JTL ruling: "If R2-D2 is attached to a unit, another Pilot
+    still can be played or deployed on that unit")."""
+    return AdditionalPilotSlots(count=1, self_exempt=True)
 
 
 # ── han-solo:07 — New primitive: scaling-magnitude (SOR_97, JTL_208) ───────────
@@ -1115,8 +1122,8 @@ def _never_tell_me_the_odds_fn(state, source_ci, target_id, event_ctx):
     play (``push_select_damage`` no-ops otherwise)."""
     from swu.engine.state import Zone
     from swu.engine.actions import push_select_damage
-    ctrl = state.player_by_id(source_ci.owner_id)
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    ctrl = state.player_by_id(actor_of(state, source_ci))
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     odd = 0
     for ps in (opp, ctrl):
         for _ in range(3):
@@ -1181,7 +1188,7 @@ def _commandeer_fn(state, source_ci, target_id, event_ctx):
     if res is None:
         return state
     _, target_ci = res
-    change_control(state, target_ci, source_ci.owner_id)  # "Take control"
+    change_control(state, target_ci, actor_of(state, source_ci))  # "Take control"
     target_ci.exhausted = False                            # "If you do, ready it"
     target_ci.return_to_owner_hand_at_regroup = True       # delayed bounce
     return state
@@ -1298,7 +1305,7 @@ def _planetary_bombardment(state, source_ci, target_id, event_ctx):
     Capital Ship unit (a conditional magnitude — the Zeb Orellios LAW_45 pattern),
     via the indirect-damage primitive (boba-fett:01)."""
     from swu.engine.traits import has_trait
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     has_capital = any(
         has_trait(state, u, "Capital Ship")
         for arena in (ps.ground_arena, ps.space_arena) for u in arena
@@ -1422,6 +1429,17 @@ def _devastator_jtl143():
     ]
 
 
+@discard_payoff("profundity_second_discard")
+def _profundity_second_discard(state, source_id, discarded, args):
+    """"Then, if they have more cards in their hand than you, they discard a card
+    from their hand.\""""
+    from swu.engine.actions import push_discard_of_choice
+    opp = state.player_by_id(args["opponent_id"])
+    if len(opp.hand) > len(state.player_by_id(args["controller_id"]).hand):
+        push_discard_of_choice(state, opp.player_id, 1, source_id=source_id,
+                               after_idx=int(args["after_idx"]))
+
+
 @card_ability("JTL", "154")
 def _profundity_jtl154():
     """JTL_154 — Profundity (Unit 8/9, Overwhelm): "When Played/When Defeated:
@@ -1431,25 +1449,17 @@ def _profundity_jtl154():
     Overwhelm is the keyword layer.  Two triggers (a ``WhenPlayed`` and a
     ``WhenDefeated``), each a no-target ``CustomEffect``: "choose a player" resolves
     to the opponent (choosing yourself is self-harm, never the play), who discards
-    the first card of their hand (the established K-2SO SOR_145 / J-Type Nubian
-    Starship LOF_194 first-card simplification), and then — only if they now hold
-    more cards than the controller — discards a second.  Bound inline so the
-    conditional second discard reads the post-first-discard hand sizes."""
+    a card of their choice, and then — only if they now hold more cards than the
+    controller — discards a second (the ``profundity_second_discard`` payoff, so the
+    comparison reads the post-first-discard hand sizes)."""
     def _profundity_discard(state, source_ci, target_id, event_ctx):
-        from swu.engine.state import Zone
-        ctrl = state.player_by_id(source_ci.owner_id)
-        opp = state.players[1 - state.player_index(source_ci.owner_id)]
-
-        def _discard_first():
-            if opp.hand:
-                ci = opp.hand.pop(0)
-                ci.zone = Zone.DISCARD
-                opp.discard.append(ci)
-
-        _discard_first()
-        # "Then, if they have more cards in their hand than you" (the controller).
-        if len(opp.hand) > len(ctrl.hand):
-            _discard_first()
+        opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
+        _discard_choice(state, source_ci, opp.player_id,
+                        payoff="profundity_second_discard",
+                        payoff_args={"controller_id": actor_of(state, source_ci),
+                                     "opponent_id": opp.player_id,
+                                     "after_idx": 1 - state.player_index(
+                                         actor_of(state, source_ci))})
         return state
 
     return [
@@ -1903,7 +1913,7 @@ def _no_glory_only_results(state, source_ci, target_id, event_ctx):
         return state
     from swu.engine.actions import change_control
     from swu.abilities.resolver import _apply_defeat_unit
-    change_control(state, res[1], source_ci.owner_id)
+    change_control(state, res[1], actor_of(state, source_ci))
     return _apply_defeat_unit(state, target_id)
 
 
@@ -1957,7 +1967,7 @@ def _red_squadron_self_damage_draw(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import _draw_cards
     state = _apply_deal_damage(state, source_ci.instance_id, 2,
                                source_ci.card_def.display_name)
-    _draw_cards(state, state.player_by_id(source_ci.owner_id), 1)
+    _draw_cards(state, state.player_by_id(actor_of(state, source_ci)), 1)
     return state
 
 
@@ -2131,7 +2141,7 @@ def _dornean_gunship_indirect(state, source_ci, target_id, event_ctx):
     has already entered play, so it counts itself).  0 Vehicles is impossible here,
     but the guard keeps the decision from being pushed for nothing."""
     from swu.engine.traits import has_trait
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = sum(1 for u in (ps.ground_arena + ps.space_arena)
             if has_trait(state, u, "Vehicle"))
     if n > 0:
@@ -2182,7 +2192,7 @@ def _salvage_play_vehicle_from_discard(state, source_ci, target_id, event_ctx):
     pattern; ``eligible_ids`` is a general zone filter, not a discard-only one).
     ``then_damage=1`` is the existing "then deal N to the played unit" field."""
     from swu.cards.models import Unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     eligible = frozenset(
         ci.instance_id for ci in ps.discard
         if isinstance(ci.card_def, Unit)
@@ -2420,7 +2430,7 @@ def _trench_run_fn(state, source_ci, target_id, event_ctx):
         return state
     from swu.engine.state import Zone
     from swu.engine.actions import note_hand_or_deck_discard, push_granted_attack
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     costs: list[int] = []
     for _ in range(2):
         if not opp.deck:
@@ -2436,7 +2446,7 @@ def _trench_run_fn(state, source_ci, target_id, event_ctx):
         state = _apply_indirect_damage(
             state, target_id, abs(costs[0] - costs[1]),
             source_name=source_ci.card_def.display_name,
-            dealer_id=source_ci.owner_id)
+            dealer_id=actor_of(state, source_ci))
     still = state.find_instance(target_id)
     if still is not None and still[1].zone in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
         push_granted_attack(state, source_ci, power_bonus=4, attacker_id=target_id)
@@ -2605,7 +2615,7 @@ def _fight_fire_strike_both(state, source_ci, target_id, event_ctx):
     for tid in (event_ctx.get("prior_target_id"), target_id):
         if tid:
             state = _apply_deal_damage(state, tid, 3, source_name=name,
-                                       dealer_id=source_ci.owner_id)
+                                       dealer_id=actor_of(state, source_ci))
     return state
 
 
@@ -2718,7 +2728,7 @@ def _system_shock_fn(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_deal_damage
     return _apply_deal_damage(state, host_id, 1,
                               source_name=source_ci.card_def.display_name,
-                              dealer_id=source_ci.owner_id)
+                              dealer_id=actor_of(state, source_ci))
 
 
 @card_ability("JTL", "175")
@@ -2753,7 +2763,7 @@ def _piercing_shot_fn(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_deal_damage
     return _apply_deal_damage(state, target_id, 3,
                               source_name=source_ci.card_def.display_name,
-                              dealer_id=source_ci.owner_id)
+                              dealer_id=actor_of(state, source_ci))
 
 
 @card_ability("JTL", "180")
@@ -2821,8 +2831,8 @@ def _rafa_martez_fn(state, source_ci, target_id, event_ctx):
         from swu.abilities.resolver import _apply_deal_damage
         state = _apply_deal_damage(state, target_id, 1,
                                    source_name=source_ci.card_def.display_name,
-                                   dealer_id=source_ci.owner_id)
-    ps = state.player_by_id(source_ci.owner_id)
+                                   dealer_id=actor_of(state, source_ci))
+    ps = state.player_by_id(actor_of(state, source_ci))
     for r in ps.resources:
         if r.exhausted:
             r.exhausted = False
@@ -3002,19 +3012,12 @@ def _discard_hand_card(state, ps, ci):
 
 
 def _admiral_trench_discard_draw(state, source_ci, target_id, event_ctx):
-    """Discard a hand card costing 3 or more, then draw.
+    """Discard a hand card costing 3 or more (the player's pick), then draw.
 
-    The card to pitch is auto-picked (the first qualifying one — the K-2SO SOR_145
-    first-card-discard convention); the collection gate guarantees one exists, so
-    the "If you do" always fires and the Exhaust is never wasted."""
-    from swu.engine.actions import _draw_cards
-    ps = state.player_by_id(source_ci.owner_id)
-    victim = next((c for c in ps.hand
-                   if int(getattr(c.card_def, "cost", None) or 0) >= 3), None)
-    if victim is None:
-        return state
-    _discard_hand_card(state, ps, victim)
-    _draw_cards(state, ps, 1)
+    The collection gate guarantees one exists, so the "If you do" always fires and
+    the Exhaust is never wasted; ``then_draw`` follows the choice."""
+    _discard_choice(state, source_ci, actor_of(state, source_ci), then_draw=1,
+                    eligible=lambda cd: int(getattr(cd, "cost", None) or 0) >= 3)
     return state
 
 
@@ -3163,7 +3166,7 @@ def _cassian_andor_mill(state, source_ci, target_id, event_ctx):
     defending player is simply the host controller's opponent (two-player)."""
     from swu.engine.actions import note_hand_or_deck_discard, _draw_cards
     from swu.engine.state import Zone
-    idx = state.player_index(source_ci.owner_id)
+    idx = state.player_index(actor_of(state, source_ci))
     mine = state.players[idx]
     theirs = state.players[1 - idx]
     if not theirs.deck:
@@ -3233,8 +3236,7 @@ def _the_invisible_hand_jtl_89():
     Two registrations over one ``CustomEffect`` — ``WhenPlayed`` and the existing
     ``WhenAttackEnds`` trigger, whose "and survives" is intrinsic (it only fires for
     a source still in play).  The search is ``up_to=True``, which is the outer "you
-    may"; the inner one collapses to mandatory (a free ≤2-cost Droid is never a
-    downside)."""
+    may"; the free play of a ≤2-cost Droid is the inner one, and can be declined."""
     effects = [CustomEffect(fn=_invisible_hand_search)]
     return [
         TriggerAbility(trigger=WhenPlayed(), effects=list(effects)),
@@ -3620,7 +3622,7 @@ def _stolen_at_hauler_fn(state, source_ci, target_id, event_ctx):
     stable, so flagging it here is enough; it enters under the player who replays
     it, while ``owner_id`` — and therefore the pile it returns to — is unchanged."""
     opp_id = next(p.player_id for p in state.players
-                  if p.player_id != source_ci.owner_id)
+                  if p.player_id != actor_of(state, source_ci))
     ledger = state.game_memory.foreign_free_discard_play_this_phase
     ids = ledger.setdefault(opp_id, [])
     if source_ci.instance_id not in ids:
@@ -4307,7 +4309,7 @@ def _phantom_ii_jtl_50_attach(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import _attach_unit_as_pilot
     from swu.abilities.registry import Duration
     from swu.abilities.resolver import execute_effect, _make_modifier
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     ghost = next((ci for ci in ps.ground_arena + ps.space_arena
                   if ci.instance_id != source_ci.instance_id
                   and (ci.card_def.name or "") == "The Ghost"), None)
@@ -4541,7 +4543,7 @@ def _covering_the_wing_jtl_76(state, source_ci, target_id, event_ctx):
     wrong order (the Lando JTL_3 lesson).  ``select_token``'s stop-early is the
     printed "you may"."""
     from swu.engine.actions import _create_token_units, push_select_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     created = _create_token_units(state, ps, "X-Wing", 1)
     push_select_token(state, source_ci, token_type="Shield", max_targets=1,
                       controller="any",
@@ -4664,7 +4666,7 @@ def _scramble_fighters_jtl_92(state, source_ci, target_id, event_ctx):
     marker — so the base-attack option simply never appears for these tokens while
     their unit attacks stay intact."""
     from swu.engine.actions import _create_token_units
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     created = _create_token_units(state, ps, "TIE Fighter", 8, enters_ready=True)
     for ci in created:
         state.game_memory.cannot_attack_bases_this_phase.add(ci.instance_id)
@@ -4712,7 +4714,7 @@ def _unity_of_purpose_jtl_106(state, source_ci, target_id, event_ctx):
     board with no units yields 0 and nothing is applied."""
     from swu.abilities.registry import Duration
     from swu.abilities.resolver import _make_modifier
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     units = list(ps.ground_arena) + list(ps.space_arena)
     amount = len({getattr(u.card_def, "name", None) for u in units})
     if not amount:
@@ -4809,7 +4811,7 @@ def _resupply_carrier_jtl_119(state, source_ci, target_id, event_ctx):
     primitive (``_resource_top_of_deck``, When Has Become Now SEC_245).  A no-op
     on an empty deck."""
     from swu.engine.actions import _resource_top_of_deck
-    _resource_top_of_deck(state, state.player_by_id(source_ci.owner_id))
+    _resource_top_of_deck(state, state.player_by_id(actor_of(state, source_ci)))
     return state
 
 
@@ -4916,7 +4918,7 @@ def _bb8_jtl_145_pay_and_ready(state, source_ci, target_id, event_ctx):
     if res is None:
         return state
     _, unit = res
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if sum(1 for r in ps.resources if not r.exhausted) < 2:
         return state
     from swu.engine.actions import _exhaust_resources
@@ -5152,7 +5154,7 @@ def _cham_syndulla_jtl_164(state, source_ci, target_id, event_ctx):
     primitive ``_resource_top_of_deck`` (Resupply Carrier JTL_119).  A no-op on an
     empty deck."""
     from swu.engine.actions import _resource_top_of_deck
-    _resource_top_of_deck(state, state.player_by_id(source_ci.owner_id))
+    _resource_top_of_deck(state, state.player_by_id(actor_of(state, source_ci)))
     return state
 
 
@@ -5279,7 +5281,7 @@ def _moff_gideon_jtl_188_tax(state, source_ci, target_id, event_ctx):
     A ledger rather than a marker on Gideon, because the tax is bought by an event
     that has already happened: it must survive Gideon leaving play, and two hits in
     one phase must stack."""
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     tax = state.game_memory.unit_play_tax_this_phase
     tax[opp.player_id] = int(tax.get(opp.player_id, 0) or 0) + 1
     return state
@@ -5543,7 +5545,7 @@ def _sith_trooper_jtl_238(state, source_ci, target_id, event_ctx):
     attacked.  A count of 0 applies nothing."""
     from swu.abilities.registry import Duration
     from swu.abilities.resolver import _make_modifier
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     amount = sum(1 for u in opp.ground_arena + opp.space_arena if u.damage > 0)
     if not amount:
         return state
@@ -5722,7 +5724,7 @@ def _poe_jtl_13_flip_onto_vehicle(state, source_ci, target_id, event_ctx):
     if res is None:
         return state
     _, host = res
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not any(c is source_ci for c in ps.base_zone):
         return state
     from swu.engine.actions import attach_leader_as_pilot_upgrade
@@ -5817,7 +5819,7 @@ def _kazuda_jtl_18_suppress_any(state, source_ci, target_id, event_ctx):
     ability is the one he grants as an upgrade — and either way the controller is
     the same player, which is who "friendly" means."""
     from swu.engine.actions import push_select_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     count = len(ps.ground_arena) + len(ps.space_arena)
     if count <= 0:
         return state
@@ -5993,7 +5995,7 @@ def _chimaera_jtl_39_use_when_defeated(state, source_ci, target_id, event_ctx):
         return state
     from swu.engine.decisions import PendingDecision
     from swu.engine.events import DecisionPushed
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(state, source_ci)
     owner_idx = state.player_index(controller_id)
     state.pending_decisions.append(PendingDecision(
         deciding_player_id=controller_id,
@@ -6190,7 +6192,7 @@ def _hondo_ohnaka_jtl_56_steal(state, source_ci, target_id, event_ctx):
     is an eligible destination, as his printed rules note allows."""
     from swu.engine.actions import push_move_upgrade
     push_move_upgrade(state, source_ci,
-                      dest_controller_id=source_ci.owner_id,
+                      dest_controller_id=actor_of(state, source_ci),
                       exclude_upgrade_traits=["Pilot"])
     return state
 
@@ -6309,7 +6311,7 @@ def _pantoran_starship_thief_jtl_83(state, source_ci, target_id, event_ctx):
     if res is None:
         return state
     _, host_ci = res
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 3:
         return state
     from swu.engine.actions import (
@@ -6318,7 +6320,7 @@ def _pantoran_starship_thief_jtl_83(state, source_ci, target_id, event_ctx):
     _attach_unit_as_pilot(state, source_ci.instance_id, host_ci.instance_id)
     if all(u is not source_ci for u in host_ci.attached_upgrades):
         return state  # the attach could not happen (already left play)
-    change_control(state, host_ci, source_ci.owner_id)
+    change_control(state, host_ci, actor_of(state, source_ci))
     host_ci.control_linked_to = source_ci.instance_id
     return state
 
@@ -6430,7 +6432,7 @@ def _focus_fire_jtl_129(state, source_ci, target_id, event_ctx):
     _, victim = res
     from swu.engine.actions import compute_power
     from swu.engine.traits import has_trait
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     arena = (ps.ground_arena if victim.zone.name == "GROUND_ARENA" else ps.space_arena)
     shots = [(u.card_def.display_name, compute_power(state, u))
              for u in arena if has_trait(state, u, "Vehicle")]
@@ -6463,9 +6465,9 @@ def _timely_reinforcements_jtl_130(state, source_ci, target_id, event_ctx):
     token."""
     from swu.engine.actions import _create_token_units
     from swu.engine.state import Modifier
-    idx = state.player_index(source_ci.owner_id)
+    idx = state.player_index(actor_of(state, source_ci))
     opp = state.players[1 - idx]
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     count = len(opp.resources) // 2
     if count <= 0:
         return state
@@ -6519,7 +6521,7 @@ def _turbolaser_salvo_fire(state, source_ci, target_id, event_ctx):
     res = state.find_instance(target_id)
     if res is None:
         return state
-    idx = state.player_index(source_ci.owner_id)
+    idx = state.player_index(actor_of(state, source_ci))
     opp = state.players[1 - idx]
     _, marker = res
     arena = (opp.ground_arena if marker.zone.name == "GROUND_ARENA"
@@ -6564,7 +6566,7 @@ def _they_hate_that_ship_jtl_155(state, source_ci, target_id, event_ctx):
     (JTL_155).  Both clauses in one ``CustomEffect`` so the drawback is paid even
     when nothing is playable, and so the play decision lands on top."""
     from swu.engine.actions import _create_token_units, push_play_from_hand
-    idx = state.player_index(source_ci.owner_id)
+    idx = state.player_index(actor_of(state, source_ci))
     _create_token_units(state, state.players[1 - idx], "TIE Fighter", 2,
                         enters_ready=True)
     push_play_from_hand(state, source_ci, trait="Vehicle", cost_reduction=3)
@@ -6621,7 +6623,7 @@ def _shadow_caster_jtl_169(state, source_ci, target_id, event_ctx):
         return state
     from swu.engine.decisions import PendingDecision
     from swu.engine.events import DecisionPushed
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(state, source_ci)
     owner_idx = state.player_index(controller_id)
     for ability_idx in reversed(idxs):
         state.pending_decisions.append(PendingDecision(
@@ -6743,7 +6745,7 @@ def _jump_to_lightspeed_jtl_232(state, source_ci, target_id, event_ctx):
     _apply_return_to_hand(state, target_id)
     if name:
         state.game_memory.pending_play_discounts.append({
-            "player_id": source_ci.owner_id,
+            "player_id": actor_of(state, source_ci),
             "trait": None,
             "units_only": True,
             "card_name": name,
@@ -6840,7 +6842,7 @@ def _shuttle_st_149_jtl_242_move_token(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import push_move_upgrade
     push_move_upgrade(state, source_ci,
                       tokens_only=True,
-                      dest_controller_id=source_ci.owner_id)
+                      dest_controller_id=actor_of(state, source_ci))
     return state
 
 
@@ -6989,7 +6991,7 @@ def _death_star_plans_jtl_260_steal(state, source_ci, target_id, event_ctx):
     if upg is None:
         return state
     located = state.find_instance(source_ci.instance_id)
-    host_controller = located[0].player_id if located else source_ci.owner_id
+    host_controller = located[0].player_id if located else actor_of(state, source_ci)
     attacker_id = next((p.player_id for p in state.players
                         if p.player_id != host_controller), None)
     if attacker_id is None:

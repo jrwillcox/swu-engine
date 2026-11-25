@@ -37,7 +37,8 @@ def _settle(state, *, decline_disclose=False, discard_to_prevent=False):
     """Drive AutoResolveEffects / disclose / may_discard to quiescence."""
     from swu.engine.actions import (
         legal_actions, apply, AutoResolveEffects,
-        DiscloseSelectCard, DeclineDisclose, DiscardRandomCard, DeclineDiscard)
+        DiscloseSelectCard, DeclineDisclose, DiscardRandomCard, DiscardChosenCard,
+        DeclineDiscard)
     for _ in range(80):
         if not state.pending_decisions:
             break
@@ -59,7 +60,8 @@ def _settle(state, *, decline_disclose=False, discard_to_prevent=False):
             continue
         if kind == "may_discard":
             if discard_to_prevent:
-                d = next((x for x in acts if isinstance(x, DiscardRandomCard)), None)
+                d = next((x for x in acts
+                          if isinstance(x, (DiscardRandomCard, DiscardChosenCard))), None)
                 if d is not None:
                     state = apply(state, d)
                     continue

@@ -26,8 +26,11 @@ Two behaviours here are load-bearing and easy to break:
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from typing import Optional
 
+from swu.cards.models import Leader
 from swu.engine.keywords import Keyword, has_keyword, keyword_value
 from swu.engine.state import (
     CardInstance, GameState, ability_suppressed,
@@ -264,16 +267,35 @@ def _constant_stat_sources(ps) -> list:
 
     Every arena unit, plus the player's **BASE** — a base is a permanent in play
     and can carry a constant ("Each leader unit you control gets +0/+1", Pau City
-    TWI_19 / Petranaki Arena TWI_28).  The undeployed LEADER also sits in
-    ``base_zone`` but is deliberately excluded: a leader's ConstantAbility is
-    deployed-only, which is exactly what the arenas-only scan has always given it
-    for free (Anakin Skywalker TWI_12's self-buff, Nala Se TWI_1's aura).
+    TWI_19 / Petranaki Arena TWI_28) — plus the UNDEPLOYED LEADER in
+    ``base_zone``.  A leader's ConstantAbility is deployed-only by default (Anakin
+    Skywalker TWI_12's self-buff, Nala Se TWI_1's aura); the scans let an
+    undeployed leader contribute only its ``both_sides`` / ``undeployed_only``
+    specs, via ``_constant_spec_side_ok``.
     """
     out = list(ps.ground_arena) + list(ps.space_arena)
     base = ps.base_instance
     if base is not None:
         out.append(base)
+    out.extend(ci for ci in ps.base_zone
+               if ci is not base and _is_undeployed_leader(ci))
     return out
+
+
+def _is_undeployed_leader(ci) -> bool:
+    return isinstance(ci.card_def, Leader) and not getattr(ci, "deployed", False)
+
+
+def _constant_spec_side_ok(source_ci, spec) -> bool:
+    """Whether ``spec`` is live for ``source_ci`` given which leader side shows.
+
+    An undeployed leader contributes only its ``both_sides`` and
+    ``undeployed_only`` constants; any other source skips ``undeployed_only``
+    ones (Savage Opress TS26_5's undeployed text box)."""
+    if _is_undeployed_leader(source_ci):
+        return bool(getattr(spec, "both_sides", False)
+                    or getattr(spec, "undeployed_only", False))
+    return not getattr(spec, "undeployed_only", False)
 
 
 def _constant_ability_power_bonus(state: GameState, unit_ci: CardInstance,
@@ -309,6 +331,8 @@ def _constant_ability_power_bonus(state: GameState, unit_ci: CardInstance,
             cn = source_ci.card_def.card_number or ""
             for spec in get_abilities(sc, cn):
                 if not isinstance(spec, ConstantAbility):
+                    continue
+                if not _constant_spec_side_ok(source_ci, spec):
                     continue
                 if getattr(spec, "via_host", False):
                     continue  # an upgrade-borne aura — handled by the dedicated
@@ -478,7 +502,7 @@ def _stat_bonus_amount(state: GameState, source_ci: CardInstance,
 def _upgrades_on_controller_base(state: GameState, source_ci: CardInstance) -> int:
     """How many upgrades sit on the base of ``source_ci``'s controller (Carrion
     Spike HMW_66) — shared by the stat count and the keyword-value count."""
-    base = state.player_by_id(source_ci.owner_id).base_instance
+    base = state.player_by_id(actor_of(state, source_ci)).base_instance
     return len(getattr(base, "attached_upgrades", None) or ()) if base else 0
 
 
@@ -520,7 +544,7 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
         # Every attached card counts — a Shield / Experience / Advantage token IS
         # an upgrade in SWU — but nothing on the Executor itself.  Reads no power,
         # so it cannot re-enter the stat scans.
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         return sum(len(u.attached_upgrades)
                    for u in ps.ground_arena + ps.space_arena
                    if u.instance_id != source_ci.instance_id)
@@ -545,12 +569,12 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
     if count_src == "other_friendly_space_units":
         # Clone Combat Squadron JTL_115: "+1/+1 for each OTHER friendly space unit."
         # The controller's space arena less the source itself (which is always in it).
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         return sum(1 for u in ps.space_arena
                    if u.instance_id != source_ci.instance_id)
     if count_src == "other_friendly_pilots":
         from swu.engine.traits import has_trait
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         n = 0
         for u in ps.ground_arena + ps.space_arena:
             if has_trait(state, u, "Pilot"):
@@ -569,7 +593,7 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
     if count_src == "other_exhausted_friendly_units":
         # Kino Loy SEC_114: "+1/+0 for each OTHER exhausted friendly unit."  Count
         # the controller's exhausted arena units, excluding the source itself.
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         return sum(
             1 for u in ps.ground_arena + ps.space_arena
             if getattr(u, "exhausted", False)
@@ -578,7 +602,7 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
         # Swarming Vulture Droid JTL_256: "+1/+0 for each other friendly Swarming
         # Vulture Droid."  Count the controller's arena units sharing the source's
         # printed name, excluding the source itself.
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         name = getattr(source_ci.card_def, "name", None)
         return sum(
             1 for u in ps.ground_arena + ps.space_arena
@@ -597,21 +621,21 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
     if count_src == "controller_hand_size":
         # Qi'ra ASH_226: "This unit gets -1/-0 for each card in your hand."  Count
         # the buff controller's hand (the source is in play, so never in hand).
-        return len(state.player_by_id(source_ci.owner_id).hand)
+        return len(state.player_by_id(actor_of(state, source_ci)).hand)
     if count_src == "controller_resources":
         # 97th Legion SOR_118: "+1/+1 for each resource you control."  Count every
         # resource in the buff controller's resource row (available + spent).
-        return len(state.player_by_id(source_ci.owner_id).resources)
+        return len(state.player_by_id(actor_of(state, source_ci)).resources)
     if count_src == "controller_exhausted_resources":
         # Chewbacca HMW_117: "This unit gains Raid 1 for each exhausted resource you
         # control" (read through ``KeywordGrant.value_count``'s fallback).
-        return sum(1 for r in state.player_by_id(source_ci.owner_id).resources
+        return sum(1 for r in state.player_by_id(actor_of(state, source_ci)).resources
                    if r.exhausted)
     if count_src.startswith("controller_resources_per_"):
         # Wroshyr Rebel HMW_133: "+1/+0 for every 2 resources you control" — the
         # divisor rides in the string (the ``controller_base_damage_per_`` shape).
         per = int(count_src.rsplit("_", 1)[1] or 1)
-        n = len(state.player_by_id(source_ci.owner_id).resources)
+        n = len(state.player_by_id(actor_of(state, source_ci)).resources)
         return (n // per) if per > 0 else 0
     if count_src == "target_raid":
         # The Chieftain HMW_212: "While a friendly Tusken unit is defending, it gets
@@ -628,7 +652,7 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
         # target predicate uses.
         from swu.cards.models import TokenUnit
         res = state.find_instance(source_ci.instance_id)
-        ps = res[0] if res is not None else state.player_by_id(source_ci.owner_id)
+        ps = res[0] if res is not None else state.player_by_id(actor_of(state, source_ci))
         return sum(1 for arena in (ps.ground_arena, ps.space_arena)
                    for u in arena
                    if isinstance(u.card_def, TokenUnit) and not u.exhausted)
@@ -640,7 +664,7 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
         # trait-grant layer's reach.
         trait = count_src[len("controller_discard_trait_cards_"):]
         res = state.find_instance(source_ci.instance_id)
-        ps = res[0] if res is not None else state.player_by_id(source_ci.owner_id)
+        ps = res[0] if res is not None else state.player_by_id(actor_of(state, source_ci))
         return sum(1 for c in ps.discard
                    if trait in (getattr(c.card_def, "traits", None) or ()))
     if count_src.startswith("controller_discard_trait_units_"):
@@ -652,7 +676,7 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
         from swu.cards.models import Unit
         trait = count_src[len("controller_discard_trait_units_"):]
         res = state.find_instance(source_ci.instance_id)
-        ps = res[0] if res is not None else state.player_by_id(source_ci.owner_id)
+        ps = res[0] if res is not None else state.player_by_id(actor_of(state, source_ci))
         return sum(1 for c in ps.discard
                    if isinstance(c.card_def, Unit)
                    and trait in (getattr(c.card_def, "traits", None) or ()))
@@ -665,7 +689,7 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
         from swu.engine.traits import has_trait
         trait = count_src[len("other_controller_trait_units_"):]
         res = state.find_instance(source_ci.instance_id)
-        ps = res[0] if res is not None else state.player_by_id(source_ci.owner_id)
+        ps = res[0] if res is not None else state.player_by_id(actor_of(state, source_ci))
         return sum(1 for arena in (ps.ground_arena, ps.space_arena)
                    for u in arena
                    if u.instance_id != source_ci.instance_id
@@ -685,7 +709,7 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
         from swu.engine.traits import has_trait
         trait = count_src[len("controller_trait_units_"):]
         res = state.find_instance(source_ci.instance_id)
-        ps = res[0] if res is not None else state.player_by_id(source_ci.owner_id)
+        ps = res[0] if res is not None else state.player_by_id(actor_of(state, source_ci))
         return sum(1 for arena in (ps.ground_arena, ps.space_arena)
                    for u in arena if has_trait(state, u, trait))
     if count_src.startswith("controller_base_damage_per_"):
@@ -695,7 +719,7 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
         # underscore so one arm serves any step size.  Integer division: 4 damage
         # with a step of 5 is still no bonus.
         per = int(count_src.rsplit("_", 1)[1] or 1)
-        base = state.player_by_id(source_ci.owner_id).base_instance
+        base = state.player_by_id(actor_of(state, source_ci)).base_instance
         dmg = base.damage if base is not None else 0
         return (dmg // per) if per > 0 else 0
     return 0
@@ -753,6 +777,8 @@ def _constant_ability_hp_bonus(state: GameState, unit_ci: CardInstance) -> int:
             cn = source_ci.card_def.card_number or ""
             for spec in get_abilities(sc, cn):
                 if not isinstance(spec, ConstantAbility):
+                    continue
+                if not _constant_spec_side_ok(source_ci, spec):
                     continue
                 if getattr(spec, "via_host", False):
                     continue  # upgrade-borne aura — the _via_host_stat_bonus pass

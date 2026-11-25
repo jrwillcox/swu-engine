@@ -27,6 +27,8 @@ any cost.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass
 from typing import Optional
@@ -36,7 +38,7 @@ from swu.engine.decisions import PendingDecision
 from swu.engine.events import (
     DecisionPushed, DecisionResolved, UnitReadied, UpgradePlayed,
 )
-from swu.engine.state import CardInstance, GameState, Zone
+from swu.engine.state import CardInstance, GameState, Zone, note_card_controller
 
 from swu.engine.actions.base import (
     Action, IllegalActionError,
@@ -51,7 +53,7 @@ from swu.engine.actions.zones import (
     _attach_upgrade, _eligible_upgrade_targets, _is_fortify, _upgrade_target_spec, note_upgrade_attached,
 )
 from swu.engine.actions.shared import (
-    _resource_top_of_deck,
+    _apply_defeat_unit_by_id, _resource_top_of_deck,
 )
 
 
@@ -319,7 +321,7 @@ def push_move_upgrade(s: GameState, source_ci: CardInstance, *,
     }
     if not _movable_upgrades(s, filters):
         return
-    controller_id = decider_id or source_ci.owner_id
+    controller_id = decider_id or actor_of(s, source_ci)
     owner_idx = s.player_index(controller_id)
     dec = PendingDecision(
         deciding_player_id=controller_id,
@@ -427,6 +429,7 @@ class StealUpgrade(Action):
                 can_attach = _spec_matches_ci(spec, source_ci, upg, s, {})
         if can_attach:
             _relocate_upgrade(s, self.upgrade_id, info["host_id"], source_id)
+            note_card_controller(s, upg, controller_ps.player_id)   # "take control"
             choice = f"took control of {self.upgrade_id}"
         else:
             from swu.abilities.resolver import _apply_defeat_unit
@@ -476,7 +479,7 @@ def push_pay_and_steal_upgrade(s: GameState, source_ci: CardInstance) -> None:
     optional ability is never offered when it could do nothing."""
     if not _stealable_upgrades(s, source_ci):
         return
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     owner_idx = s.player_index(controller_id)
     s.pending_decisions.append(PendingDecision(
         deciding_player_id=controller_id,
@@ -512,7 +515,7 @@ def _pilot_self_attach_hosts(s: GameState, source_ci: CardInstance,
     an upgrade to an ENEMY Vehicle unit without a Pilot on it" (Sidon Ithano
     JTL_213), where the pilot ends up buffing a ship it does not control."""
     from swu.engine.traits import has_trait
-    idx = s.player_index(source_ci.owner_id)
+    idx = s.player_index(actor_of(s, source_ci))
     ps = s.players[1 - idx] if hosts == "enemy" else s.players[idx]
     return [ci.instance_id for ci in ps.ground_arena + ps.space_arena
             if ci.instance_id != source_ci.instance_id
@@ -543,6 +546,8 @@ def _attach_unit_as_pilot(s: GameState, unit_id: str, vehicle_id: str) -> None:
             break
     if not removed:
         return
+    # Its controller keeps control of it as an upgrade (on any Vehicle).
+    note_card_controller(s, unit_ci, unit_ps.player_id)
     # A unit becoming an upgrade sheds its own attachments (tokens vanish, real
     # upgrades → owner's discard), mirroring _apply_capture / _defeat_unit.  A
     # freshly-played Poe has none, but this keeps the relocation clean in general.
@@ -583,7 +588,7 @@ def push_attach_unit_as_pilot(s: GameState, source_ci: CardInstance, *,
     ability auto-skips (does nothing) when it could not attach anywhere."""
     if not _pilot_self_attach_hosts(s, source_ci, hosts):
         return
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     owner_idx = s.player_index(controller_id)
     dec = PendingDecision(
         deciding_player_id=controller_id,
@@ -688,6 +693,9 @@ def _play_upgrade_source_zones(state: GameState, ctx: dict) -> list[list[CardIns
     Smuggle), which is why the Armorer's own "If you do, resource the top card of
     your deck" rider exists."""
     ps = state.player_by_id(ctx["controller_id"])
+    if ctx.get("resources_of") is not None:
+        # Another player's resource row (Tear This Ship Apart LAW_66).
+        return [state.player_by_id(ctx["resources_of"]).resources]
     if ctx.get("from_resources"):
         return [ps.resources]
     if ctx.get("from_discard_only"):
@@ -719,6 +727,10 @@ def _play_upgrade_hosts_for(state: GameState, ctx: dict,
     "friendly" reads from its owner — the player making the play): "on a unit that
     entered play this phase" / "on a friendly unit" (The Armorer ASH_1)."""
     hosts = [u.instance_id for u in _eligible_upgrade_targets(state, upgrade_ci)]
+    # Units given up to Exploit for this play (Count Dooku TWI_5) can't host it.
+    doomed = set(ctx.get("then_defeat_ids") or ())
+    if doomed:
+        hosts = [h for h in hosts if h not in doomed]
     pinned = ctx.get("host_id")
     if pinned is not None:
         hosts = [h for h in hosts if h == pinned]
@@ -860,7 +872,7 @@ def push_play_upgrade_from_hand(
     Only pushed when there is at least one affordable candidate upgrade with ≥1 legal
     host — so the optional play is never offered when it could do nothing.  The
     decider is the source's controller."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ctx = {
         "trait": trait,
         "from_resources": bool(from_resources),
@@ -988,13 +1000,28 @@ class PlayUpgradeFromHand(Action):
         # when its own When Played resolves.
         if ctx.get("then_defeat_at_regroup"):
             upgrade_ci.defeat_at_regroup = True
+        # Exploit's units (Count Dooku TWI_5 "Play a Separatist card … It gains
+        # Exploit 1"): given up as part of playing the card, so before it attaches.
+        for cid in ctx.get("then_defeat_ids") or ():
+            if s.find_instance(cid) is not None:
+                _apply_defeat_unit_by_id(s, cid)
         # A card played out of the RESOURCE row (The Armorer ASH_1) may be exhausted
         # there; it is not an exhaustible card once attached, and leaving the flag on
         # would put an exhausted card in a hand if it is ever returned.
-        if ctx.get("from_resources"):
+        if ctx.get("from_resources") or ctx.get("resources_of") is not None:
             upgrade_ci.exhausted = False
+            upgrade_ci.face_down = False
         # _attach_upgrade fires UpgradePlayed + WhenPlayed
         _attach_upgrade(s, ps, upgrade_ci, self.host_id)
+        # "If you do, that opponent resources the top card of their deck" (Tear This
+        # Ship Apart LAW_66) — exhausted, per its rules note.
+        if ctx.get("resources_of") is not None and ctx.get(
+                "then_owner_resources_deck_top"):
+            robbed = s.player_by_id(ctx["resources_of"])
+            before = len(robbed.resources)
+            _resource_top_of_deck(s, robbed)
+            if len(robbed.resources) > before:
+                robbed.resources[-1].exhausted = True
         # "If you do, resource the top card of your deck" (The Armorer ASH_1) — the
         # ramp that repays the resource row the play just spent, on a real play only.
         if ctx.get("then_resource_top_of_deck"):

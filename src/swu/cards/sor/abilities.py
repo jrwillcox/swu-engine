@@ -10,12 +10,15 @@ and may not be fully playable in all edge cases.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from swu.abilities.registry import (
     card_ability,
     TriggerAbility, ConstantAbility, ActivatedAbility, EventAbility, CostReduction,
     WhenPlayed, WhenDefeated, OnAttack, WhenAttacked, WhenUnitDefeated,
     WhenAttackEnds, OnAttackDefeatsUnit, WhenYouPlayCard, PhaseStartTrigger,
     WhenDeployed, WhenDealsCombatDamageToBase, WhenDealsCombatDamageToUnit,
+    WhenDamageDealt,
     WhenOpponentPlaysCard, EntersPlayReady,
     DealDamage, DealDamageEqualTo, Heal, DefeatUnit, DefeatAllUnits, GiveToken, DrawCards, ExhaustCard,
     ReadyCard, ModifyStats, GrantKeyword, RevokeKeyword, ReturnToHand, CustomEffect,
@@ -26,6 +29,7 @@ from swu.abilities.registry import (
     TargetSpec, ConditionCheck, Condition, Duration,
     SELF, DEFENDER, EACH_FRIENDLY, EACH_ENEMY, EACH_IN_PLAY,
 )
+from swu.engine.discard_payoffs import discard_payoff
 
 
 # ── LEADERS ──────────────────────────────────────────────────────────────────
@@ -134,15 +138,14 @@ def _director_krennic():
     """Director Krennic leader (SOR_1).
 
     "Each friendly damaged unit gets +1/+0" is printed on BOTH the leader and unit
-    sides → a single ungated ConstantAbility (Restore 2 on the deployed side is the
-    keyword layer).  NOTE: the ConstantAbility scan (``compute_power``) only iterates
-    arena units, so the buff applies while Krennic is DEPLOYED; the engine does not
-    scan an undeployed (base_zone) leader for constants — a documented simplification
-    for the leader side, shared by any leader with an undeployed constant."""
+    sides → a single ``both_sides`` ConstantAbility, live while Krennic is
+    undeployed and once deployed (Restore 2 on the deployed side is the keyword
+    layer)."""
     return ConstantAbility(
         target=TargetSpec(controller="friendly", kind="unit",
                           predicates=("damaged",)),
         effects=[StatBonus(power=1, hp=0)],
+        both_sides=True,
     )
 
 
@@ -272,12 +275,11 @@ def _hera_syndulla_leader():
 
 
 def _leia_organa_ldr_attack(state, source_ci, target_id, event_ctx):
-    """Adapter: attack with a Rebel unit, then may attack with another (repeat loop,
-    each Rebel unit once).  ``optional`` so the follow-ups can be declined; see the
-    registration docstring for the documented deviations."""
+    """Adapter: attack with a Rebel unit (mandatory if able), then MAY attack with
+    one other Rebel unit (the ``then_attack_another`` rider)."""
     from swu.engine.actions import push_granted_attack
     push_granted_attack(state, source_ci, attacker_trait="Rebel",
-                        optional=True, repeat=True)
+                        then_attack_another=True)
     return state
 
 
@@ -295,10 +297,9 @@ def _leia_organa_leader():
     """Leia Organa leader (SOR_9).
 
     Undeployed: Action [exhaust]: Attack with a Rebel unit. Then, you may attack with
-    another Rebel unit → ``push_granted_attack(attacker_trait="Rebel", optional=True,
-    repeat=True)``.  DEVIATIONS (both minor, player-favourable): the first attack is
-    modelled as optional rather than mandatory, and the repeat loop allows attacking
-    with every Rebel unit (once each) rather than exactly one follow-up.
+    another Rebel unit → ``push_granted_attack(attacker_trait="Rebel",
+    then_attack_another=True)``: the first attack is mandatory if able, the one
+    follow-up optional.
     Deployed: When this unit completes an attack: You may attack with another Rebel
     unit → a ``WhenAttackEnds`` granted attack (optional, ``exclude_source``).
     Raid 1 (deployed) is the keyword layer."""
@@ -552,7 +553,7 @@ def _obi_wan_kenobi():
         # Draw only if the unit that actually received the Experience is a Force unit.
         target_traits = getattr(target_ci.card_def, "traits", None) or ()
         if "Force" in target_traits:
-            ps = state.player_by_id(source_ci.owner_id)
+            ps = state.player_by_id(actor_of(state, source_ci))
             from swu.engine.actions import _draw_cards
             _draw_cards(state, ps, 1)
         return state
@@ -647,7 +648,7 @@ def _bright_hope():
         from swu.abilities.resolver import _apply_return_to_hand
         from swu.engine.actions import _draw_cards
         state = _apply_return_to_hand(state, target_id)
-        owner_ps = state.player_by_id(source_ci.owner_id)
+        owner_ps = state.player_by_id(actor_of(state, source_ci))
         _draw_cards(state, owner_ps, 1)
         return state
 
@@ -1005,7 +1006,7 @@ def _superlaser_technician():
     """
     def _resource_self(state, source_ci, target_id, event_ctx):
         from swu.engine.state import Zone
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         # The defeated unit was placed in discard by _defeat_unit before the
         # optional trigger resolves; move it from discard into the resource zone.
         for i, ci in enumerate(ps.discard):
@@ -1195,8 +1196,8 @@ def _force_choke():
         target_ps, target_ci = result
         from swu.abilities.resolver import _apply_deal_damage
         state = _apply_deal_damage(state, target_id, 5)
-        # Controller of the targeted unit draws a card
-        ps = state.player_by_id(target_ci.owner_id)
+        # Controller of the targeted unit draws a card (its arena's player).
+        ps = target_ps
         from swu.engine.actions import _draw_cards
         _draw_cards(state, ps, 1)
         return state
@@ -1226,7 +1227,7 @@ def _resupply():
     """
     def _resupply_effect(state, source_ci, target_id, event_ctx):
         from swu.engine.state import Zone
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         # source_ci is already in discard (event was played); move to resources
         for i, ci in enumerate(ps.discard):
             if ci.instance_id == source_ci.instance_id:
@@ -1533,7 +1534,7 @@ def _greedo_mill(state, source_ci, target_id, event_ctx):
     stays unset ⇒ no damage).  Resolves inline (deterministic, no decision)."""
     from swu.engine.state import Zone
     from swu.cards.models import Unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
     card = ps.deck.pop(0)
@@ -1700,7 +1701,7 @@ def _luke_skywalker_sor51(state, source_ci, target_id, event_ctx):
     if target_id is None:
         return state
     defeated = set(state.game_memory.units_defeated_this_round)
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     friendly_defeated = any(c.instance_id in defeated for c in ps.discard)
     n = 6 if friendly_defeated else 3
     from swu.abilities.resolver import _make_modifier
@@ -1844,7 +1845,7 @@ def _command_put_self_as_resource(state, source_ci, target_id, event_ctx):
     """opt 3: put this event into play as a (ready) resource for its controller."""
     from swu.engine.state import Zone
     from swu.engine.events import CardResourced
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     ci = next((c for c in ps.discard
                if c.instance_id == source_ci.instance_id), None)
     if ci is None:
@@ -1908,7 +1909,7 @@ def _command_sor107():
 def _cunning_opponent_random_discard(state, source_ci, target_id, event_ctx):
     """opt 4: an opponent discards a random card from their hand (seeded RNG)."""
     from swu.engine.state import Zone
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     if not opp.hand:
         return state
     rng = state.make_rng()
@@ -1957,7 +1958,7 @@ def _cunning_sor203():
 def _vigilance_mill_opponent_6(state, source_ci, target_id, event_ctx):
     """opt 1: discard 6 cards from an opponent's deck (top-down)."""
     from swu.engine.state import Zone
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     for _ in range(6):
         if not opp.deck:
             break
@@ -2069,7 +2070,7 @@ def _palpatine_take_control(state, source_ci, target_id, event_ctx):
     if res is None:
         return state
     _, target_ci = res
-    change_control(state, target_ci, source_ci.owner_id)
+    change_control(state, target_ci, actor_of(state, source_ci))
     return state
 
 
@@ -2178,6 +2179,14 @@ def _grand_inquisitor():
     ]
 
 
+def _mark_round_use(state, source_ci, target_id, event_ctx):
+    """Spend the source's "use this ability only once each round" (the Toro Calican
+    SHD_239 marker read by SOURCE_ONCE_PER_ROUND_TRIGGER_AVAILABLE)."""
+    state.game_memory.activated_abilities_used_this_round.add(
+        f"{source_ci.instance_id}:trig")
+    return state
+
+
 @card_ability("SOR", "13")
 def _cassian_andor():
     """SOR_13 — Cassian Andor (Leader).
@@ -2185,17 +2194,14 @@ def _cassian_andor():
     Undeployed: Action [1 resource, Exhaust]: If you've dealt 3 or more damage to an
       enemy base this phase, draw a card.  Gated by the new
       CONTROLLER_DEALT_N_BASE_DAMAGE_THIS_PHASE(3) condition (backed by
-      game_memory.base_damage_dealt_this_phase, accumulated at the direct base-combat
-      damage step — the "don't offer a no-op" pattern, so the cost isn't wasted).
+      game_memory.base_damage_dealt_this_phase, accumulated by record_base_damage for
+      every kind of base damage — the "don't offer a no-op" pattern).
     Deployed "When you deal damage to an enemy base: You may draw a card. Use this
-      ability only once each round."  Faithful simplification: the broad "when you
-      deal damage" is modelled with WhenDealsCombatDamageToBase (this unit's combat
-      damage — Cassian is a Saboteur base-attacker, the common case), optional.
-      DEVIATION: the printed "Use this ability only once each round" is dropped —
-      TriggerAbility has no once-per-round limiter, and Cassian (a single unit)
-      attacks at most once per round unless readied, so it is naturally satisfied
-      in the common case; the sole edge is a re-readied Cassian attacking a base
-      twice in one round (a small over-draw).
+      ability only once each round."  The general WhenDamageDealt(dealer="you",
+      target="enemy", kind="base") observer — any damage you deal to an enemy base,
+      combat or not, by any of your cards.  Optional.
+      "Once each round" is the shared SOURCE_ONCE_PER_ROUND_TRIGGER_AVAILABLE
+      limiter (Toro Calican SHD_239), marked on accept by ``_mark_round_use``.
     (Saboteur is a printed keyword handled by the keyword engine.)
     """
     return [
@@ -2208,10 +2214,11 @@ def _cassian_andor():
                 Condition.CONTROLLER_DEALT_N_BASE_DAMAGE_THIS_PHASE, param=3),
         ),
         TriggerAbility(
-            trigger=WhenDealsCombatDamageToBase(),
-            effects=[DrawCards(1)],
+            trigger=WhenDamageDealt(dealer="you", target="enemy", kind="base"),
+            effects=[DrawCards(1), CustomEffect(fn=_mark_round_use)],
             optional=True,
             deployed_only=True,
+            condition=ConditionCheck(Condition.SOURCE_ONCE_PER_ROUND_TRIGGER_AVAILABLE),
         ),
     ]
 
@@ -2222,7 +2229,7 @@ def _han_solo_resource_from_hand(state, source_ci, target_id, event_ctx):
     phase start."""
     from swu.engine.actions import (
         _resource_card_from_hand, push_defeat_own_resource_schedule)
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     _resource_card_from_hand(state, ps)
     push_defeat_own_resource_schedule(state, source_ci)
     return state
@@ -2233,7 +2240,7 @@ def _han_solo_resource_from_deck(state, source_ci, target_id, event_ctx):
     ready resource, then schedule the next-action-phase resource defeat."""
     from swu.engine.actions import (
         _resource_top_of_deck, push_defeat_own_resource_schedule)
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     _resource_top_of_deck(state, ps)
     push_defeat_own_resource_schedule(state, source_ci)
     return state
@@ -2355,7 +2362,7 @@ def _binds_heal(state, source_ci, target_id, event_ctx):
     event_ctx["binds_amount"] = healed
     event_ctx["excluded_target_id"] = target_id
     from swu.engine.traits import get_traits
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     has_force = any("Force" in get_traits(state, u)
                     for u in (ps.ground_arena + ps.space_arena))
     if healed > 0 and has_force:
@@ -2371,7 +2378,7 @@ def _binds_damage(state, source_ci, target_id, event_ctx):
     if amount <= 0:
         return state
     from swu.abilities.resolver import _apply_deal_damage
-    return _apply_deal_damage(state, target_id, amount, dealer_id=source_ci.owner_id)
+    return _apply_deal_damage(state, target_id, amount, dealer_id=actor_of(state, source_ci))
 
 
 @card_ability("SOR", "75")
@@ -2514,7 +2521,7 @@ def _force_lightning(state, source_ci, target_id, event_ctx):
     _, unit = res
     unit.abilities_suppressed = True
     from swu.engine.traits import has_trait
-    ctrl = state.player_by_id(source_ci.owner_id)
+    ctrl = state.player_by_id(actor_of(state, source_ci))
     if any(has_trait(state, u, "Force")
            for u in ctrl.ground_arena + ctrl.space_arena):
         from swu.engine.actions import push_pay_resources_for_tokens
@@ -2596,41 +2603,45 @@ def _jedha_agitator():
     )
 
 
+def _opponent_of(state, player_id):
+    return state.players[1 - state.player_index(player_id)]
+
+
+def _after_idx(state, source_ci):
+    """Who acts once a decision pushed from ``source_ci``'s ability pops."""
+    return 1 - state.player_index(actor_of(state, source_ci))
+
+
 def _force_throw_discard(state, source_ci, target_id, event_ctx):
-    """SOR_167 effect 1 — the opponent discards the first card from their hand
-    (the documented "choose a player" -> opponent simplification, K-2SO SOR_145).  If
-    the controller controls a Force unit and the discarded card has a positive cost,
-    record that cost and arm the follow-up damage (``event_ctx["prior_target_id"]`` —
-    the ``requires_prior_target`` gate, In Pursuit TWI_221)."""
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
-    if not opp.hand:
-        return state
-    from swu.engine.state import Zone
-    card = opp.hand.pop(0)
-    card.zone = Zone.DISCARD
-    opp.discard.append(card)
-    from swu.engine.actions import record_hand_discard
-    record_hand_discard(state, opp.player_id)
+    """SOR_167 — the opponent discards a card of their choice (the documented
+    "choose a player" -> opponent simplification); the ``force_throw`` payoff deals
+    its cost."""
+    from swu.engine.actions import push_discard_of_choice
+    opp = _opponent_of(state, actor_of(state, source_ci))
+    push_discard_of_choice(state, opp.player_id, 1,
+                           source_id=source_ci.instance_id,
+                           after_idx=_after_idx(state, source_ci),
+                           payoff="force_throw",
+                           payoff_args={"controller_id": actor_of(state, source_ci)})
+    return state
+
+
+@discard_payoff("force_throw")
+def _force_throw_payoff(state, source_id, discarded, args):
+    """"Then, if you control a Force unit, you may deal damage to a unit equal to
+    the cost of the discarded card" — an "up to 1" select_damage."""
+    from swu.engine.actions import push_select_damage
     from swu.engine.traits import has_trait
-    ctrl = state.player_by_id(source_ci.owner_id)
-    cost = getattr(card.card_def, "cost", 0) or 0
-    if cost > 0 and any(has_trait(state, u, "Force")
-                        for u in ctrl.ground_arena + ctrl.space_arena):
-        event_ctx["force_throw_amount"] = cost
-        event_ctx["prior_target_id"] = card.instance_id
-    return state
-
-
-def _force_throw_damage(state, source_ci, target_id, event_ctx):
-    """SOR_167 effect 2 — deal the recorded discarded-card cost to the chosen unit."""
-    if target_id is None:
-        return state
-    amt = int(event_ctx.get("force_throw_amount", 0))
-    if amt > 0:
-        from swu.abilities.resolver import _apply_deal_damage
-        _apply_deal_damage(state, target_id, amt,
-                           source_name=source_ci.card_def.display_name)
-    return state
+    res = state.find_instance(source_id or "")
+    if not discarded or res is None:
+        return
+    cost = int(getattr(discarded[0].card_def, "cost", 0) or 0)
+    ctrl = state.player_by_id(args["controller_id"])
+    if cost <= 0 or not any(has_trait(state, u, "Force")
+                            for u in ctrl.ground_arena + ctrl.space_arena):
+        return
+    push_select_damage(state, res[1], amount_each=cost, max_targets=1,
+                       decider_id=ctrl.player_id)
 
 
 @card_ability("SOR", "167")
@@ -2640,20 +2651,12 @@ def _force_throw_sor_167():
     unit equal to the cost of the discarded card."
 
     Two effects sharing the ``resolve_effects`` ``event_ctx`` (the It Binds All Things
-    SOR_75 / In Pursuit TWI_221 "record then gate" pattern): (1) a non-targeted
-    ``CustomEffect`` — the opponent discards their first card (documented "choose a
-    player"->opponent simplification) and, iff a Force unit is controlled and the
-    card's cost is positive, records the cost and arms the payoff; (2) an **optional**
-    ``CustomEffect`` (target any unit, ``requires_prior_target`` so it prompts only
-    when armed, ``optional=True`` for the "you may") that deals the recorded cost."""
-    return EventAbility(effects=[
-        CustomEffect(fn=_force_throw_discard),
-        CustomEffect(
-            fn=_force_throw_damage,
-            target=TargetSpec(controller="any", kind="unit", optional=True,
-                              predicates=("requires_prior_target",)),
-        ),
-    ])
+    SOR_75 / In Pursuit TWI_221 "record then gate" pattern): the opponent discards a
+    card of their choice (documented "choose a player"->opponent simplification);
+    the ``force_throw`` discard payoff then, iff a Force unit is controlled and the
+    card's cost is positive, offers an "up to 1 unit" ``select_damage`` for that
+    cost (the "you may")."""
+    return EventAbility(effects=[CustomEffect(fn=_force_throw_discard)])
 
 
 def _power_failure(state, source_ci, target_id, event_ctx):
@@ -2834,7 +2837,7 @@ def _search_your_feelings(state, source_ci, target_id, event_ctx):
     bottom the un-taken searched cards in a seeded-random order — with window = the
     full deck, that randomises the whole remaining deck."""
     from swu.engine.actions import push_deck_search
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     push_deck_search(
         state, source_ci, count=1, eligible=lambda cd: True, up_to=True,
         window=len(ps.deck), rest_disposition="bottom")
@@ -2873,7 +2876,7 @@ def _emperors_legion(state, source_ci, target_id, event_ctx):
     ``units_defeated_this_round`` (one action phase per round)."""
     from swu.engine.state import Zone
     from swu.cards.models import Unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     defeated = state.game_memory.units_defeated_this_round
     for c in list(ps.discard):
         if isinstance(c.card_def, Unit) and c.instance_id in defeated:
@@ -2943,7 +2946,7 @@ def _home_one_play(state, source_ci, target_id, event_ctx):
     """SOR_102 — play a [Heroism] unit from the discard pile, costing 3 less."""
     from swu.engine.actions import push_play_from_hand
     from swu.cards.models import Unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     eligible = frozenset(
         c.instance_id for c in ps.discard
         if isinstance(c.card_def, Unit)
@@ -2998,15 +3001,14 @@ def _agent_kallus_sor_115():
     round."
 
     Ambush is the keyword engine.  A WhenUnitDefeated observer filtered to another
-    (not_self) unique unit — any player's — draws.  DEVIATION: the "only once each
-    round" limiter is dropped (TriggerAbility has no once-per-round gate — the
-    Cassian Andor SOR_13 precedent); the only cost is over-drawing when several
-    unique units die in one round."""
+    (not_self) unique unit — any player's — draws.  "Only once each round" is the
+    shared SOURCE_ONCE_PER_ROUND_TRIGGER_AVAILABLE limiter, marked on accept."""
     return TriggerAbility(
         trigger=WhenUnitDefeated(filter=TargetSpec(
             kind="unit", predicates=("unique", "not_self"))),
-        effects=[DrawCards(1)],
+        effects=[DrawCards(1), CustomEffect(fn=_mark_round_use)],
         optional=True,
+        condition=ConditionCheck(Condition.SOURCE_ONCE_PER_ROUND_TRIGGER_AVAILABLE),
     )
 
 
@@ -3021,7 +3023,7 @@ def _black_one_sor_147():
     def _fn(state, source_ci, target_id, event_ctx):
         from swu.engine.state import Zone
         from swu.engine.actions import _draw_cards
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         while ps.hand:
             ci = ps.hand.pop(0)
             ci.zone = Zone.DISCARD
@@ -3083,20 +3085,15 @@ def _forced_surrender_sor_175():
     base you've damaged this phase discards 2 cards from their hand."
 
     DrawCards(2) then a CustomEffect: game_memory.base_damage_dealt_this_phase records
-    the combat base damage the controller has dealt this phase (Cassian SOR_13's
-    ledger); if > 0 the (single) opponent discards their first 2 cards (the K-2SO
-    SOR_145 first-card discard simplification).  DEVIATION: only combat base damage
-    is tracked (ability base damage is not), matching the Cassian ledger's scope."""
+    the enemy-base damage the controller has dealt this phase, of any kind (Cassian
+    SOR_13's ledger); if > 0 the (single) opponent discards 2 cards of their choice."""
     def _fn(state, source_ci, target_id, event_ctx):
-        from swu.engine.state import Zone
-        dealt = state.game_memory.base_damage_dealt_this_phase.get(source_ci.owner_id, 0)
+        from swu.engine.actions import push_discard_of_choice
+        dealt = state.game_memory.base_damage_dealt_this_phase.get(actor_of(state, source_ci), 0)
         if dealt > 0:
-            opp = state.players[1 - state.player_index(source_ci.owner_id)]
-            for _ in range(2):
-                if opp.hand:
-                    ci = opp.hand.pop(0)
-                    ci.zone = Zone.DISCARD
-                    opp.discard.append(ci)
+            push_discard_of_choice(state, _opponent_of(state, actor_of(state, source_ci)).player_id,
+                                   2, source_id=source_ci.instance_id,
+                                   after_idx=_after_idx(state, source_ci))
         return state
     return EventAbility(effects=[DrawCards(2), CustomEffect(fn=_fn)])
 
@@ -3175,7 +3172,7 @@ def _chopper_sor_188():
         from swu.engine.state import Zone
         from swu.cards.models import Event
         from swu.engine.actions import _exhaust_resources
-        opp = state.players[1 - state.player_index(source_ci.owner_id)]
+        opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
         if not opp.deck:
             return state
         card = opp.deck.pop(0)
@@ -3206,10 +3203,9 @@ def _bamboozle_sor_199():
     A single ``CustomEffect`` with its own target (the CustomEffect.target seam):
     the controller picks any unit, it is exhausted, and each non-token upgrade on it
     is returned to its owner's hand (``_apply_return_to_hand``'s upgrade branch,
-    Jabba ASH_42).  DEVIATION (documented): the alternative cost ("discard a Cunning
-    card instead of paying") is a payment *option*, not part of the effect — the card
-    remains fully playable at its printed cost, so omitting the discount path leaves
-    it functionally complete (no generic discard-instead-of-pay cost seam exists)."""
+    Jabba ASH_42).  The alternative cost is a ``CostRoute(kind="discard_aspect_card",
+    aspect="Cunning")`` marker: ``PlayCard`` opens the ``cost_route`` decision, where
+    the player may discard a Cunning hand card instead of paying, or pay as usual."""
     def _bamboozle(state, source_ci, target_id, event_ctx):
         from swu.cards.models import TokenUpgrade
         from swu.abilities.resolver import _apply_return_to_hand
@@ -3223,8 +3219,12 @@ def _bamboozle_sor_199():
                 continue
             _apply_return_to_hand(state, up.instance_id)
         return state
-    return EventAbility(effects=[CustomEffect(
-        fn=_bamboozle, target=TargetSpec(kind="unit", controller="any"))])
+    from swu.abilities.registry import CostRoute
+    return [
+        EventAbility(effects=[CustomEffect(
+            fn=_bamboozle, target=TargetSpec(kind="unit", controller="any"))]),
+        CostRoute(kind="discard_aspect_card", aspect="Cunning"),
+    ]
 
 
 @card_ability("SOR", "200")
@@ -3232,21 +3232,13 @@ def _spark_of_rebellion_sor_200():
     """SOR_200 — Spark of Rebellion (Event, Spectre): "Look at an opponent's hand and
     discard a card from it."
 
-    A single ``CustomEffect`` pushes the private ``look_hand`` decision (Viper Probe
-    Droid SOR_228 — so the player actually sees the hand) and discards the opponent's
-    first hand card (the K-2SO SOR_145 / Garindan SEC_186 first-card simplification).
-    The look snapshots the full hand before the discard, matching "look, then
-    discard"; an empty opponent hand is a clean acknowledge with nothing discarded."""
+    The ``name_and_discard`` decision (Chimaera SOR_185, Unmasking the Conspiracy
+    TWI_223): it shows the controller the opponent's whole hand and discards the
+    card they pick — that IS "look at it and discard a card from it".  An empty
+    opponent hand fizzles with nothing to look at."""
     def _spark(state, source_ci, target_id, event_ctx):
-        from swu.engine.actions import push_look_opponent_hand, record_hand_discard
-        from swu.engine.state import Zone
-        push_look_opponent_hand(state, source_ci)
-        opp = state.players[1 - state.player_index(source_ci.owner_id)]
-        if opp.hand:
-            card = opp.hand.pop(0)
-            card.zone = Zone.DISCARD
-            opp.discard.append(card)
-            record_hand_discard(state, opp.player_id)
+        from swu.engine.actions import push_name_and_discard
+        push_name_and_discard(state, source_ci)
         return state
     return EventAbility(effects=[CustomEffect(fn=_spark)])
 
@@ -3256,24 +3248,18 @@ def _bodhi_rook_sor_201():
     """SOR_201 — Bodhi Rook (Unit, Imperial/Rebel, 3/3): "When Played: Look at an
     opponent's hand and discard a non-unit card from it."
 
-    Like Spark of Rebellion SOR_200 but the discard is *filtered to non-units*: the
-    ``CustomEffect`` pushes the ``look_hand`` decision then discards the opponent's
-    first NON-UNIT card (the first-card simplification, filtered per the card text —
-    plain ``DiscardFromHand`` can't express the filter).  No non-unit in the
-    opponent's hand ⇒ nothing discarded (a clean look)."""
+    Spark of Rebellion SOR_200's ``name_and_discard`` narrowed by
+    ``card_type="non_unit"`` (Tip the Scale LOF_226): the controller sees the whole
+    hand and picks a non-unit.  With no non-unit in it nothing can be discarded, so
+    the plain ``look_hand`` still shows the hand."""
     def _bodhi(state, source_ci, target_id, event_ctx):
-        from swu.engine.actions import push_look_opponent_hand, record_hand_discard
-        from swu.engine.state import Zone
+        from swu.engine.actions import push_look_opponent_hand, push_name_and_discard
         from swu.cards.models import Unit
-        push_look_opponent_hand(state, source_ci)
-        opp = state.players[1 - state.player_index(source_ci.owner_id)]
-        for i, ci in enumerate(opp.hand):
-            if not isinstance(ci.card_def, Unit):
-                card = opp.hand.pop(i)
-                card.zone = Zone.DISCARD
-                opp.discard.append(card)
-                record_hand_discard(state, opp.player_id)
-                break
+        opp = _opponent_of(state, actor_of(state, source_ci))
+        if any(not isinstance(ci.card_def, Unit) for ci in opp.hand):
+            push_name_and_discard(state, source_ci, card_type="non_unit")
+        elif opp.hand:
+            push_look_opponent_hand(state, source_ci)
         return state
     return TriggerAbility(trigger=WhenPlayed(), effects=[CustomEffect(fn=_bodhi)])
 
@@ -3320,7 +3306,7 @@ def _mining_guild_pay_draw(state, source_ci, target_id, event_ctx):
     """Pay 2 resources, then draw a card ("if you do" binding — Bright Hope SOR_99).
     Affordability is guaranteed by the trigger's ``CONTROLLER_N_PLUS_READY_RESOURCES(2)``
     gate; re-checked defensively before paying."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 2:
         return state
     from swu.engine.actions import _exhaust_resources, _draw_cards
@@ -3365,7 +3351,7 @@ def _youre_my_only_hope(state, source_ci, target_id, event_ctx):
     5 or less remaining HP.  Modelled with the ``peek_top`` ``may_play`` mode (the
     play carries a cost_reduction / free) — reveal + KeepTopCard/PlayTopCard."""
     from swu.engine.actions import push_peek_top
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     base = ps.base_instance
     free = base is not None and (base.card_def.hp - base.damage) <= 5
     push_peek_top(state, source_ci, mode="may_play", cost_reduction=5, free=free)
@@ -3425,8 +3411,8 @@ def _ig88_activate(state, source_ci, target_id, event_ctx):
     board (stable between activation and the immediately-resolved attack).  A thin
     adapter onto push_granted_attack (mandatory attack)."""
     from swu.engine.actions import push_granted_attack
-    ps = state.player_by_id(source_ci.owner_id)
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    ps = state.player_by_id(actor_of(state, source_ci))
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     my = len(ps.ground_arena) + len(ps.space_arena)
     their = len(opp.ground_arena) + len(opp.space_arena)
     bonus = 1 if my > their else 0
@@ -3467,7 +3453,7 @@ def _boba_ready_one(state, source_ci, target_id, event_ctx):
     the leader when there is an exhausted resource to ready ("If you do" binding)."""
     if source_ci.exhausted:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if _ready_n_resources(ps, 1):
         source_ci.exhausted = True
     return state
@@ -3475,7 +3461,7 @@ def _boba_ready_one(state, source_ci, target_id, event_ctx):
 
 def _boba_ready_two(state, source_ci, target_id, event_ctx):
     """Deployed: "ready up to 2 resources" (mandatory, fungible -> no decision)."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     _ready_n_resources(ps, 2)
     return state
 
@@ -3485,15 +3471,15 @@ def _boba_fett():
     """Boba Fett (SOR_15) — Leader.
 
     Undeployed: "When an enemy unit leaves play: You may exhaust this leader.  If
-    you do, ready a resource" — a WhenUnitDefeated(enemy) optional trigger (defeat
-    is the common "leaves play"; documented simplification).
+    you do, ready a resource" — a WhenUnitDefeated(enemy, leaves_play=True) optional
+    trigger (defeat, bounce, put on a deck, capture).
     Deployed: "When this unit completes an attack: If an enemy unit left play this
     phase, ready up to 2 resources" — a WhenAttackEnds trigger gated by
-    ENEMY_UNIT_DEFEATED_THIS_PHASE."""
+    ENEMY_UNIT_LEFT_PLAY_THIS_PHASE."""
     return [
         TriggerAbility(
             trigger=WhenUnitDefeated(
-                filter=TargetSpec(controller="enemy", kind="unit")),
+                filter=TargetSpec(controller="enemy", kind="unit"), leaves_play=True),
             effects=[CustomEffect(fn=_boba_ready_one)],
             optional=True,
             undeployed_only=True,
@@ -3501,7 +3487,7 @@ def _boba_fett():
         TriggerAbility(
             trigger=WhenAttackEnds(),
             effects=[CustomEffect(fn=_boba_ready_two)],
-            condition=ConditionCheck(Condition.ENEMY_UNIT_DEFEATED_THIS_PHASE),
+            condition=ConditionCheck(Condition.ENEMY_UNIT_LEFT_PLAY_THIS_PHASE),
             deployed_only=True,
         ),
     ]
@@ -3516,7 +3502,7 @@ def _thrawn_reveal_exhaust(state, source_ci, target_id, event_ctx):
     unit whose printed cost <= the revealed cost — the controller would never
     exhaust their own unit, and a single peek/exhaust needs no player prompt to be
     correct.  The revealed card stays on top of the deck (only revealed)."""
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     if not opp.deck:
         return state
     revealed_cost = getattr(opp.deck[0].card_def, "cost", 0) or 0
@@ -3631,7 +3617,7 @@ def _childsen_when_played(state, source_ci, target_id, event_ctx):
     only benefits Childsen (Experience on itself), so we reveal the maximum
     (min(4, Vigilance cards in hand)) and give that many Experience to self."""
     from swu.engine.tokens import attach_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = min(4, sum(1 for c in ps.hand if _has_aspect(c.card_def, "Vigilance")))
     for _ in range(n):
         attach_token(state, ps, source_ci, "Experience")
@@ -3700,8 +3686,8 @@ def _kanan_on_attack(state, source_ci, target_id, event_ctx):
     distinct aspects milled."""
     from swu.engine.traits import has_trait
     from swu.engine.state import Zone
-    ps = state.player_by_id(source_ci.owner_id)
-    opp = state.players[1 - state.player_index(source_ci.owner_id)]
+    ps = state.player_by_id(actor_of(state, source_ci))
+    opp = state.players[1 - state.player_index(actor_of(state, source_ci))]
     spectre = sum(1 for u in ps.ground_arena + ps.space_arena
                   if has_trait(state, u, "Spectre"))
     aspects = set()
@@ -3761,7 +3747,7 @@ def _force_is_with_me(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import push_granted_attack, _find_in_arenas
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     target = _find_in_arenas(ps, target_id)
     if target is None:
         return state
@@ -3830,7 +3816,7 @@ def _baze_malbus():
 
 def _cargo_juggernaut(state, source_ci, target_id, event_ctx):
     """"If you control another [Vigilance] unit, heal 4 damage from your base." """
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     others = [u for u in ps.ground_arena + ps.space_arena
               if u.instance_id != source_ci.instance_id
               and _has_aspect(u.card_def, "Vigilance")]
@@ -4224,8 +4210,8 @@ def _vanguard_ace_tokens(state, source_ci, target_id, event_ctx):
     (it increments at the CardPlayed chokepoint before WhenPlayed collection), so
     'other cards' = count − 1."""
     from swu.engine.tokens import attach_token
-    ps = state.player_by_id(source_ci.owner_id)
-    others = state.game_memory.cards_played_this_phase.get(source_ci.owner_id, 0) - 1
+    ps = state.player_by_id(actor_of(state, source_ci))
+    others = state.game_memory.cards_played_this_phase.get(actor_of(state, source_ci), 0) - 1
     for _ in range(max(0, others)):
         attach_token(state, ps, source_ci, "Experience")
     return state
@@ -4273,7 +4259,7 @@ def _gamorrean_guards():
 def _ready_one_resource(state, source_ci, target_id, event_ctx):
     """Ready one of the host controller's exhausted resources (readying a ready
     resource is a no-op, so pick an exhausted one)."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     for r in ps.resources:
         if r.exhausted:
             r.exhausted = False
@@ -4646,7 +4632,7 @@ def _lando_return_resources(state, source_ci, target_id, event_ctx):
     prompting a choice; a plain face-down resource is preferred.  Each returned card
     goes face-up to the owner's hand and is no longer a resource."""
     from swu.engine.state import Zone
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     for _ in range(min(2, len(ps.resources))):
         res = next((r for r in ps.resources if r.face_down), ps.resources[0])
         ps.resources.remove(res)
@@ -4783,7 +4769,7 @@ def _change_of_heart_fn(state, source_ci, target_id, event_ctx):
     if res is None:
         return state
     _, target_ci = res
-    change_control(state, target_ci, source_ci.owner_id)      # "Take control"
+    change_control(state, target_ci, actor_of(state, source_ci))      # "Take control"
     target_ci.return_control_to_owner_at_regroup = True        # delayed revert
     return state
 
@@ -4856,7 +4842,7 @@ def _traitorous_take_control(state, source_ci, target_id, event_ctx):
         return state
     if (getattr(host_ci.card_def, "cost", None) or 0) > 3:
         return state
-    change_control(state, host_ci, source_ci.owner_id)  # "Take control of that unit"
+    change_control(state, host_ci, actor_of(state, source_ci))  # "Take control of that unit"
     host_ci.control_linked_to = source_ci.instance_id   # revert on unattach
     return state
 

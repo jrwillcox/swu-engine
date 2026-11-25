@@ -35,6 +35,8 @@ function belongs with the handler for the kind it pushes.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass
 from typing import Optional
@@ -281,7 +283,7 @@ def push_opponent_capture_or_ready(s: GameState, source_ci: CardInstance) -> Non
 
     When the opponent has no non-leader unit they cannot choose, so "they don't" ⇒
     the source readies **inline** and no decision is pushed."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     opponent_id = next(p.player_id for p in s.players if p.player_id != controller_id)
     ctx = {
         "source_id": source_ci.instance_id,
@@ -389,7 +391,7 @@ def push_rescue_guarded(
 
     Pushed only when that player actually owns a card guarded by the source — with
     nothing to rescue the decision could only be declined."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ctrl_idx = s.player_index(controller_id)
     decider_id = s.players[1 - ctrl_idx].player_id
     ctx = {
@@ -456,7 +458,7 @@ def push_multi_capture(s: GameState, source_ci: CardInstance, *,
     captures an enemy non-leader unit in the same arena" (Let's Talk SEC_131), which
     is the same walk with no opt-out.  The decision still auto-resolves once the
     pairs run out, so the controller only ever chooses the PAIRING."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ctx = {
         "source_id": source_ci.instance_id,
         "controller_id": controller_id,
@@ -539,6 +541,7 @@ def push_combined_power_play(
     pool: str = "friendly",
     power_cap: Optional[int] = None,
     payoff: str = "play",
+    any_card: bool = False,
 ) -> None:
     """Push a 'combined_power_play' decision (Consolidation of Power TWI_89):
     "Choose any number of friendly units.  You may play a unit from your hand if
@@ -563,7 +566,7 @@ def push_combined_power_play(
     Deal damage to this unit equal to the combined power of the defeated units."
     No play happens; the chosen units are defeated and the source takes damage
     equal to their combined power (read while they were still in play)."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ctx = {"source_id": source_ci.instance_id,
            "controller_id": controller_id,
            "chosen": [],
@@ -572,7 +575,9 @@ def push_combined_power_play(
            "cost_reduction_per_unit": cost_reduction_per_unit,
            "pool": pool,
            "power_cap": power_cap,
-           "payoff": payoff}
+           "payoff": payoff,
+           # The exploit play may be of any card type (Count Dooku TWI_5).
+           "any_card": bool(any_card)}
     if not _combined_power_choices(s, ctx):
         return
     owner_idx = s.player_index(controller_id)
@@ -632,7 +637,8 @@ def _resolve_combined_power_play(s: GameState, top) -> GameState:
         # the play, so their stats are intact while the card is being paid for.
         push_play_from_hand(s, res[1], trait=ctx.get("trait"),
                             cost_reduction=int(per_unit) * len(chosen),
-                            then_defeat_ids=chosen)
+                            then_defeat_ids=chosen,
+                            any_card=bool(ctx.get("any_card")))
     elif res is not None:
         push_play_from_hand(s, res[1], free=True, cost_max=total,
                             then_defeat_ids=chosen)

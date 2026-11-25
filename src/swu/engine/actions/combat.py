@@ -30,6 +30,8 @@ ability resolver.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass
 from typing import Optional
@@ -39,7 +41,9 @@ from swu.engine.events import (
     AttackDeclared, DamageDealt, DamagePrevented, DecisionPushed, DecisionResolved, OverwhelmDamage,
     RestoreHealing,
 )
-from swu.engine.keywords import Keyword, has_keyword, keyword_value, shields_on
+from swu.engine.keywords import (
+    Keyword, attack_context, attack_snapshot, has_keyword, keyword_value, shields_on,
+)
 from swu.engine.state import (
     CardInstance, GameState, Phase, PlayerState, Zone, ability_suppressed,
 )
@@ -55,7 +59,7 @@ from swu.engine.actions.stats import (
 )
 from swu.engine.actions.damage import (
     _bases_cannot_heal, _deal_damage_with_shield, _hp_lethal, base_damage_after_prevention, note_base_healed,
-    note_damage_dealt,
+    note_damage_dealt, _dealer_player,
 )
 from swu.engine.actions.zones import (
     _defeat_unit, _draw_cards, _find_in_arenas,
@@ -472,6 +476,20 @@ def _apply_granted_riders(s: GameState, gctx: dict, deciding_player_id: str,
         if first_cost > 0 and _filter_granted_attacks(s, new_ctx, me, foe):
             _push_granted_followup(s, new_ctx, deciding_player_id, after_idx, insert_at)
 
+    # Leia Organa SOR_9: "Attack with a Rebel unit.  Then, you may attack with
+    # ANOTHER Rebel unit" — the same filter, one optional follow-up, the first
+    # attacker excluded (``then_attack_cheaper`` without the cost cap).
+    if gctx.get("then_attack_another"):
+        new_ctx = dict(gctx)
+        new_ctx.pop("then_attack_another", None)
+        new_ctx["optional"] = True
+        new_ctx["already_attacked"] = (
+            list(new_ctx.get("already_attacked") or []) + [attacker_id])
+        me = s.player_by_id(deciding_player_id)
+        foe = s.players[1 - s.player_index(deciding_player_id)]
+        if _filter_granted_attacks(s, new_ctx, me, foe):
+            _push_granted_followup(s, new_ctx, deciding_player_id, after_idx, insert_at)
+
     # Log Trap HMW_149: "Then attack with it again, even if it's exhausted.  It
     # can't attack bases for the second attack."  Pinned to the same unit; a
     # defeated attacker leaves no candidate, so nothing is pushed.
@@ -606,12 +624,28 @@ def record_base_damage(s: GameState, base_owner_id: str, amount: int, *,
 
     Also queues the instance for the general ``WhenDamageDealt`` observer
     (``note_damage_dealt``): ``combat`` marks the base-attack and Overwhelm sites,
-    ``dealer`` names the dealing player or card for ability damage."""
+    ``dealer`` names the dealing player or card for ability damage.
+
+    It is also the one place the "damaged a base this phase" ledgers are written,
+    for combat, Overwhelm, ability and indirect damage alike:
+    ``base_damage_dealt_this_phase`` (the dealing player's running total against an
+    ENEMY base — Cassian Andor SOR_13, Forced Surrender SOR_175) and
+    ``units_dealt_base_damage_this_round`` (the dealing UNIT, when ``dealer`` names a
+    unit in play — Cassian Andor SEC_12, Retaliation SEC_77)."""
     if amount > 0:
         base_ci = s.player_by_id(base_owner_id).base_instance
         if base_ci is not None:
             note_damage_dealt(s, base_ci, base_owner_id, amount,
                               combat=combat, dealer=dealer)
+        dealer_player = _dealer_player(s, base_owner_id, combat, dealer)
+        gm = s.game_memory
+        if dealer_player is not None and dealer_player != base_owner_id:
+            gm.base_damage_dealt_this_phase[dealer_player] = (
+                gm.base_damage_dealt_this_phase.get(dealer_player, 0) + amount)
+        if dealer:
+            res = s.find_instance(dealer)
+            if res is not None and res[1].zone in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
+                gm.units_dealt_base_damage_this_round.add(dealer)
         s.game_memory.base_damage_events.append(base_owner_id)
         # The standing, board-readable sibling of that drained queue: "If an enemy
         # base was damaged this phase" (Baylan Skoll ASH_39).
@@ -682,6 +716,17 @@ def _defender_deals_first(attacker: CardInstance) -> bool:
     OnAttack CustomEffect and read only at the unit-combat damage step — the mirror
     of _attacker_has_first_strike's ordering."""
     return bool(getattr(attacker, "defender_deals_first", False))
+
+
+def _attack_end_key(active_ps, attacker_id: str) -> str:
+    """The event-context key naming the attacker on the "When Attack Ends" fire:
+    ``attack_ended_survivor`` while it is still in play, else
+    ``attack_ended_departed`` — which only a ``WhenAttackEnds(even_if_defeated=
+    True)`` trigger matches (Chirrut Imwe LAW_46, Padmé Amidala TS26_4), so every
+    "if this unit survived" reading is unchanged."""
+    if _find_in_arenas(active_ps, attacker_id) is not None:
+        return "attack_ended_survivor"
+    return "attack_ended_departed"
 
 
 def _snapshot_advantage_tokens(*combatants) -> frozenset:
@@ -894,6 +939,7 @@ def _attacker_has_first_strike(
 def _enumerate_attacks(
     state: GameState, ps: PlayerState, inactive_ps: PlayerState,
     *, include_exhausted: bool = False, cross_arena: bool = False,
+    grants_saboteur: bool = False,
 ) -> list["AttackWithUnit"]:
     """All legal AttackWithUnit actions for ps's ready units (Sentinel-aware).
 
@@ -903,6 +949,11 @@ def _enumerate_attacks(
     ``include_exhausted`` also enumerates attacks for exhausted units (Mon Mothma
     SEC_103: "attack with any number of other units … even if those units are
     exhausted").
+
+    ``grants_saboteur``: the attack itself gives the attacker Saboteur (Swoop Down
+    SHD_230: "It gains Saboteur … for this attack").  That this-attack modifier only
+    lands once the attack is declared, so without this the defender choice would
+    still be bound by Sentinel.
     """
     acts: list[AttackWithUnit] = []
     for attacker in ps.ground_arena + ps.space_arena:
@@ -923,7 +974,7 @@ def _enumerate_attacks(
                      if attacker.zone == Zone.GROUND_ARENA
                      else inactive_ps.ground_arena)
             enemy_arena = enemy_arena + list(other)
-        saboteur = has_keyword(state, attacker, Keyword.SABOTEUR)
+        saboteur = grants_saboteur or has_keyword(state, attacker, Keyword.SABOTEUR)
         # Hidden: a unit can't be attacked the phase it was played, so it is
         # removed from the eligible defenders entirely (Saboteur does not bypass
         # Hidden — only Sentinel).  Computing Sentinel over the attackable set
@@ -1128,10 +1179,13 @@ def _filter_granted_attacks(
     granted_attack branch and the Mon Mothma SEC_103 repeat re-push, so both agree
     on eligibility.
     """
+    granted_kw = {kw[0] if isinstance(kw, (list, tuple)) else kw
+                  for kw in (ctx.get("grant_keywords") or [])}
     attacks = list(_enumerate_attacks(
         state, deciding_ps, enemy_ps,
         include_exhausted=bool(ctx.get("allow_exhausted")),
-        cross_arena=bool(ctx.get("cross_arena"))))
+        cross_arena=bool(ctx.get("cross_arena")),
+        grants_saboteur="Saboteur" in granted_kw))
     # A restricted attacker (e.g. Desperate Attack: "Attack with a damaged unit").
     preds = ctx.get("attacker_predicates") or []
     if preds:
@@ -1430,7 +1484,7 @@ def push_select_token(
     the SOURCE's controller — never the decider — and only when at least one unit was
     really chosen.
     """
-    decider = decider_id or source_ci.owner_id
+    decider = decider_id or actor_of(s, source_ci)
     ctx = {
         "source_id": source_ci.instance_id,
         "controller_id": decider,
@@ -1492,7 +1546,7 @@ def push_select_token(
         # Secret Marriage TS26_46's rider: draw a card if any chosen unit was an
         # ENEMY one, settled at the resolve when the picks are known.
         "then_draw_if_enemy_chosen": bool(then_draw_if_enemy_chosen),
-        "source_controller_id": source_ci.owner_id,
+        "source_controller_id": actor_of(s, source_ci),
         "chosen": [],
     }
     if int(max_targets) <= 0 or not _select_token_targets(s, ctx):
@@ -1530,6 +1584,9 @@ def _select_damage_targets(state: GameState, ctx: dict) -> list[str]:
     # never an eligible target.
     if ctx.get("exclude_source"):
         chosen.add(ctx["source_id"])
+    # "a unit that costs more than the discarded card" (Reckless Sacrifice ASH_163)
+    # — printed cost strictly greater; a cost-less leader unit never qualifies.
+    cost_gt = ctx.get("cost_gt")
     targets: list[str] = []
     for ps in state.players:
         if enemy_of is not None and ps.player_id == enemy_of:
@@ -1541,8 +1598,13 @@ def _select_damage_targets(state: GameState, ctx: dict) -> list[str]:
             arenas.append(ps.space_arena)
         for lst in arenas:
             for u in lst:
-                if u.instance_id not in chosen:
-                    targets.append(u.instance_id)
+                if u.instance_id in chosen:
+                    continue
+                if cost_gt is not None:
+                    cost = getattr(u.card_def, "cost", None)
+                    if cost is None or int(cost) <= int(cost_gt):
+                        continue
+                targets.append(u.instance_id)
     return targets
 
 
@@ -1557,9 +1619,16 @@ def push_select_damage(
     exclude_source: bool = False,
     then_self_base_damage_if_no_friendly_hit: int = 0,
     then_escalate: tuple = (),
+    cost_gt: Optional[int] = None,
+    mandatory: bool = False,
 ) -> None:
     """Push a 'select_damage' decision: "Deal ``amount_each`` damage to each of
     up to ``max_targets`` units" (IG-2000 JTL_140).
+
+    ``cost_gt`` narrows the targets to units whose printed cost is greater, and
+    ``mandatory`` withholds the early finish while a target remains — "Deal 5
+    damage to a unit that costs more than the discarded card" (Reckless Sacrifice
+    ASH_163).
 
     The deciding player picks distinct units one at a time; each is recorded.
     After finishing (or reaching the cap), the decision is popped and damage is
@@ -1596,7 +1665,7 @@ def push_select_damage(
     if arena is not None:
         ctx["arena"] = arena
     if enemy_only:
-        ctx["enemy_of"] = decider_id or source_ci.owner_id
+        ctx["enemy_of"] = decider_id or actor_of(s, source_ci)
     if then_attack_with is not None:
         ctx["then_attack_with"] = then_attack_with
     if exclude_source:
@@ -1604,9 +1673,13 @@ def push_select_damage(
     if then_self_base_damage_if_no_friendly_hit:
         ctx["self_base_damage_if_no_friendly_hit"] = int(
             then_self_base_damage_if_no_friendly_hit)
+    if cost_gt is not None:
+        ctx["cost_gt"] = int(cost_gt)
+    if mandatory:
+        ctx["mandatory"] = True
     if int(max_targets) <= 0 or not _select_damage_targets(s, ctx):
         return
-    decider = decider_id or source_ci.owner_id
+    decider = decider_id or actor_of(s, source_ci)
     decider_idx = s.player_index(decider)
     after_idx = after_resolve_idx if after_resolve_idx is not None else 1 - decider_idx
     dec = PendingDecision(
@@ -1705,18 +1778,6 @@ def _resolve_base_attack_step2(
     # Step 4: Damage to base
     power = base_damage_after_prevention(s, base_ci, power)
     base_ci.damage += power
-    if power > 0:
-        # Record that this attacker dealt damage to a base this round (gates
-        # Retaliation SEC_77 "Defeat a unit that dealt damage to a base this
-        # phase").  Only the direct base-attack site is tracked (the common case);
-        # Overwhelm spillover to a base is a documented uncovered edge.
-        s.game_memory.units_dealt_base_damage_this_round.add(attacker.instance_id)
-        # Accumulate this player's total base damage this phase (Cassian Andor
-        # SOR_13's undeployed "3 or more damage to an enemy base this phase"); the
-        # defending base is always an enemy base at this direct-attack site.
-        gm = s.game_memory
-        gm.base_damage_dealt_this_phase[active_ps.player_id] = (
-            gm.base_damage_dealt_this_phase.get(active_ps.player_id, 0) + power)
     s.event_log.append(DamageDealt(
         target_instance_id=base_ci.instance_id,
         target_name=base_ci.card_def.display_name,
@@ -1724,7 +1785,8 @@ def _resolve_base_attack_step2(
         amount=power,
         is_base=True,
     ))
-    record_base_damage(s, inactive_ps.player_id, power, combat=True)
+    record_base_damage(s, inactive_ps.player_id, power, combat=True,
+                       dealer=attacker.instance_id)
 
     # Step 5: Win check
     _check_game_over(s)
@@ -1755,15 +1817,16 @@ def _resolve_base_attack_step2(
     # attack never damages the attacker, so it always survives; fire if still in
     # play and the game is not already over.  after_all is the opponent so the
     # turn passes once the resulting decision resolves.
-    if not s.is_terminal() and _find_in_arenas(active_ps, attacker.instance_id) is not None:
+    if not s.is_terminal():
         from swu.abilities.resolver import fire_triggered_abilities as _fire_end
         # ``attack_ended_attacker`` rides along so the WhenFriendlyUnitAttackEnds
         # observer (Anakin Skywalker LAW_88) also sees a BASE attack end — "when a
         # friendly unit's attack ends" draws no unit/base distinction.  A base attack
-        # never damages the attacker, so this guarded site is the whole story here;
-        # no defeated-defender key, so LAW_7's "If the defending unit was defeated"
-        # reading correctly never fires on a base attack.
-        end_ctx = {"attack_ended_survivor": attacker.instance_id,
+        # never damages the attacker, but another effect can still defeat it during
+        # the attack: it is then named under ``attack_ended_departed`` (Chirrut Imwe
+        # LAW_46 "does not need to survive").  No defeated-defender key, so LAW_7's
+        # "If the defending unit was defeated" reading correctly never fires here.
+        end_ctx = {_attack_end_key(active_ps, attacker.instance_id): attacker.instance_id,
                    "attack_ended_attacker": attacker.instance_id}
         if power > 0:
             # Also mark that this attack dealt combat damage to a base, so a
@@ -1954,6 +2017,11 @@ def _resolve_unit_combat_step2(
     def_power = compute_power(s, defender, is_attacking=False, is_defending=True,
                               attacker_id=attacker.instance_id)
     def_power = _combat_power_after_block(s, defender, def_power)   # LAW_130
+    # Overwhelm, decided inside this attack's context so a "while attacking a …
+    # unit, … gains Overwhelm" grant (Moff Gideon SHD_7, Jango Fett SHD_138, Miraj
+    # Scintel SEC_139) counts — judged against the defender before combat damage.
+    with attack_context(attack_snapshot(s, attacker, [defender])):
+        atk_overwhelm = has_keyword(s, attacker, Keyword.OVERWHELM)
 
     # Step 4: damage with Shield interception.  An On Attack effect may have
     # redirected the attacker's incoming combat damage onto a chosen friendly unit
@@ -2007,7 +2075,7 @@ def _resolve_unit_combat_step2(
     # direct base-attack pipeline's, because Overwhelm excess IS combat damage dealt
     # to a base (Ezra Bridger ASH_13, Hera Syndulla ASH_31).
     spill_to_base = 0
-    if (has_keyword(s, attacker, Keyword.OVERWHELM) and dealt_to_defender > 0
+    if (atk_overwhelm and dealt_to_defender > 0
             and not _overwhelm_denied_by(s, [defender])):
         excess = max(0, dealt_to_defender - defender_hp_before)
         if excess > 0:
@@ -2017,7 +2085,8 @@ def _resolve_unit_combat_step2(
             if def_base is not None and excess > 0:
                 def_base.damage += excess
                 spill_to_base = excess
-                record_base_damage(s, inactive_ps.player_id, excess, combat=True)
+                record_base_damage(s, inactive_ps.player_id, excess, combat=True,
+                                   dealer=attacker.instance_id)
                 s.event_log.append(OverwhelmDamage(
                     defending_player_id=inactive_ps.player_id,
                     amount=excess,
@@ -2129,15 +2198,17 @@ def _resolve_unit_combat_step2(
     # defeat processing — the "survived" clause is intrinsic.  after_all is the
     # opponent so the turn passes once the resulting decision resolves (the
     # attacking action's switch is suspended while a decision is pending).
-    if not s.is_terminal() and _find_in_arenas(active_ps, attacker_id) is not None:
+    if not s.is_terminal():
         # ``attack_ended_defender_defeated`` rides along for
         # WhenAttackEnds(require_defender_defeated=True) — "If the defending unit was
         # defeated, ready this unit" (Thrawn ASH_33, Halo ASH_223).  It cannot
         # re-match the WhenFriendlyUnitAttackEnds observer, which additionally
         # requires ``attack_ended_attacker`` (never set on this fire).
         # ``attack_ended_combat_damaged`` lists the units this attacker actually dealt
-        # combat damage to (The Great Mothers ASH_101).
-        end_ctx = {"attack_ended_survivor": attacker_id}
+        # combat damage to (The Great Mothers ASH_101).  An attacker no longer in play
+        # is named under ``attack_ended_departed`` instead, which only an
+        # ``even_if_defeated`` trigger matches (Chirrut Imwe LAW_46).
+        end_ctx = {_attack_end_key(active_ps, attacker_id): attacker_id}
         if defender_dead:
             end_ctx["attack_ended_defender_defeated"] = defender.instance_id
         if dealt_to_defender > 0:
@@ -2552,6 +2623,7 @@ def push_granted_attack(
     excess_damage_to_unit: bool = False,
     then_attack_cheaper: bool = False,
     then_attack_again: bool = False,
+    then_attack_another: bool = False,
     bonus_if_shares_trait_with_friendly: bool = False,
     defender_suppress_abilities: bool = False,
     borrow_abilities: bool = False,
@@ -2706,6 +2778,10 @@ def push_granted_attack(
     then_attack_again
         After the attack settles, the same unit attacks again, even if exhausted,
         and not a base (Log Trap HMW_149) — a one-shot re-push pinned to it.
+    then_attack_another
+        After the attack settles, the controller MAY attack with another unit
+        passing the same filter (Leia Organa SOR_9: "Then, you may attack with
+        another Rebel unit") — one optional follow-up, the first attacker excluded.
     bonus_if_shares_trait_with_friendly
         The stat bonus applies only if the chosen attacker shares a trait with
         another friendly unit (Familiar Strategem HMW_266).
@@ -2719,9 +2795,9 @@ def push_granted_attack(
     controller has no unit able to attack (or declines an optional attack), a
     DeclineGrantedAttack lets the effect fizzle cleanly.
     """
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="granted_attack",
         context={
             "source_id": source_ci.instance_id,
@@ -2747,6 +2823,8 @@ def push_granted_attack(
             # "Then attack with it again, even if it's exhausted.  It can't attack
             # bases for the second attack" (Log Trap HMW_149).
             "then_attack_again": then_attack_again,
+            # "Then, you may attack with another Rebel unit" (Leia Organa SOR_9).
+            "then_attack_another": then_attack_another,
             # "If it shares a Trait with another friendly unit, it gets +2/+0 for
             # this attack" (Familiar Strategem HMW_266).
             "bonus_if_shares_trait_with_friendly": bonus_if_shares_trait_with_friendly,
@@ -2799,7 +2877,7 @@ def push_granted_attack(
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="granted_attack",
     ))
 
@@ -2831,7 +2909,7 @@ def _resolve_two_unit_combat(
     # Log an AttackDeclared for each co-defender (both are attacked) so the event
     # stream names both.  The bus fire is a no-op for WhenAttacked (an ability, not a
     # bus listener) but keeps parity with the single-defender declare.
-    first_evt = None
+    evts = []
     for defn in (def1, def2):
         evt = AttackDeclared(
             attacker_player_id=active_ps.player_id,
@@ -2843,14 +2921,14 @@ def _resolve_two_unit_combat(
         )
         s.event_log.append(evt)
         get_bus().fire(s, evt)
-        if first_evt is None:
-            first_evt = evt
+        evts.append(evt)
 
-    # Phase 3: collect OnAttack / WhenAttacked ability triggers ONCE.  The attacker's
-    # own OnAttack fires exactly once (the rules: "any triggered abilities only occur
-    # once").  SIMPLIFICATION (documented; no shipped card exercises it): only the
-    # first co-defender's WhenAttacked is fired — no shipped card has a WhenAttacked
-    # defender under a two-unit attack.  Both defender ids ride in the event context.
+    # Phase 3: collect OnAttack / WhenAttacked ability triggers.  The attacker's own
+    # OnAttack (and every attack observer) fires exactly once (the rules: "any
+    # triggered abilities only occur once"), on the first defender's declare; the
+    # second declare carries ``only_when_attacked``, so it matches only the second
+    # co-defender's own "When this unit is attacked".  Both defender ids ride in the
+    # event context.
     decisions_before = len(s.pending_decisions)
     from swu.abilities.resolver import fire_triggered_abilities
     event_ctx = {
@@ -2859,7 +2937,12 @@ def _resolve_two_unit_combat(
         "defender_ids": [def1.instance_id, def2.instance_id],
     }
     s = fire_triggered_abilities(
-        s, first_evt, after_all_player_idx=s.active_player_index, event_ctx=event_ctx)
+        s, evts[0], after_all_player_idx=s.active_player_index, event_ctx=event_ctx)
+    if not s.is_terminal():
+        s = fire_triggered_abilities(
+            s, evts[1], after_all_player_idx=s.active_player_index,
+            event_ctx={**event_ctx, "defender_id": def2.instance_id,
+                       "only_when_attacked": True})
     if len(s.pending_decisions) > decisions_before:
         pre_attack = PendingDecision(
             deciding_player_id=active_ps.player_id,
@@ -2887,14 +2970,11 @@ def _resolve_two_unit_combat_step2(
     defenders: list[CardInstance],
 ) -> None:
     """Steps 2–6 of a two-unit attack (Darth Maul C24_6).  Both co-defenders are hit
-    simultaneously for the attacker's power; the attacker takes the SUM of both
-    defenders' power; Overwhelm spills the COMBINED excess to the defending base.
-
-    SIMPLIFICATIONS (documented; none exercised by a shipped card co-occurring with a
-    two-unit attacker): First Strike, defender-deals-first (The Stranger LAW_86) and
-    combat-damage redirect (Maul SHD_90) are not modelled here — a two-unit attack is
-    always simultaneous; the "while defending" attacker debuff (Lando LAW_108) is not
-    applied (``defender_id`` is left None for the attacker's power).
+    for the attacker's power; the attacker takes the SUM of both defenders' power;
+    Overwhelm spills the COMBINED excess to the defending base.  First Strike (per
+    defender), defender-deals-first (The Stranger LAW_86), a combat-damage redirect
+    (Maul SHD_90) and the per-defender power debuffs (Lando LAW_108, Strafing Gunship
+    SOR_212) apply as in the single-defender pipeline.
     """
     # Step 2: On-attack keyword triggers.
     if has_keyword(s, attacker, Keyword.RESTORE):
@@ -2920,30 +3000,61 @@ def _resolve_two_unit_combat_step2(
         _expire_modifiers(s, "this_attack")
         return
 
-    # Step 3: Effective powers (snapshot before any damage lands).
-    atk_power = compute_power(s, attacker, is_attacking=True, attacking_unit=True)
-    atk_power = _combat_power_after_block(s, attacker, atk_power)   # LAW_130
+    # Step 3: Effective powers (snapshot before any damage lands).  Per defender, as
+    # in the single-defender pipeline: a defender's "while defending, the attacker
+    # gets −1/−0" (Lando LAW_108) lowers only the damage dealt to THAT defender, and
+    # an attacker's "the defender gets −N/−0" (Strafing Gunship SOR_212) lands on each.
+    def _atk_power_vs(d: CardInstance) -> int:
+        p = compute_power(s, attacker, is_attacking=True, attacking_unit=True,
+                          defender_id=d.instance_id)
+        return _combat_power_after_block(s, attacker, p)   # LAW_130
+
+    atk_powers = {d.instance_id: _atk_power_vs(d) for d in live_defs}
     hp_before = {d.instance_id: compute_hp(s, d) - d.damage for d in live_defs}
     def_powers = {d.instance_id: _combat_power_after_block(
-                      s, d, compute_power(s, d, is_attacking=False))
+                      s, d, compute_power(s, d, is_attacking=False, is_defending=True,
+                                          attacker_id=attacker.instance_id))
                   for d in live_defs}
+    with attack_context(attack_snapshot(s, attacker, live_defs)):
+        atk_overwhelm = has_keyword(s, attacker, Keyword.OVERWHELM)
 
-    # Step 4: simultaneous damage — each defender takes the attacker's power (its own
-    # Shield may intercept); the attacker takes the SUM of the defenders' power.
-    dealt = {}
-    for d in live_defs:
-        dealt[d.instance_id] = _deal_damage_with_shield(s, inactive_ps, d, atk_power,
-                                                        is_combat=True,
-                                                        dealer_source_id=attacker.instance_id)
-    total_to_attacker = sum(def_powers[d.instance_id] for d in live_defs)
-    # The co-defenders deal one pooled instance, so no single dealing card can be
-    # named — the conservative reading (it keeps every prevention it would have).
-    dealt_to_attacker = _deal_damage_with_shield(
-        s, active_ps, attacker, total_to_attacker, is_combat=True)
+    # Step 4: damage.  Each defender takes the attacker's power (its own Shield may
+    # intercept); the attacker takes the SUM of the defenders' power, as one pooled
+    # instance (no single dealing card can be named — the conservative reading, it
+    # keeps every prevention it would have), or a redirect takes it (Maul SHD_90).
+    redirect = _combat_redirect_unit(s, active_ps, attacker)
+    dealt = {d.instance_id: 0 for d in live_defs}
+
+    def _hit_defenders() -> None:
+        for d in live_defs:
+            dealt[d.instance_id] = _deal_damage_with_shield(
+                s, inactive_ps, d, atk_powers[d.instance_id], is_combat=True,
+                dealer_source_id=attacker.instance_id)
+
+    if _defender_deals_first(attacker):
+        # The Stranger LAW_86: both defenders strike first; a defeated attacker deals
+        # nothing back, a surviving one swings with its post-damage power (Grit).
+        dealt_to_attacker = _apply_attacker_combat_damage(
+            s, active_ps, attacker, sum(def_powers.values()), redirect)
+        if not _hp_lethal(s, attacker):
+            atk_powers = {d.instance_id: _atk_power_vs(d) for d in live_defs}
+            _hit_defenders()
+    else:
+        # First Strike, judged per defender (Hound's Tooth JTL_185's conditional
+        # one): the attacker's damage lands first, and a defender it struck first
+        # deals combat damage back only if it survived.  Without First Strike the
+        # exchange is simultaneous (the snapshot powers above).
+        first = {d.instance_id for d in live_defs
+                 if _attacker_has_first_strike(s, attacker, d)}
+        _hit_defenders()
+        back = sum(def_powers[d.instance_id] for d in live_defs
+                   if d.instance_id not in first or not _hp_lethal(s, d))
+        dealt_to_attacker = _apply_attacker_combat_damage(
+            s, active_ps, attacker, back, redirect)
 
     # Step 5: Overwhelm — the COMBINED excess spills to the defending base.
     spill_to_base = 0
-    if (has_keyword(s, attacker, Keyword.OVERWHELM)
+    if (atk_overwhelm
             and not _overwhelm_denied_by(s, live_defs)):
         excess = sum(max(0, dealt[d.instance_id] - hp_before[d.instance_id])
                      for d in live_defs)
@@ -2954,7 +3065,8 @@ def _resolve_two_unit_combat_step2(
             if def_base is not None and excess > 0:
                 def_base.damage += excess
                 spill_to_base = excess
-                record_base_damage(s, inactive_ps.player_id, excess, combat=True)
+                record_base_damage(s, inactive_ps.player_id, excess, combat=True,
+                                   dealer=attacker.instance_id)
                 s.event_log.append(OverwhelmDamage(
                     defending_player_id=inactive_ps.player_id,
                     amount=excess,
@@ -3036,8 +3148,8 @@ def _resolve_two_unit_combat_step2(
 
     # "When Attack Ends: If this unit survived" (Vermillion LAW_215) for the attacker.
     # Same two extra keys as the single-defender pipeline (ASH_33/223, ASH_101).
-    if not s.is_terminal() and _find_in_arenas(active_ps, attacker_id) is not None:
-        end_ctx = {"attack_ended_survivor": attacker_id}
+    if not s.is_terminal():
+        end_ctx = {_attack_end_key(active_ps, attacker_id): attacker_id}
         if defeated_def_ids:
             end_ctx["attack_ended_defender_defeated"] = defeated_def_ids[0]
         damaged_ids = [d.instance_id for d in live_defs if dealt[d.instance_id] > 0]

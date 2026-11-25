@@ -3391,7 +3391,12 @@ class TestMoffGideon:
         # While attacking a unit: +1 power and Overwhelm on the cheap unit.
         assert compute_power(state, cheap_ci, is_attacking=True,
                              attacking_unit=True) == cheap.power + 1
-        assert has_keyword(state, cheap_ci, Keyword.OVERWHELM)
+        from swu.engine.keywords import attack_context, attack_snapshot
+        foe = _place(state, "P1", pricey, "ground")
+        with attack_context(attack_snapshot(state, cheap_ci, [foe])):
+            assert has_keyword(state, cheap_ci, Keyword.OVERWHELM)
+            assert not has_keyword(state, pricey_ci, Keyword.OVERWHELM)
+        assert not has_keyword(state, cheap_ci, Keyword.OVERWHELM)  # not attacking
         # Not attacking a unit (defending / attacking a base): no power buff.
         assert compute_power(state, cheap_ci, is_attacking=True,
                              attacking_unit=False) == cheap.power
@@ -6621,6 +6626,9 @@ class TestGroup10CardAdvantageDisruption:
         discard_before = len(state.player_by_id("P0").discard)
 
         _enter_regroup(state)
+        top = state.pending_decisions[-1]
+        assert top.kind == "discard_excess_from_hand" and top.deciding_player_id == "P0"
+        state = _resolve_discards(state)
 
         # One card left P0's hand for the discard pile; the counter is cleared.
         assert len(state.player_by_id("P0").discard) == discard_before + 1
@@ -6825,18 +6833,25 @@ class TestEnticingReward:
         top = state.pending_decisions[-1]
         assert top.kind == "deck_search"
         assert top.deciding_player_id == "P0"
-        # Host is non-unique → collector already discarded its one hand card.
-        ps0 = state.player_by_id("P0")
-        assert hand_filler.instance_id in {c.instance_id for c in ps0.discard}
         # Forced pick of the two non-unit cards (up_to=False, count=2).
         for _ in range(2):
             sel = next(a for a in legal_actions(state)
                        if isinstance(a, SelectSearchCard))
             state = apply(state, sel)
-        assert not state.pending_decisions
         ps0 = state.player_by_id("P0")
         drawn = {c.card_def.name for c in ps0.hand}
         assert event_a.name in drawn and event_b.name in drawn
+        # Host is non-unique → THEN the collector discards, choosing among the hand
+        # that now holds the drawn cards.
+        assert state.pending_decisions[-1].kind == "discard_excess_from_hand"
+        assert len(legal_actions(state)) == 3
+        pick = next(a for a in legal_actions(state)
+                    if getattr(a, "instance_id", None) == hand_filler.instance_id)
+        state = apply(state, pick)
+        assert not state.pending_decisions
+        ps0 = state.player_by_id("P0")
+        assert hand_filler.instance_id in {c.instance_id for c in ps0.discard}
+        assert {event_a.name, event_b.name} <= {c.card_def.name for c in ps0.hand}
 
 
 class TestBountyPosting:
@@ -6893,6 +6908,10 @@ class TestAlteringTheDeal:
         state.player_by_id("P0").capture_pile.append(cap)
 
         state, _evt = _play_event_from_hand(state, repo, "SHD", "243", owner="P0")
+        from swu.engine.actions import legal_actions, apply, SelectCapturedToPlay
+        acts = legal_actions(state)
+        assert [a.instance_id for a in acts] == [cap.instance_id], "chosen, no decline"
+        state = apply(state, SelectCapturedToPlay(cap.instance_id))
         assert not state.pending_decisions
         # Captured card left the capture pile → owner's (P1) discard.
         assert cap.instance_id not in {c.instance_id for c in state.player_by_id("P0").capture_pile}

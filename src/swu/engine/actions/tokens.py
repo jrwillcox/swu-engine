@@ -23,6 +23,8 @@ suppression into the kernel rather than giving each a file of its own.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass
 from typing import Optional
@@ -399,7 +401,7 @@ def push_pay_resources_for_tokens(
     granted inline, since a Credit is a pile entry and fires no enter-play bus.
     ``max_resources`` may be ``None`` for an unbounded "any number" (bounded only by
     the available cost items — Cad Bane)."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ps = s.player_by_id(controller_id)
     if cost_source == "credit":
         if len(ps.credits) <= 0:
@@ -499,7 +501,7 @@ def arm_when_played_redo(s: GameState, source_ci: CardInstance) -> None:
     simplification of the rules' simultaneous delayed effects (vanishingly rare,
     needing two attacks before a When Played card in the same phase)."""
     charges = s.game_memory.when_played_redo_charges
-    pid = source_ci.owner_id
+    pid = actor_of(s, source_ci)
     charges[pid] = charges.get(pid, 0) + 1
 
 
