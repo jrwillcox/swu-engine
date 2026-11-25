@@ -1,0 +1,10 @@
+{
+  "deck_slug": "chewbacca",
+  "source": {
+    "deck": "tests/fixtures/chewbacca_hmw.json",
+    "set_code": null
+  },
+  "total_deck_cards": 52,
+  "playable_deck_cards": 52,
+  "groups": []
+}

@@ -776,7 +776,9 @@ def _settle_defeat_after_attack(s: GameState, attacker: CardInstance) -> None:
     itself, read here at the very end of each combat pipeline — just before the
     this-attack cleanup, and after the WhenAttackEnds fire, so "after completing
     this attack" is exact.  Cleared whether or not the defeat happens; if combat
-    already defeated the attacker this is a clean no-op."""
+    already defeated the attacker this is a no-op (``find_instance`` still finds it
+    in the discard pile, so ``_apply_defeat_unit``'s in-arena guard is what stops
+    a second defeat)."""
     if not getattr(attacker, "defeat_after_attack", False):
         return
     attacker.defeat_after_attack = False

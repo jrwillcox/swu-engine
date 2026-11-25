@@ -3760,6 +3760,13 @@ def _apply_defeat_unit(state: "GameState", target_id: str,
     # A real (non-attached) Upgrade card not on any host: nothing to defeat.
     if isinstance(ci.card_def, Upgrade):
         return state
+    # ``find_instance`` also reaches the discard pile (and hand/deck), so a unit
+    # that has already left play — e.g. Defiant Hammerhead LAW_62 killed by combat
+    # damage before its "defeat this unit after completing this attack" — must not
+    # be defeated again: ``_defeat_unit`` only removes from the arenas and would
+    # append a second copy to the discard (duplicate instance_id).
+    if ci not in ps.ground_arena and ci not in ps.space_arena:
+        return state
     from swu.engine.actions import _defeat_unit
     _defeat_unit(state, ps, ci)
     return state

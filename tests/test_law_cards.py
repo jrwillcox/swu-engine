@@ -4328,6 +4328,21 @@ class TestDefiantHammerhead_LAW_62:
         assert _find_instance(state, foe.instance_id) is None
         assert _find_instance(state, ram.instance_id) is None                # rammed
 
+    def test_LAW_62_killed_by_combat_is_not_defeated_a_second_time(self, repo):
+        """The 10/10 hull kills the ram in combat; the "defeat after the attack"
+        rider must then do nothing (it once re-defeated the card from the discard
+        pile, putting two copies there — found by the Chewbacca HMW deck soak)."""
+        from swu.engine.actions import apply, AttackWithUnit
+        state = _make_state()
+        ram = _place(state, "P0", _get_card(repo, "LAW", "62"), "space")     # 6/6
+        foe = _place(state, "P1", _get_card(repo, "LAW", "164"), "space")    # 10/10
+        state = apply(state, AttackWithUnit(attacker_id=ram.instance_id,
+                                            defender_id=foe.instance_id))
+        state = _law02_accept(state)
+        state = _law01_continue(state)
+        discard = state.player_by_id("P0").discard
+        assert [c.instance_id for c in discard].count(ram.instance_id) == 1
+
     def test_LAW_62_defeats_itself_even_when_it_survives_combat(self, repo):
         from swu.engine.actions import apply, AttackWithUnit
         state = _make_state()
