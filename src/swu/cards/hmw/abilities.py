@@ -1744,11 +1744,11 @@ def _boga():
 
 def _local_support_reveal(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import _draw_cards
-    from swu.engine.traits import has_trait
+    from swu.engine.traits import get_traits, has_trait
     ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
-    traits = set(getattr(ps.deck[0].card_def, "traits", None) or ())
+    traits = set(get_traits(state, ps.deck[0]))  # Malakili LAW_212 counts in the deck
     if any(has_trait(state, u, t) for u in ps.ground_arena + ps.space_arena
            for t in traits):
         _draw_cards(state, ps, 1)

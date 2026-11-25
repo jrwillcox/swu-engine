@@ -1403,7 +1403,9 @@ def _resolve_event_ability(
         event_ctx: dict = {}
         if _ability_can_inline(wrapper, s, event_ci, event_ctx):
             from swu.abilities.resolver import _resolve_inline as _ri
-            _ri(s, wrapper, event_ci, event_ctx)
+            _ri(s, wrapper, event_ci, event_ctx, resume={
+                "set_code": sc, "card_number": cn, "ability_idx": idx,
+                "decider_id": ps.player_id})
         else:
             dec = PendingDecision(
                 deciding_player_id=ps.player_id,

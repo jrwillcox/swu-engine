@@ -103,11 +103,19 @@ def _make_state(include_bases: bool = True):
 def _resolve_discards(state, pick_ids=()):
     """Resolve pending hand-discard choices (``DiscardFromHand`` and friends push a
     ``discard_excess_from_hand`` decision for the discarding player).  Discards the
-    cards in ``pick_ids`` first when offered, else the first legal card."""
-    from swu.engine.actions import apply, legal_actions
+    cards in ``pick_ids`` first when offered, else the first legal card.  The rest
+    of the ability that pushed the choice is parked behind it and resumes after
+    it; when only automatic effects are left that is a lone AutoResolveEffects,
+    applied here as the web session does."""
+    from swu.engine.actions import AutoResolveEffects, apply, legal_actions
     for _ in range(20):
-        if not (state.pending_decisions
-                and state.pending_decisions[-1].kind == "discard_excess_from_hand"):
+        if not state.pending_decisions:
+            break
+        if state.pending_decisions[-1].kind != "discard_excess_from_hand":
+            acts = legal_actions(state)
+            if len(acts) == 1 and isinstance(acts[0], AutoResolveEffects):
+                state = apply(state, acts[0])
+                continue
             break
         acts = legal_actions(state)
         act = next((a for a in acts if getattr(a, "instance_id", None) in pick_ids),

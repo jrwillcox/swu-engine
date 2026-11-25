@@ -39,6 +39,7 @@ from swu.engine.events import (
 )
 from swu.engine.state import CardInstance, GameState, Zone
 from swu.engine.tokens import attach_token
+from swu.engine.traits import trait_view
 
 from swu.engine.actions.base import (
     Action, IllegalActionError,
@@ -601,7 +602,7 @@ def push_bottom_from_discard(
     skip = set(exclude_ids or ())
     candidate_ids = [ci.instance_id for pl in piles for ci in pl.discard
                      if ci.instance_id not in skip
-                     and (eligible is None or eligible(ci.card_def))]
+                     and (eligible is None or eligible(trait_view(s, ci)))]
     if not candidate_ids or int(count) <= 0:
         return
     dec = PendingDecision(
@@ -668,7 +669,7 @@ def push_return_from_discard(
     """
     ps = s.player_by_id(actor_of(s, source_ci))
     candidate_ids = [ci.instance_id for ci in ps.discard
-                     if eligible(ci.card_def)
+                     if eligible(trait_view(s, ci))
                      and (eligible_instance is None or eligible_instance(ci))]
     if not candidate_ids or int(count) <= 0:
         return  # nothing eligible — fizzle cleanly
@@ -1584,15 +1585,15 @@ def push_discard_of_choice(
     a unit, …" (``payoff_args`` must be plain data).  It runs even when nothing
     could be discarded, with an empty list, so the payoff owns its "if you do".
 
-    Because the choice may be a decision, the payoff resolves AFTER any effects the
-    calling ability still has to resolve inline: put everything that depends on the
-    discard in the payoff.
+    The calling ability's later effects wait for the choice (the resolver parks
+    them behind it), but only the payoff knows WHICH cards were discarded: put
+    anything that reads them in the payoff.
 
     Replaced the old first-card auto-discard (``DiscardFromHand``, K-2SO's and Poe's
     modal discards, and about 25 card-module discards), known deviations fixed
     2026-11-23/24."""
     ps = s.player_by_id(player_id)
-    pool = [ci for ci in ps.hand if eligible is None or eligible(ci.card_def)]
+    pool = [ci for ci in ps.hand if eligible is None or eligible(trait_view(s, ci))]
     if len(pool) <= int(count):
         for ci in pool:
             ps.hand.remove(ci)

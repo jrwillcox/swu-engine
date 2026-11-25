@@ -3938,16 +3938,78 @@ def _optional_trigger_has_legal_effect(
     return False
 
 
+# Event-context keys that live only during synchronous trigger collection: raw
+# CardInstances (not JSON-serialisable) and the just-drawn card ids (hidden info
+# for an opponent-draw observer).  Dropped whenever the context is persisted on a
+# decision — see ``_build_ability_decision``.
+_TRANSIENT_EVENT_CTX_KEYS = ("defeated_ci", "defeated_upgrades", "drawn_card_ids")
+
+
+def _persistable_event_ctx(event_ctx: dict) -> dict:
+    return {k: v for k, v in event_ctx.items() if k not in _TRANSIENT_EVENT_CTX_KEYS}
+
+
 def _resolve_inline(
     state: "GameState",
     ability: TriggerAbility,
     source_ci: "CardInstance",
     event_ctx: dict,
+    *,
+    resume: Optional[dict] = None,
 ) -> "GameState":
-    """Execute all effects of a mandatory inline ability."""
-    for effect in ability.effects:
+    """Execute all effects of a mandatory inline ability, in printed order.
+
+    An effect may push a decision (a CustomEffect adapter onto a discard choice, a
+    deck search, a token pick …).  The rest of the ability must wait for that
+    choice, so when ``resume`` names the ability — ``{"set_code", "card_number",
+    "ability_idx", "decider_id"}`` — the remaining effects are parked in a
+    ``resolve_effects`` decision just below whatever the effect pushed, and resume
+    once it is answered.  Without ``resume`` (an unaddressable effect list) they
+    run straight on, the old behaviour."""
+    effects = ability.effects
+    for i, effect in enumerate(effects):
+        depth = len(state.pending_decisions)
         state = execute_effect(state, effect, source_ci, None, event_ctx)
+        if (resume is not None and i + 1 < len(effects)
+                and len(state.pending_decisions) > depth
+                and not state.is_terminal()):
+            _defer_remaining_effects(state, resume, source_ci.instance_id,
+                                     i + 1, event_ctx, depth)
+            break
     return state
+
+
+def _defer_remaining_effects(
+    state: "GameState", resume: dict, source_id: str, next_idx: int,
+    event_ctx: dict, depth: int,
+) -> None:
+    """Park an ability's unresolved effects (from ``next_idx``) in a
+    ``resolve_effects`` decision inserted at ``depth`` — directly below the
+    decision(s) the previous effect just pushed — so they resume after it.
+
+    The hand-off is preserved: the parked decision inherits the after-index the
+    first pushed decision carried (where play would have gone once the ability
+    finished), and that decision now returns to the ability's decider."""
+    from swu.engine.decisions import PendingDecision
+    first_new = state.pending_decisions[depth]
+    after = first_new.after_resolve_player_index
+    decider_id = resume["decider_id"]
+    first_new.after_resolve_player_index = state.player_index(decider_id)
+    state.pending_decisions.insert(depth, PendingDecision(
+        deciding_player_id=decider_id,
+        kind="resolve_effects",
+        context={
+            "set_code": resume["set_code"],
+            "card_number": resume["card_number"],
+            "ability_idx": resume["ability_idx"],
+            "source_id": source_id,
+            "effect_idx": next_idx,
+            "resolved_targets": {},
+            "event_ctx": _persistable_event_ctx(event_ctx),
+            "after_all_player_idx": after,
+        },
+        after_resolve_player_index=after,
+    ))
 
 
 # ── "Use that ability again" meta-mechanic (Aethersprite LOF_197, Thrawn JTL_2) ─
@@ -4340,7 +4402,12 @@ def fire_triggered_abilities(
     # the original ability fully completes.
     for ci, sci, idx, ab in inline:
         depth_before = len(state.pending_decisions)
-        state = _resolve_inline(state, ab, ci, event_ctx)
+        state = _resolve_inline(state, ab, ci, event_ctx, resume={
+            "set_code": sci.card_def.set_code or "",
+            "card_number": sci.card_def.card_number or "",
+            "ability_idx": idx,
+            "decider_id": actor_of(state, ci),
+        })
         state = _schedule_ability_redo(
             state, ci, sci.card_def.set_code or "", sci.card_def.card_number or "",
             idx, event_ctx, after_all_player_idx, depth_before)
@@ -4438,8 +4505,7 @@ def _build_ability_decision(
     #     so leaving these ids in the persisted context would leak the opponent's
     #     freshly-drawn hand card into the deciding player's view (a hidden-info
     #     leak).  Resolution never reads them.
-    _TRANSIENT = ("defeated_ci", "defeated_upgrades", "drawn_card_ids")
-    event_ctx = {k: v for k, v in event_ctx.items() if k not in _TRANSIENT}
+    event_ctx = _persistable_event_ctx(event_ctx)
 
     if ability.optional:
         return PendingDecision(
@@ -4560,21 +4626,50 @@ def apply_resolve_effects(state: "GameState", chosen_target_id: Optional[str]) -
 
     effect_idx = ctx["effect_idx"]
 
-    # If a choice was made, execute the effect at current effect_idx with the chosen target
-    if chosen_target_id is not None and effect_idx < len(effects):
-        eff = effects[effect_idx]
-        spec = _get_effect_target_spec(eff)
-        if spec is not None and spec.fixed is None:
-            s = execute_effect(s, eff, source_ci, chosen_target_id, event_ctx)
+    def _nested_pending() -> bool:
+        # An effect pushed its own decision (a discard choice, a deck search …):
+        # the rest of this ability waits until it is answered.  This decision
+        # stays below it with ``effect_idx`` at the next effect and resumes when it
+        # is back on top.
+        return bool(s.pending_decisions) and s.pending_decisions[-1] is not top
+
+    # A choice was made for the first effect that needs one.  Effects printed
+    # BEFORE it resolve first, exactly as the legal-actions builder looked past
+    # them to offer the choice (automatic ones run, target-less ones fizzle), then
+    # the chosen target — kept only if still legal.
+    if chosen_target_id is not None:
+        while effect_idx < len(effects) and not _nested_pending():
+            eff = effects[effect_idx]
+            spec = _get_effect_target_spec(eff)
+            if spec is not None and spec.fixed is None:
+                if _gather_legal_targets(s, spec, source_ci, event_ctx):
+                    break
+                effect_idx += 1          # no legal target: fizzles
+                ctx["effect_idx"] = effect_idx
+                continue
+            s = execute_effect(s, eff, source_ci, None, event_ctx)
             effect_idx += 1
             ctx["effect_idx"] = effect_idx
-            # Re-acquire source_ci after possible state changes
             source_result2 = s.find_instance(source_id)
             if source_result2 is not None:
                 _, source_ci = source_result2
+        if effect_idx < len(effects) and not _nested_pending():
+            eff = effects[effect_idx]
+            spec = _get_effect_target_spec(eff)
+            if (spec is not None and chosen_target_id
+                    in _gather_legal_targets(s, spec, source_ci, event_ctx)):
+                s = execute_effect(s, eff, source_ci, chosen_target_id, event_ctx)
+                effect_idx += 1
+                ctx["effect_idx"] = effect_idx
+                # Re-acquire source_ci after possible state changes
+                source_result2 = s.find_instance(source_id)
+                if source_result2 is not None:
+                    _, source_ci = source_result2
 
     # Auto-resolve remaining auto-resolvable effects
     while effect_idx < len(effects):
+        if _nested_pending():
+            break
         eff = effects[effect_idx]
         spec = _get_effect_target_spec(eff)
         if spec is None or spec.fixed is not None:

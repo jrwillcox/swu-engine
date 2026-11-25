@@ -623,7 +623,12 @@ class GameSession:
           when the controller has *no* unit able to attack — leaving only a
           no-op decline.
 
-        In both cases the sole legal action is forced, so we auto-apply it in
+        * ``resolve_effects`` → ``AutoResolveEffects``.  An ability whose effect
+          pushed a choice parks its remaining effects in this decision; once the
+          choice is made and only automatic effects are left, it is offered
+          alone (it is never offered beside a real choice).
+
+        In each case the sole legal action is forced, so we auto-apply it in
         place.  We deliberately do **not** auto-resolve a ``granted_attack`` that
         still offers a real attack (those carry >1 action — the player keeps the
         choice) nor any other single-option decision.  Auto-applied actions are
@@ -631,7 +636,8 @@ class GameSession:
         ``event_log`` so the frontend still animates them.  Bot seats resolve
         their own bookmarks in ``advance_bot``'s loop, so this is human-only.
         """
-        from swu.engine.actions import ContinueAttack, DeclineGrantedAttack
+        from swu.engine.actions import (
+            AutoResolveEffects, ContinueAttack, DeclineGrantedAttack)
         s = self.state
         while (
             not s.is_terminal()
@@ -640,7 +646,7 @@ class GameSession:
         ):
             legal = legal_actions(s)
             if len(legal) != 1 or not isinstance(
-                legal[0], (ContinueAttack, DeclineGrantedAttack)
+                legal[0], (ContinueAttack, DeclineGrantedAttack, AutoResolveEffects)
             ):
                 break
             s = apply(s, legal[0])
@@ -674,6 +680,13 @@ class GameSession:
             events.extend(notices)
             events.extend(self.state.event_log[before:])
             iters += 1
+            # The bot's answer can leave the human a forced no-op (the rest of the
+            # human's ability, parked behind the bot's choice) — collapse it here
+            # too, which may hand the seat straight back to the bot.
+            if self.actor_id() == self.human_id:
+                before = len(self.state.event_log)
+                self._auto_resolve_forced_noops()
+                events.extend(self.state.event_log[before:])
         self._action_cache = {}
         return events
 

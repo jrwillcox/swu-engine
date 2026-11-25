@@ -423,6 +423,32 @@ def test_LAW_212_malakili_creatures_out_of_play_are_underworld(repo):
     assert not has_trait(state, theirs, "Underworld")
 
 
+def test_LAW_212_malakili_creature_in_deck_matches_an_underworld_search(repo):
+    """A deck search's filter reads the trait layer, so Malakili's grant counts
+    for a Creature in the deck (was: printed traits only)."""
+    from tests.test_shd_cards import _put_on_deck
+    from swu.engine.actions.deck import push_deck_search
+
+    def underworld(cd):
+        return "Underworld" in (getattr(cd, "traits", None) or ())
+
+    def candidates(state):
+        src = state.player_by_id("P0").ground_arena[0]
+        state.pending_decisions.clear()
+        push_deck_search(state, src, count=1, eligible=underworld, up_to=True)
+        return state.pending_decisions[-1].context["candidate_ids"]
+
+    state = _make_state()
+    creature_def = _get_card(repo, "LAW", "163")
+    assert "Underworld" not in creature_def.traits
+    _put_on_deck(state, "P0", [creature_def])
+    creature = state.player_by_id("P0").deck[0]
+    _place(state, "P0", _get_card(repo, "SOR", "46"))         # a search source
+    assert creature.instance_id not in candidates(state)
+    _place(state, "P0", _get_card(repo, "LAW", "212"))         # Malakili
+    assert creature.instance_id in candidates(state)
+
+
 # ── 7. granted Saboteur vs Sentinel ───────────────────────────────────────────
 
 def test_SHD_230_swoop_down_ignores_sentinel(repo):
