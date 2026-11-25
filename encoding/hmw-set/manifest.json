@@ -5,7 +5,7 @@
     "set_code": "HMW"
   },
   "total_deck_cards": 272,
-  "playable_deck_cards": 271,
+  "playable_deck_cards": 272,
   "groups": [
     {
       "gid": "hmw-set:01",
@@ -611,7 +611,7 @@
         "HMW_77",
         "HMW_144"
       ],
-      "done": 6,
+      "done": 7,
       "total": 7
     },
     {

@@ -315,7 +315,14 @@ class GameSession:
             else:
                 base = "Choose a unit in your discard pile to put on the bottom of your deck (its power = the damage dealt)."
         elif top.kind == "opponent_chooses_target":
-            if top.context.get("stage") == "confirm":
+            if (top.context.get("disposition") == "defeat_for_beast"
+                    and top.context.get("stage") == "confirm"):
+                base = ("You may defeat the chosen unit — if you do, its controller "
+                        "creates a Beast token. Confirm or decline.")
+            elif top.context.get("disposition") == "defeat_for_beast":
+                base = ("Choose a non-leader unit you control — it may be defeated, "
+                        "and you would then create a Beast token.")
+            elif top.context.get("stage") == "confirm":
                 base = "You may deal damage to the unit or base the opponent chose, or decline."
             elif top.context.get("disposition") == "defeat":
                 base = "Choose one of your units — the opponent will defeat it."
@@ -559,6 +566,25 @@ class GameSession:
                 if disposition == "bottom":
                     return f"Put {name} on the bottom"
                 return f"Discard {name}"
+        from swu.engine.actions import (
+            ConfirmOpponentDamage, DeclineOpponentDamage, SelectModalOption,
+        )
+        if isinstance(action, SelectModalOption) and self.state.pending_decisions:
+            ctx = self.state.pending_decisions[-1].context
+            labels = ctx.get("option_labels") or []
+            indices = ctx.get("option_indices") or []
+            if action.option_idx in indices and len(labels) == len(indices):
+                return labels[indices.index(action.option_idx)]
+        if (isinstance(action, (ConfirmOpponentDamage, DeclineOpponentDamage))
+                and self.state.pending_decisions
+                and self.state.pending_decisions[-1].context.get("disposition")
+                == "defeat_for_beast"):
+            # Mysterious Disappearance HMW_58: the confirm stage defeats, not damages.
+            chosen = self._card_name(
+                self.state.pending_decisions[-1].context.get("chosen_id") or "") or "the unit"
+            if isinstance(action, ConfirmOpponentDamage):
+                return f"Defeat {chosen} (its controller creates a Beast)"
+            return f"Don't defeat {chosen}"
         # Any other action: swap the instance ids in describe() for card names.
         return _ID_TOKEN.sub(
             lambda m: self._visible_card_name(m.group()) or m.group(),

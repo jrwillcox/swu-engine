@@ -60,7 +60,7 @@ adding one; `granted_attack` and `play_from_hand` take many options:
   `cost_reduction`, `then_damage`, `cost_max`, `grant_keyword`, `free`, `aspect`,
   `exclude_aspect`, `from_discard`, `ignore_aspect_penalty`, `defeat_at_regroup`,
   `grant_keyword_if_credit_spent`, `then_self_base_damage_cost` (Galactic Ambition
-  SOR_235), `eligible_ids` (restricts the choice, e.g. to discard cards),
+  SOR_235), `then_source_damage_cost_unless` (Mother Talzin IC27_66), `eligible_ids` (restricts the choice, e.g. to discard cards),
   `then_defeat_ids` (Consolidation of Power TWI_89), `then_defeat_played` (the played
   unit itself, beneath its When Played triggers; Maul HMW_16), and `cost_reduction_if_trait`, a
   `(trait, reduction)` pair that replaces `cost_reduction` for a card with that trait
@@ -74,7 +74,7 @@ adding one; `granted_attack` and `play_from_hand` take many options:
   Ability-made resources enter EXHAUSTED (Resupply SOR_126's ruling):
   `push_resource_from_hand(enters_exhausted=, then_resource_deck_top=)` (HMW_17,
   Ima-Gun Di HMW_44). `push_choose_modal(allow_repeat=True)` lets one option be picked
-  twice (Hunter HMW_35).
+  twice (Hunter HMW_35); `option_labels=[…]` names the web buttons (Seismic HMW_54).
 
 | Kind | Models | Example |
 |---|---|---|
@@ -89,7 +89,7 @@ adding one; `granted_attack` and `play_from_hand` take many options:
 | `say_no` | "Do X unless an opponent says no" | I Am Your Father SOR_233 |
 | `reveal_top` | "Reveal the top N; discard any; reorder the rest" (`disposition`, `deal_aspect_damage`) | For a Cause I Believe In SOR_152 |
 | `sacrifice_resource` | "You may defeat a friendly resource; if you do, deal N" | Wrecker SHD_154 |
-| `opponent_chooses_target` | "An opponent picks one of their units or their base; you may damage it" (`ground_only`) | Grey Squadron Y-Wing SHD_246 |
+| `opponent_chooses_target` | "An opponent picks one of their units or their base; you may damage it" (`ground_only`); `disposition="defeat_for_beast"` + `non_leader_only` + `chooser_id` = "A player chooses a non-leader unit they control. You may defeat it…" | Grey Squadron Y-Wing SHD_246, Mysterious Disappearance HMW_58 |
 | `reveal_resource_ramp` | "Reveal a resource that shares a name with a friendly unique unit; return it to hand and resource the top of your deck" (`optional`; gate `CONTROLLER_HAS_REVEAL_RAMP_RESOURCE`) | Hunter SHD_9 |
 | `select_distinct_return_random` | "Choose N differently named cards in your discard; return one at random" (`rng.choice`). No decline; pushed only when N distinct names exist. Related gate: `CONTROLLER_DISCARD_DISTINCT_COSTS_MIN`. | Doctor Aphra SHD_15 |
 | `repeated_modal` | "Discard up to N; for each, choose a different option" | Poe Dameron SHD_153 |

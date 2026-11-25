@@ -271,6 +271,13 @@ class PlayFromHand(Action):
         # paid cost is 0 under ``free``).
         self_base_dmg = (getattr(ci.card_def, "cost", 0) or 0) if bool(
             ctx.get("then_self_base_damage_cost")) else 0
+        # Mother Talzin IC27_66: "If it's not a Night or Undead unit, deal damage
+        # equal to its cost to this unit" — ``[source_id, [exempt traits]]``.
+        src_rider = ctx.get("then_source_damage_cost_unless")
+        src_dmg = 0
+        if src_rider and not (set(getattr(ci.card_def, "traits", None) or ())
+                              & set(src_rider[1])):
+            src_dmg = getattr(ci.card_def, "cost", 0) or 0
         grant_keyword = ctx.get("grant_keyword")
         # "If you defeated a Credit while paying its cost, that unit gains <kw>
         # for this phase" — Jabba the Hutt LAW_15 deployed action.
@@ -328,6 +335,10 @@ class PlayFromHand(Action):
             _apply_deal_damage(
                 s, deciding_ps.base_instance.instance_id, self_base_dmg,
                 source_name=ctx.get("then_damage_source"))
+        if src_dmg > 0 and s.find_instance(src_rider[0]) is not None:
+            from swu.abilities.resolver import _apply_deal_damage
+            _apply_deal_damage(s, src_rider[0], src_dmg,
+                               source_name=ctx.get("then_damage_source"))
 
         # "Then, defeat the chosen units" — the units whose combined power set this
         # play's cost ceiling (Consolidation of Power TWI_89).  After the play, so
@@ -1354,6 +1365,7 @@ def push_play_from_hand(
     waive_aspect: Optional[str] = None,
     any_card: bool = False,
     ignore_all_aspect_penalties: bool = False,
+    then_source_damage_cost_unless: Optional[tuple] = None,
 ) -> None:
     """Push a 'play_from_hand' decision: the source's controller plays a unit
     (matching ``trait`` if given) from hand, paying its cost (Admiral Ozzel).
@@ -1450,6 +1462,11 @@ def push_play_from_hand(
         free.  Deal damage to your base equal to its cost." (Galactic Ambition
         SOR_235).  Read off the printed cost (not the paid cost, which is 0 under
         ``free``).
+    then_source_damage_cost_unless
+        A tuple of traits: after the unit enters play, deal damage equal to its
+        printed cost to the SOURCE unit unless the played unit has one of those
+        traits (Mother Talzin IC27_66: "If it's not a Night or Undead unit, deal
+        damage equal to its cost to this unit").
 
     The play is mandatory if able: ``legal_actions`` offers a ``PlayFromHand``
     for every affordable matching unit and no decline.  If no matching unit is
@@ -1514,6 +1531,9 @@ def push_play_from_hand(
                 "eligible_ids": (list(eligible_ids)
                                  if eligible_ids is not None else None),
                 "then_self_base_damage_cost": then_self_base_damage_cost,
+                "then_source_damage_cost_unless": (
+                    [source_ci.instance_id, list(then_source_damage_cost_unless)]
+                    if then_source_damage_cost_unless is not None else None),
                 "cost_reduction_if_trait": (list(cost_reduction_if_trait)
                                             if cost_reduction_if_trait is not None
                                             else None),

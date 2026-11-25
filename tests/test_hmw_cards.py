@@ -4463,3 +4463,97 @@ def test_HMW_272_growth_beast_heal_3_draw_1(repo):
     ps = state.player_by_id("P0")
     assert _beasts(state, "P0") == 1 and _base(state, "P0").damage == 2
     assert [c.card_def.name for c in ps.hand] == ["Drawn"]
+
+
+# ── hmw-set:29 — Mysterious Disappearance HMW_58 ─────────────────────────────
+
+class TestMysteriousDisappearanceHMW_58:
+
+    def _cast(self, repo, state):
+        from tests.test_sor_cards import _play_event_from_hand
+        from tests.test_sec_cards import _drain as _sec_drain
+        state, _ = _play_event_from_hand(state, repo, "HMW", "58", resources=30)
+        return _sec_drain(state)
+
+    def _act(self, state, cls_name, **fields):
+        from swu.engine.actions import legal_actions, apply
+        acts = [a for a in legal_actions(state) if type(a).__name__ == cls_name
+                and all(getattr(a, k) == v for k, v in fields.items())]
+        assert acts, f"no {cls_name} {fields} offered"
+        return apply(state, acts[0])
+
+    def _board(self):
+        state = _make_state()
+        foe = _place(state, "P1", _unit("Foe", "51", power=5, hp=6))
+        mine = _place(state, "P0", _unit("Mine", "52", hp=3))
+        return state, foe, mine
+
+    def test_HMW_58_opponent_chooses_you_defeat_they_get_a_beast(self, repo):
+        from tests.test_sec_cards import _pick_modal
+        state, foe, mine = self._board()
+        state = self._cast(repo, state)
+        assert state.pending_decisions[-1].kind == "choose_two_modal"
+        state = _pick_modal(state, 2)                              # the opponent
+        top = state.pending_decisions[-1]
+        assert top.kind == "opponent_chooses_target" and top.deciding_player_id == "P1"
+        state = self._act(state, "ChooseOwnTarget", target_id=foe.instance_id)
+        assert state.pending_decisions[-1].deciding_player_id == "P0"
+        state = self._act(state, "ConfirmOpponentDamage")
+        assert state.find_instance(foe.instance_id)[1].zone.name == "DISCARD"
+        assert _beasts(state, "P1") == 1 and _beasts(state, "P0") == 0
+        assert state.find_instance(mine.instance_id)[1].zone.name == "GROUND_ARENA"
+
+    def test_HMW_58_declining_defeats_nothing_and_makes_no_beast(self, repo):
+        from tests.test_sec_cards import _pick_modal
+        state, foe, _ = self._board()
+        state = _pick_modal(self._cast(repo, state), 2)
+        state = self._act(state, "ChooseOwnTarget", target_id=foe.instance_id)
+        from tests.test_sec_cards import _drain as _sec_drain
+        state = _sec_drain(self._act(state, "DeclineOpponentDamage"))
+        assert state.find_instance(foe.instance_id)[1].zone.name == "GROUND_ARENA"
+        assert _beasts(state, "P1") == 0 and not state.pending_decisions
+
+    def test_HMW_58_you_may_choose_yourself(self, repo):
+        from tests.test_sec_cards import _pick_modal
+        state, _, mine = self._board()
+        state = _pick_modal(self._cast(repo, state), 1)            # you
+        assert state.pending_decisions[-1].deciding_player_id == "P0"
+        state = self._act(state, "ChooseOwnTarget", target_id=mine.instance_id)
+        state = self._act(state, "ConfirmOpponentDamage")
+        assert state.find_instance(mine.instance_id)[1].zone.name == "DISCARD"
+        assert _beasts(state, "P0") == 1 and _beasts(state, "P1") == 0
+
+    def test_HMW_58_skips_the_player_choice_when_one_side_has_no_units(self, repo):
+        state = _make_state()
+        foe = _place(state, "P1", _unit("Foe", "51"))
+        _place(state, "P0", _get_leader(repo, "HMW", "4"))          # leaders don't count
+        state = self._cast(repo, state)
+        top = state.pending_decisions[-1]
+        assert top.kind == "opponent_chooses_target" and top.deciding_player_id == "P1"
+        from swu.engine.actions import legal_actions
+        assert {a.target_id for a in legal_actions(state)} == {foe.instance_id}
+
+    def test_HMW_58_leaders_cannot_be_chosen(self, repo):
+        from tests.test_sec_cards import _pick_modal
+        from swu.engine.actions import legal_actions
+        state, foe, _ = self._board()
+        _place(state, "P1", _get_leader(repo, "HMW", "4"))
+        state = _pick_modal(self._cast(repo, state), 2)
+        assert {a.target_id for a in legal_actions(state)} == {foe.instance_id}
+
+    def test_HMW_58_fizzles_with_no_non_leader_units(self, repo):
+        state = self._cast(repo, _make_state())
+        assert not state.pending_decisions
+
+    def test_HMW_58_bot_defeats_a_big_enemy_but_spares_a_small_one(self, repo):
+        from swu.players.heuristic_bot import HeuristicBot
+        from swu.engine.actions import legal_actions
+        for power, hp, expect in ((6, 7, "ConfirmOpponentDamage"),
+                                  (1, 1, "DeclineOpponentDamage")):
+            state = _make_state()
+            foe = _place(state, "P1", _unit("Foe", "51", power=power, hp=hp))
+            state = self._cast(repo, state)
+            state = self._act(state, "ChooseOwnTarget", target_id=foe.instance_id)
+            bot = HeuristicBot("P0", seed=0)
+            pick = bot.choose_action(state.view_for("P0"), legal_actions(state))
+            assert type(pick).__name__ == expect

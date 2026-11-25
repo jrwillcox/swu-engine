@@ -626,7 +626,8 @@ def _third_sister():
 
 def _seismic_choose(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import push_choose_modal
-    push_choose_modal(state, source_ci, option_indices=[1, 2], pick=1)
+    push_choose_modal(state, source_ci, option_indices=[1, 2], pick=1,
+                      option_labels=["Ground arena", "Space arena"])
     return state
 
 
@@ -3970,7 +3971,8 @@ def _easy_prey_hmw():
 
 def _sandstorm_choose(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import push_choose_modal
-    push_choose_modal(state, source_ci, option_indices=[2, 3], pick=1)
+    push_choose_modal(state, source_ci, option_indices=[2, 3], pick=1,
+                      option_labels=["Ground arena", "Space arena"])
     return state
 
 
@@ -4063,12 +4065,66 @@ def _defoliator_tank():
 #
 # The Beast token is a vanilla 3/3 ground Creature TokenUnit row, so
 # ``CreateTokenUnit("Beast")`` / ``_create_token_units`` need no machinery.
-# Mysterious Disappearance HMW_58 ("A player chooses a non-leader unit they
-# control.  You may defeat that unit.  If you do, that player creates a Beast
-# token.") is NOT encoded: it needs a choose-a-player → that player picks → you
-# confirm flow (a new ``opponent_chooses_target`` disposition with bot and web
-# handling) — flagged for a framework session.
+# Mysterious Disappearance HMW_58 uses the ``opponent_chooses_target``
+# ``"defeat_for_beast"`` disposition, with ``chooser_id`` naming the player.
 # ══════════════════════════════════════════════════════════════════════════════
+
+
+def _has_non_leader_unit(ps) -> bool:
+    from swu.cards.models import Leader
+    return any(not isinstance(u.card_def, Leader)
+               for u in ps.ground_arena + ps.space_arena)
+
+
+def _mysterious_push(state, source_ci, chooser_id):
+    from swu.engine.actions import push_opponent_chooses_target
+    push_opponent_chooses_target(state, source_ci, units_only=True,
+                                 non_leader_only=True, disposition="defeat_for_beast",
+                                 chooser_id=chooser_id)
+
+
+def _mysterious_pick(chooser):
+    def _fn(state, source_ci, target_id, event_ctx):
+        me = actor_of(state, source_ci)
+        chooser_id = me if chooser == "me" else next(
+            p.player_id for p in state.players if p.player_id != me)
+        _mysterious_push(state, source_ci, chooser_id)
+        return state
+    return _fn
+
+
+def _mysterious_choose(state, source_ci, target_id, event_ctx):
+    """Choose the player — only among players with a non-leader unit; with one
+    such player there is nothing to choose."""
+    from swu.engine.actions import push_choose_modal
+    me = actor_of(state, source_ci)
+    options = [(1, "You choose one of your units", me)]
+    options += [(2, "Your opponent chooses one of their units", p.player_id)
+                for p in state.players if p.player_id != me]
+    live = [o for o in options if _has_non_leader_unit(state.player_by_id(o[2]))]
+    if len(live) == 1:
+        _mysterious_push(state, source_ci, live[0][2])
+    elif live:
+        push_choose_modal(state, source_ci, option_indices=[o[0] for o in live],
+                          pick=1, option_labels=[o[1] for o in live])
+    return state
+
+
+@card_ability("HMW", "58")
+def _mysterious_disappearance():
+    """HMW_58 — Mysterious Disappearance (Event, Trick, 2): "A player chooses a
+    non-leader unit they control.  You may defeat that unit.  If you do, that
+    player creates a Beast token."
+
+    Index 0 picks the player (the Seismic HMW_54 option shape); options 1 (you)
+    and 2 (your opponent) push the two-stage choose → confirm decision."""
+    return [
+        EventAbility(effects=[CustomEffect(fn=_mysterious_choose)]),
+        TriggerAbility(trigger=WhenPlayed(),
+                       effects=[CustomEffect(fn=_mysterious_pick("me"))]),
+        TriggerAbility(trigger=WhenPlayed(),
+                       effects=[CustomEffect(fn=_mysterious_pick("opponent"))]),
+    ]
 
 
 def _ready_resources(state, source_ci):

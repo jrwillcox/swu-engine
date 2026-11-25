@@ -1,6 +1,6 @@
 # Encoding manifest — `hmw-set`
 
-Deck readiness: **271/272** cards playable. Encoding groups: **30/31** complete.
+Deck readiness: **272/272** cards playable. Encoding groups: **31/31** complete.
 
 Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py hmw-set --group NN`.
 
@@ -36,7 +36,7 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 | 26 | `hmw-set:26` | ability | New primitive: weakness-token | 7 | 7/7 ✅ | — | — |
 | 27 | `hmw-set:27` | ability | New primitive: weakness-token | 7 | 7/7 ✅ | — | — |
 | 28 | `hmw-set:28` | ability | New primitive: weakness-token | 3 | 3/3 ✅ | — | — |
-| 29 | `hmw-set:29` | ability | New primitive: beast-token | 7 | 6/7 | — | — |
+| 29 | `hmw-set:29` | ability | New primitive: beast-token | 7 | 7/7 ✅ | — | — |
 | 30 | `hmw-set:30` | ability | New primitive: beast-token | 7 | 7/7 ✅ | — | — |
 | 31 | `hmw-set:31` | ability | New primitive: beast-token | 3 | 3/3 ✅ | — | — |
 
@@ -212,7 +212,7 @@ hmw-set:28
 # Sandstorm (HMW_240), Occupation Officer (HMW_242), Defoliator Tank (HMW_248)
 ```
 
-### `hmw-set:29` — New primitive: beast-token (6/7)
+### `hmw-set:29` — New primitive: beast-token (✅ done)
 ```
 hmw-set:29
 # Tarfful (HMW_10), Poggle the Lesser (HMW_12), Bestial Bond (HMW_38), Eravana (HMW_47), Mysterious Disappearance (HMW_58), Boss Nass (HMW_77), Howler Pack (HMW_144)
