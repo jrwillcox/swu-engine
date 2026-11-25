@@ -1142,7 +1142,10 @@ def _defeat_unit(s: GameState, owner_ps: PlayerState, ci: CardInstance,
         # any discard pile (like Shield/Experience tokens; see _create_token_units).
         pass
     else:
+        # A card in the discard pile carries no damage: a unit replayed from there
+        # (Second Chance SHD_53, Tireless Magnaguard HMW_109) is a new object.
         ci.zone = Zone.DISCARD
+        ci.damage = 0
         owner_of_card.discard.append(ci)
 
 

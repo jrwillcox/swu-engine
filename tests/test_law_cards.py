@@ -1176,8 +1176,9 @@ class TestJabbasRancor:
         assert state.pending_decisions[-1].deciding_player_id == "P0"
         state = apply(state, next(a for a in legal_actions(state)
                                   if isinstance(a, ConfirmOpponentDamage)))
+        # 7 damage defeats it; a card in the discard pile keeps no damage.
         _, hit = state.find_instance(enemy_ground.instance_id)
-        assert hit.damage == 7
+        assert hit.zone.name == "DISCARD" and hit.damage == 0
         assert not any(d.kind == "opponent_chooses_target"
                        for d in state.pending_decisions)
 

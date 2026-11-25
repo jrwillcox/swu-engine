@@ -1,6 +1,6 @@
 # Encoding manifest — `p26-set`
 
-Deck readiness: **184/189** cards playable. Encoding groups: **3/6** complete.
+Deck readiness: **185/189** cards playable. Encoding groups: **4/6** complete.
 
 Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py p26-set --group NN`.
 
@@ -12,7 +12,7 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 | 2 | `p26-set:02` | ability | Card advantage & disruption | 3 | 0/3 | — | — |
 | 3 | `p26-set:03` | ability | Combat tricks, buffs & tempo | 7 | 6/7 | — | — |
 | 4 | `p26-set:04` | ability | Combat tricks, buffs & tempo | 1 | 1/1 ✅ | — | — |
-| 5 | `p26-set:05` | ability | Miscellaneous abilities | 4 | 3/4 | — | — |
+| 5 | `p26-set:05` | ability | Miscellaneous abilities | 4 | 4/4 ✅ | — | — |
 | 6 | `p26-set:06` | keyword | Fortify keyword | 1 | 1/1 ✅ | — | — |
 
 ## Copy-paste entries
@@ -43,7 +43,7 @@ p26-set:04
 # Chewbacca (P26_275)
 ```
 
-### `p26-set:05` — Miscellaneous abilities (3/4)
+### `p26-set:05` — Miscellaneous abilities (✅ done)
 ```
 p26-set:05
 # Emperor Palpatine (P26_28), Fett's Firespray (P26_32), Fett's Firespray (P26_241), Boba Fett (P26_272)
