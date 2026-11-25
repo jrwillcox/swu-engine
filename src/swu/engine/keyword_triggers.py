@@ -26,6 +26,8 @@ the other unit's.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -144,7 +146,7 @@ def _push_support_attack(state: "GameState", source_ci) -> "GameState":
     # entered play in any other phase (a regroup-time effect) simply does nothing.
     if state.phase != Phase.ACTION or state.is_terminal():
         return state
-    owner_idx = state.player_index(source_ci.owner_id)
+    owner_idx = state.player_index(actor_of(state, source_ci))
     owner_ps = state.players[owner_idx]
     enemy_ps = state.players[1 - owner_idx]
     probe = {"source_id": source_ci.instance_id, "exclude_source": True}

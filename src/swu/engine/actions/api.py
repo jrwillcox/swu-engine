@@ -34,13 +34,16 @@ the sorted set of names and field names against a golden list precisely so that 
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from swu.cards.models import AnyCard, Base, Event, Leader, Upgrade, Unit
 from swu.engine.decisions import PendingDecision
+from swu.engine.discard_payoffs import discard_payoff
 from swu.engine.events import (
     AttackDeclared, CardPlayed, CardResourced,
     ControlChanged, DamageDealt, DecisionPushed, DecisionResolved, HandDrawn, HandKept, InitiativeTaken,
@@ -57,7 +60,7 @@ from swu.engine.actions.dispatch import (
     decision_handler, register_decisions,
 )
 from swu.engine.actions.costs import (
-    _affordable_with_credits, _consume_play_discount, _consume_standing_discount, _defeat_credit, _discard_cost_candidates, _discard_cost_payable, _exhaust_resources, _pay_play_cost, _pilot_count, _pilot_limit, _piloting_cost, _piloting_discount_entry, _play_cost, _smuggle_cost, resource_cost_for,
+    _affordable_with_credits, _consume_play_discount, _consume_standing_discount, _defeat_credit, _discard_cost_payable, _exhaust_resources, _pay_play_cost, _pilot_slot_free, _piloting_cost, _play_cost, _spend_piloting_discounts, resource_cost_for,
 )
 from swu.engine.actions.damage import (
     base_damage_after_prevention,
@@ -72,13 +75,19 @@ from swu.engine.actions.shared import (
     _attach_pilot, _deploy_leader_into_arena, _eligible_pilot_targets, _enumerate_discard_play_actions, _plot_eligible_resource_ids, _plot_play_actions, _take_from_hand, spend_force_token,
 )
 from swu.engine.actions.combat import (
-    _enumerate_attacks, _enumerate_two_unit_attacks, _filter_granted_attacks, _forced_attack_actions, note_hand_or_deck_discard, record_hand_discard,
+    _enumerate_attacks, _enumerate_two_unit_attacks, _filter_granted_attacks, _forced_attack_actions,
 )
 from swu.engine.actions.observers import (
     _fire_base_damage_observers, _fire_damage_observers, _fire_bounty_observers, _fire_deck_discard_observers, _fire_draw_observers, _fire_force_observers, _fire_hand_discard_observers, _fire_heal_observers, _fire_noncombat_damage_observers, _fire_ready_observers, _fire_reveal_discard_observers, _fire_self_discard_observers, _fire_token_creation_observers, _fire_unit_entry_observers, _fire_upgrade_attach_observers, _fire_upgrade_defeat_observers,
 )
 from swu.engine.actions.sacrifice import (
-    _cost_route_affordable, _cost_route_of, push_cost_route,
+    _cost_route_affordable, _cost_route_of, _has_aspect, push_cost_route,
+)
+from swu.engine.actions.discard import (
+    push_discard_of_choice,
+)
+from swu.engine.actions.hand import (
+    _smuggle_play, _smuggle_play_targets,
 )
 from swu.engine.actions.turn import (
     _advance_mulligan, _advance_setup_resources, _check_regroup_complete, _enter_regroup, _starting_hand_modifier, _starting_hand_size,
@@ -279,10 +288,16 @@ class PlayCard(Action):
                 "This card may only be played as your first action")
 
         # ── "While playing this unit" cost route (Greater Sarlacc HMW_49, The
-        # Marauder HMW_125): park the card and settle its price first — the
-        # Exploit skeleton, as its own ``cost_route`` decision.
-        if isinstance(ci.card_def, Unit):
+        # Marauder HMW_125), or an event's alternative cost (Bamboozle SOR_199): park
+        # the card and settle its price first — the Exploit skeleton, as its own
+        # ``cost_route`` decision.
+        if isinstance(ci.card_def, (Unit, Event)):
             route = _cost_route_of(ci.card_def)
+            # No hand card to pay an alternative cost with: nothing to choose, so
+            # the play goes ahead at the normal price without the prompt.
+            if route is not None and route.kind == "discard_aspect_card" and not any(
+                    _has_aspect(c, route.aspect) for c in ps.hand):
+                route = None
             if route is not None:
                 push_cost_route(s, ps, ci, route)
                 return s
@@ -417,41 +432,10 @@ class SmugglePlay(Action):
             raise IllegalActionError(
                 f"Smuggle source {self.instance_id} not in resource zone")
 
-        cost = _smuggle_cost(s, ci, ps)
-        if cost is None:
-            raise IllegalActionError(
-                f"{ci.card_def.display_name} cannot be played using Smuggle")
-        # Pay from the OTHER resources (ci is already removed from the zone).
-        if ps.available_resources < cost:
-            raise IllegalActionError(
-                f"Insufficient resources: need {cost}, have {ps.available_resources}")
-        _exhaust_resources(ps, cost)
-
-        # Replace the smuggled card with the top card of the deck (deterministic).
-        if ps.deck:
-            repl = ps.deck.pop(0)
-            repl.zone = Zone.RESOURCES
-            repl.face_down = True
-            repl.exhausted = False
-            ps.resources.append(repl)
-            s.event_log.append(CardResourced(
-                player_id=ps.player_id,
-                instance_id=repl.instance_id,
-                card_name=repl.card_def.display_name,
-            ))
-
-        ci.face_down = False
-        card_played_evt = CardPlayed(
-            player_id=ps.player_id,
-            instance_id=ci.instance_id,
-            card_name=ci.card_def.display_name,
-            cost_paid=cost,
-        )
-        s.event_log.append(card_played_evt)
-
-        card_aspects = {a.name for a in (getattr(ci.card_def, "aspects", None) or ())}
-        if "Villainy" in card_aspects:
-            s.game_memory.villainy_players_this_phase.add(ps.player_id)
+        # Pays from the OTHER resources (ci is already out of the zone), charges a
+        # Smuggle rider (First Light SHD_36: ``upgrade_target_id`` names the friendly
+        # unit that takes the damage) and replaces the card from the deck top.
+        card_played_evt = _smuggle_play(s, ps, ci, self.upgrade_target_id)
 
         after_idx = 1 - s.active_player_index
 
@@ -519,16 +503,19 @@ class PilotPlay(Action):
             raise IllegalActionError(
                 f"Pilot source {self.instance_id} not in hand")
 
-        cost = _piloting_cost(s, ci, ps)
+        cost = _piloting_cost(s, ci, ps, self.vehicle_target_id)
         if cost is None:
             raise IllegalActionError(
                 f"{ci.card_def.display_name} cannot be played as a pilot")
-        # Consume the pending Piloting-aware discount this cost already reflects
-        # (Wedge Antilles JTL_8), so it applies to exactly one Pilot play.
-        _disc_idx = _piloting_discount_entry(s, ci, ps)
-        if _disc_idx is not None:
-            del s.game_memory.pending_play_discounts[_disc_idx]
+        if not any(h.instance_id == self.vehicle_target_id
+                   for h in _eligible_pilot_targets(s, ps, ci)):
+            raise IllegalActionError(
+                f"{self.vehicle_target_id} has no free Pilot slot for "
+                f"{ci.card_def.display_name}")
         _pay_play_cost(s, ps, cost)
+        # Spend the discounts this cost already reflects (Wedge Antilles JTL_8's
+        # pending one, a once-per-round standing upgrade one), exactly once.
+        _spend_piloting_discounts(s, ci, ps, self.vehicle_target_id)
 
         card_aspects = {a.name for a in (getattr(ci.card_def, "aspects", None) or ())}
         if "Villainy" in card_aspects:
@@ -895,7 +882,7 @@ class UseAbility(Action):
             _any_player = getattr(
                 ability.ability if isinstance(ability, GrantedAbility) else ability,
                 "any_player", False)
-            if source_ci.owner_id != active_ps.player_id and not _any_player:
+            if actor_of(state, source_ci) != active_ps.player_id and not _any_player:
                 raise IllegalActionError("Cannot use opponent's ability")
 
         # A granted activated ability: an attached upgrade (``source_ci``) confers
@@ -914,6 +901,8 @@ class UseAbility(Action):
         # The ability's source for gating/effects is the host when granted by an
         # upgrade, the acting unit when granted by an aura, else self.
         res_ci = host_ci if granted else (aura_actor if aura_actor is not None else source_ci)
+        if res_ci is None:
+            raise IllegalActionError("Ability has no card to resolve from")
         if ability.condition is not None and not ability.condition.evaluate(s, res_ci):
             raise IllegalActionError("Ability condition not met")
         # An aura grants the SAME spec to many units, so its once-per-round
@@ -926,6 +915,7 @@ class UseAbility(Action):
             raise IllegalActionError("Ability already used this round")
 
         # Pay costs
+        discard_cost: Optional[DiscardCardCost] = None
         for cost in ability.costs:
             if isinstance(cost, ExhaustSelf):
                 # "Exhaust this unit" targets the host for an upgrade-granted
@@ -960,15 +950,10 @@ class UseAbility(Action):
                 for _ in range(want):
                     _defeat_credit(s, active_ps)
             elif isinstance(cost, DiscardCardCost):
+                # Paid by CHOICE below, once the other costs are settled.
                 if not _discard_cost_payable(active_ps, cost):
                     raise IllegalActionError("No qualifying card in hand to discard")
-                for _ in range(int(getattr(cost, "count", 1) or 1)):
-                    dc = _discard_cost_candidates(active_ps, cost)[0]
-                    active_ps.hand.remove(dc)
-                    dc.zone = Zone.DISCARD
-                    active_ps.discard.append(dc)
-                    note_hand_or_deck_discard(s, dc)
-                    record_hand_discard(s, active_ps.player_id)
+                discard_cost = cost
 
         # Mark epic if applicable
         if ability.epic:
@@ -982,59 +967,25 @@ class UseAbility(Action):
         s.game_memory.activated_ability_use_counts[self.source_id] = (
             s.game_memory.activated_ability_use_counts.get(self.source_id, 0) + 1)
 
-        # Build resolution context and push effects.  "Take an extra action after
-        # this one" (Kazuda Xiono JTL_18) keeps the seat instead of handing it
-        # over — here for the deferred path (whoever is active once the decision
-        # pops) and below for the inline one.
-        after_idx = (s.active_player_index if getattr(ability, "extra_action", False)
-                     else 1 - s.active_player_index)
-        from swu.abilities.resolver import _ability_can_inline, _resolve_inline
-
-        # Construct a TriggerAbility wrapper to reuse inline resolution logic.  The
-        # effect resolves from the host for a granted ability (``res_ci``), so
-        # "attack with this unit" / SELF references point at the host.
-        from swu.abilities.registry import TriggerAbility
-        trigger_wrapper = TriggerAbility(trigger=None, effects=ability.effects, optional=False)
-
-        # The player USING the ability — normally the source's controller, but for an
-        # "Any player may use this ability" spec (Mercenary Gunship SHD_256) it may be
-        # the opponent, and the effect ("Take control of this unit") needs to know who.
-        event_ctx: dict = {"ability_user_id": active_ps.player_id}
-        if _ability_can_inline(trigger_wrapper, s, res_ci, event_ctx):
-            s = _resolve_inline(s, trigger_wrapper, res_ci, event_ctx)
-            # An inline effect may itself push a decision (e.g. Admiral Ozzel's
-            # CustomEffect pushes a 'play_from_hand' decision).  Only hand the
-            # turn over when the ability fully resolved with no decision pending —
-            # and not at all for an ``extra_action`` ability (JTL_18).
-            if (not s.is_terminal() and not s.pending_decisions
-                    and not getattr(ability, "extra_action", False)):
-                _switch_active_player(s)
-        else:
-            # Deferred path: address the spec by the card whose registry holds it
-            # (the UPGRADE for a granted ability — ``self.source_id``) and resolve
-            # from the host (``res_ci``).  ``unwrap_granted`` at the resolve site
-            # yields the inner ActivatedAbility's effects.
-            dec = PendingDecision(
-                deciding_player_id=active_ps.player_id,
-                kind="resolve_effects",
-                context={
-                    "set_code": source_ci.card_def.set_code or "",
-                    "card_number": source_ci.card_def.card_number or "",
-                    "ability_idx": self.ability_idx,
-                    "source_id": res_ci.instance_id,
-                    "effect_idx": 0,
-                    "resolved_targets": {},
-                    "event_ctx": event_ctx,
-                    "after_all_player_idx": after_idx,
-                },
-                after_resolve_player_index=after_idx,
-            )
-            s.pending_decisions.append(dec)
-            s.event_log.append(DecisionPushed(
-                deciding_player_id=active_ps.player_id,
-                kind="resolve_effects",
-            ))
-        return s
+        if discard_cost is not None:
+            # "Action [discard a card from your hand]" — the player picks the card;
+            # the effects resolve once it is discarded (the payoff below).
+            extra = bool(getattr(ability, "extra_action", False))
+            push_discard_of_choice(
+                s, active_ps.player_id, int(getattr(discard_cost, "count", 1) or 1),
+                source_id=res_ci.instance_id,
+                after_idx=(s.active_player_index if extra
+                           else 1 - s.active_player_index),
+                eligible=_discard_cost_card_filter(discard_cost),
+                payoff="resume_activated_ability",
+                payoff_args={"spec_source_id": source_ci.instance_id,
+                             "ability_idx": self.ability_idx,
+                             "actor_id": self.actor_id,
+                             "res_id": res_ci.instance_id,
+                             "user_id": active_ps.player_id})
+            return s
+        return _resolve_activated_effects(s, source_ci, self.ability_idx, ability,
+                                          res_ci, active_ps.player_id)
 
     def describe(self) -> str:
         # The actor must appear for an aura grant: one source offers the SAME
@@ -1044,6 +995,91 @@ class UseAbility(Action):
             return (f"Use ability {self.ability_idx} of {self.source_id} "
                     f"with {self.actor_id}")
         return f"Use ability {self.ability_idx} of {self.source_id}"
+
+
+def _discard_cost_card_filter(cost) -> Optional[Callable[[object], bool]]:
+    """The card filter of a ``DiscardCardCost`` ("a card that costs 6 or more" —
+    Dryden Vos SEC_7), as a card_def predicate; None when any card will do."""
+    lo = getattr(cost, "cost_min", None)
+    if lo is None:
+        return None
+    return lambda cd: int(getattr(cd, "cost", None) or 0) >= int(lo)
+
+
+def _resolve_activated_effects(
+    s: GameState, source_ci: CardInstance, ability_idx: int, ability,
+    res_ci: CardInstance, user_id: str,
+) -> GameState:
+    """Resolve a used activated ability's effects once its costs are paid: inline
+    when possible, else as a ``resolve_effects`` decision.  ``source_ci`` holds the
+    spec (the UPGRADE for a granted ability); ``res_ci`` is what it resolves from
+    (the host, or the acting unit for an aura grant)."""
+    # "Take an extra action after this one" (Kazuda Xiono JTL_18) keeps the seat
+    # instead of handing it over — here for the deferred path (whoever is active
+    # once the decision pops) and below for the inline one.
+    extra = bool(getattr(ability, "extra_action", False))
+    after_idx = s.active_player_index if extra else 1 - s.active_player_index
+    from swu.abilities.resolver import _ability_can_inline, _resolve_inline
+
+    # Construct a TriggerAbility wrapper to reuse inline resolution logic.  The
+    # effect resolves from the host for a granted ability (``res_ci``), so
+    # "attack with this unit" / SELF references point at the host.
+    from swu.abilities.registry import TriggerAbility
+    trigger_wrapper = TriggerAbility(trigger=None, effects=ability.effects, optional=False)
+
+    # The player USING the ability — normally the source's controller, but for an
+    # "Any player may use this ability" spec (Mercenary Gunship SHD_256) it may be
+    # the opponent, and the effect ("Take control of this unit") needs to know who.
+    event_ctx: dict = {"ability_user_id": user_id}
+    if _ability_can_inline(trigger_wrapper, s, res_ci, event_ctx):
+        s = _resolve_inline(s, trigger_wrapper, res_ci, event_ctx)
+        # An inline effect may itself push a decision (e.g. Admiral Ozzel's
+        # CustomEffect pushes a 'play_from_hand' decision).  Only hand the
+        # turn over when the ability fully resolved with no decision pending —
+        # and not at all for an ``extra_action`` ability (JTL_18).
+        if not s.is_terminal() and not s.pending_decisions and not extra:
+            _switch_active_player(s)
+        return s
+    # Deferred path: address the spec by the card whose registry holds it (the
+    # UPGRADE for a granted ability) and resolve from the host (``res_ci``).
+    # ``unwrap_granted`` at the resolve site yields the inner ActivatedAbility.
+    s.pending_decisions.append(PendingDecision(
+        deciding_player_id=user_id,
+        kind="resolve_effects",
+        context={
+            "set_code": source_ci.card_def.set_code or "",
+            "card_number": source_ci.card_def.card_number or "",
+            "ability_idx": ability_idx,
+            "source_id": res_ci.instance_id,
+            "effect_idx": 0,
+            "resolved_targets": {},
+            "event_ctx": event_ctx,
+            "after_all_player_idx": after_idx,
+        },
+        after_resolve_player_index=after_idx,
+    ))
+    s.event_log.append(DecisionPushed(deciding_player_id=user_id,
+                                      kind="resolve_effects"))
+    return s
+
+
+@discard_payoff("resume_activated_ability")
+def _resume_activated_ability(s: GameState, source_id, discarded: list,
+                              args: dict) -> None:
+    """The ``DiscardCardCost`` was paid by choice: now resolve the ability."""
+    from swu.abilities.registry import (
+        get_abilities, GrantedAbility, AuraGrantedAbility)
+    spec_res = s.find_instance(args["spec_source_id"])
+    res_res = s.find_instance(args["res_id"])
+    if spec_res is None or res_res is None:
+        return
+    spec_ci = spec_res[1]
+    ability = get_abilities(spec_ci.card_def.set_code or "",
+                            spec_ci.card_def.card_number or "")[int(args["ability_idx"])]
+    if isinstance(ability, (GrantedAbility, AuraGrantedAbility)):
+        ability = ability.ability
+    _resolve_activated_effects(s, spec_ci, int(args["ability_idx"]), ability,
+                               res_res[1], args["user_id"])
 
 
 # ── legal_actions ─────────────────────────────────────────────────────────────
@@ -1116,7 +1152,7 @@ def legal_actions(state: GameState) -> list[Action]:
             continue
         if isinstance(card, (Unit, Event)):
             cost = _play_cost(state, ci, ps)
-            route = _cost_route_of(card) if isinstance(card, Unit) else None
+            route = _cost_route_of(card)
             if route is not None:
                 # "While playing this unit" cost route: best-case affordability.
                 if _cost_route_affordable(state, ci, ps, cost, route):
@@ -1754,26 +1790,12 @@ def _named_card_play_forbidden(state: GameState, ci: CardInstance,
 
 def _enumerate_smuggle_plays(state: GameState, ps: PlayerState) -> list[Action]:
     """SmugglePlay actions for every resource the active player may smuggle now."""
-    acts: list[Action] = []
-    for ci in ps.resources:
-        cost = _smuggle_cost(state, ci, ps)
-        if cost is None:
-            continue
-        # Cost is paid from the OTHER resources (the smuggled card itself leaves
-        # the zone and is replaced from the deck).
-        other_ready = sum(
-            1 for r in ps.resources
-            if not r.exhausted and r.instance_id != ci.instance_id
-        )
-        if other_ready < cost:
-            continue
-        card = ci.card_def
-        if isinstance(card, Upgrade):
-            for target in _eligible_upgrade_targets(state, ci):
-                acts.append(SmugglePlay(ci.instance_id, target.instance_id))
-        else:
-            acts.append(SmugglePlay(ci.instance_id))
-    return acts
+    # ``_smuggle_play_targets`` prices each option (paid from the OTHER resources:
+    # the smuggled card leaves the zone) and lists an upgrade's hosts or a Smuggle
+    # rider's friendly units (First Light SHD_36).
+    return [SmugglePlay(ci.instance_id, target)
+            for ci in ps.resources
+            for target in _smuggle_play_targets(state, ps, ci)]
 
 
 _DEPLOY_AS_UPGRADE_RE = re.compile(r"as an upgrade", re.IGNORECASE)
@@ -1797,8 +1819,7 @@ def _eligible_leader_upgrade_targets(state: GameState, ps: PlayerState) -> list[
     (Millennium Falcon JTL_249 hosts a second Pilot)."""
     from swu.engine.traits import has_trait
     return [ci for ci in ps.ground_arena + ps.space_arena
-            if has_trait(state, ci, "Vehicle")
-            and _pilot_count(ci) < _pilot_limit(ci)]
+            if has_trait(state, ci, "Vehicle") and _pilot_slot_free(ci)]
 
 
 def _enumerate_pilot_plays(state: GameState, ps: PlayerState) -> list[Action]:
@@ -1807,13 +1828,12 @@ def _enumerate_pilot_plays(state: GameState, ps: PlayerState) -> list[Action]:
     for ci in ps.hand:
         if not isinstance(ci.card_def, Unit):
             continue
-        cost = _piloting_cost(state, ci, ps)
-        if cost is None:
+        if _piloting_cost(state, ci, ps) is None:
             continue
-        if not _affordable_with_credits(ps, cost, state):
-            continue
-        for target in _eligible_pilot_targets(state, ps):
-            acts.append(PilotPlay(ci.instance_id, target.instance_id))
+        for target in _eligible_pilot_targets(state, ps, ci):
+            cost = _piloting_cost(state, ci, ps, target.instance_id)
+            if cost is not None and _affordable_with_credits(ps, cost, state):
+                acts.append(PilotPlay(ci.instance_id, target.instance_id))
     return acts
 
 

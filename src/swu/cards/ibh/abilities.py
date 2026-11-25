@@ -36,6 +36,8 @@ Groups encoded (all shipped-set reprint canonicals):
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from swu.abilities.registry import (
     card_ability,
     TriggerAbility, EventAbility, ActivatedAbility,
@@ -438,7 +440,7 @@ def _watch_this(state, source_ci, target_id, event_ctx):
     _ps, victim = res
     arena = victim.zone
     _apply_return_to_hand(state, target_id)
-    enemy = state.players[1 - state.player_index(source_ci.owner_id)]
+    enemy = state.players[1 - state.player_index(actor_of(state, source_ci))]
     for u in enemy.ground_arena + enemy.space_arena:
         if u.zone == arena and u.instance_id != target_id:
             u.exhausted = True

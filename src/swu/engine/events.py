@@ -127,6 +127,16 @@ class UnitDefeated(GameEvent):
 
 
 @dataclass(frozen=True)
+class UnitLeftPlay(GameEvent):
+    """A unit left play WITHOUT being defeated (returned to hand, put on a deck,
+    captured).  Fired for "When a unit leaves play" observers (Boba Fett SOR_15);
+    not added to the event log.  ``controller_id`` is who controlled it as it left."""
+    controller_id: str
+    instance_id: str
+    card_name: str
+
+
+@dataclass(frozen=True)
 class UpgradeDetached(GameEvent):
     upgrade_instance_id: str
     upgrade_name: str

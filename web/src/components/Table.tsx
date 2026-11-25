@@ -233,6 +233,18 @@ export function Table({ game, onToggleLog }: { game: Game; onToggleLog?: () => v
           finishLabel: "",
         } as Cfg;
       case "play_captured_card":
+        // Altering the Deal SHD_243 reuses this decision to DISCARD a captive.
+        if (ctx.mode === "discard") {
+          return {
+            title: "Discard a captured card",
+            prompt:
+              "Choose a card captured by one of your units — it goes to its owner's discard pile.",
+            candidates: ctxCandidates,
+            pickKind: "SelectCapturedToPlay",
+            finish: findFinish("DeclineCapturedPlay"),
+            finishLabel: "Decline",
+          } as Cfg;
+        }
         return {
           title: "Play a captured card",
           prompt: "Choose a card captured by one of your units to play for free.",

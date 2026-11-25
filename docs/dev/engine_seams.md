@@ -33,7 +33,7 @@ pattern, reuse that pattern by name; don't invent a new one.
 | **"For each" keyword values** | `KeywordGrant(value_count=…)` falls back to any `StatBonus.count` source (`stats._stat_bonus_count`), so "gains Raid 1 for each …" reuses the stat counts. `count="target_raid"` reads the buffed unit's Raid. | Chewbacca HMW_117, The Chieftain HMW_212 |
 | **Ambush at bases** | "Friendly units can attack bases while using Ambush" = `AmbushCanAttackBases`: the Ambush listener pushes the decision even with no enemy unit, `_ambush_actions` adds `UseAmbush(unit, <enemy base id>)` unless a Sentinel blocks it, and `UseAmbush.apply` runs `_resolve_base_attack`. The bot takes the base when no unit trade clears its threshold. | Fett's Firespray HMW_53 |
 | **Copied traits** | "Gains each friendly leader's traits except Force, even while not in play" = `CopyLeaderTraits(exclude)`, read by `traits.get_traits`/`has_trait` in every zone (the leader's PRINTED traits). | Zam Wesell HMW_134 |
-| **Discard of choice** | "Opponent discards a card" / "Discard a card from your hand" is `DiscardFromHand(count, chooser="opponent"\|"controller")`: the DISCARDING player picks, via `push_discard_of_choice` (a one-player `discard_excess_from_hand`; no prompt when the hand holds `count` or fewer cards). `then_draw=N` draws after the choice ("discard a card, then draw"). A decision runs after the ability's remaining inline effects, so put a dependent draw in `then_draw`, not a following `DrawCards`. (Until 2026-11-23 it took the first card.) | K-2SO SOR_145, Garindan SEC_186, Furtive Handmaiden SEC_197 |
+| **Discard of choice** | "Opponent discards a card" / "Discard a card from your hand" is `DiscardFromHand(count, chooser="opponent"\|"controller")`: the DISCARDING player picks, via `push_discard_of_choice` (a one-player `discard_excess_from_hand`; no prompt when the hand holds `count` or fewer cards). `then_draw=N` draws after the choice ("discard a card, then draw"). `eligible=` (a card_def predicate) narrows the choice ("a card that costs 3 or more"). **"Discard a card. If you do, …"** is `payoff="name"` + plain-data `payoff_args`: a function registered with `@discard_payoff("name")` (`swu/engine/discard_payoffs.py`, importable from card modules) runs after the choice with the cards actually discarded — possibly none, so it owns its "if you do". Generic payoffs: `create_token_if_discarded`, `create_credit_if_discarded`, `damage_target_if_discarded`. A decision runs after the ability's remaining inline effects, so anything that depends on the discard goes in `then_draw` or the payoff, never a following effect. Never pop a hand card yourself. The activated-ability cost `DiscardCardCost` is paid the same way (payoff `resume_activated_ability`). "Look at an opponent's hand and discard a card from it" is `push_name_and_discard`. | K-2SO SOR_145, Furtive Handmaiden SEC_197, Merrin LOF_160, Force Throw SOR_167, Kylo Ren SHD_11 |
 | **Decider shift** | A stage decided by the opponent: walk an `order` list, switching `deciding_player_id` and `active_player_index` between stages. | `say_no` SOR_233 |
 | **`EACH_*` targets** | `fixed=EACH_FRIENDLY`/`EACH_ENEMY`/`EACH_IN_PLAY` hits every match with no prompt. | many |
 
@@ -64,7 +64,11 @@ adding one; `granted_attack` and `play_from_hand` take many options:
   `(trait, reduction)` pair that replaces `cost_reduction` for a card with that trait
   (Palpatine's Return SHD_94; applied by `_play_reduction_for`), `resources_of`
   (another player's — or your own — resource row; LAW_66, Osha HMW_17) and
-  `waive_aspect` (every penalty pip of one aspect, Heroism/Villainy included; HMW_17).
+  `waive_aspect` (every penalty pip of one aspect, Heroism/Villainy included; HMW_17),
+  `ignore_all_aspect_penalties` (the whole penalty; Agent Kallus LAW_3) and
+  `any_card` ("play a CARD": events and upgrades are offered too, and picking one
+  hands it to `play_event_from_hand` / `play_upgrade_from_hand` with the same
+  discount; Daimyo's Palace LAW_20, Count Dooku TWI_5).
   Ability-made resources enter EXHAUSTED (Resupply SOR_126's ruling):
   `push_resource_from_hand(enters_exhausted=, then_resource_deck_top=)` (HMW_17,
   Ima-Gun Di HMW_44). `push_choose_modal(allow_repeat=True)` lets one option be picked
@@ -152,17 +156,63 @@ The golden files in `tests/fixtures/` (`actions_decision_kinds.json`,
   (bus + `fire_triggered_abilities`). Firing only `get_bus().fire` makes the play
   invisible to the per-phase play counters and every "when you play a card" observer —
   the bug that ability-driven plays and Exploit commits had until 2026-11-23.
-- **"You", "friendly" and "enemy" mean the CONTROLLER.** Use
-  `state.controller_id(state, ci)` (or `resolver._acting_player_id` for an ability's
-  source), never `ci.owner_id`, when a card asks who controls something. `owner_id`
-  is for where a card goes (owner's hand, discard, deck). Older card code still
-  reads `source_ci.owner_id`; see [known_deviations.md](../known_deviations.md).
+- **"You", "friendly" and "enemy" mean the CONTROLLER.** In an ability, "you" is
+  `actor_of(state, source_ci)` (`from swu.engine.actor import actor_of`, safe at
+  module scope in card modules): the controller in play, a defeated unit's
+  last-known controller, an event's player. Who controls another card is
+  `state.controller_id(state, ci)`; an attached upgrade is controlled by the player
+  who played it, even on an enemy unit. Never use `ci.owner_id` for either.
+  `owner_id` is only for where a card goes (owner's hand, discard, deck) and for
+  finding a card in its owner's piles. A path that attaches an upgrade or plays an
+  event for a player records it with `state.note_card_controller`.
 - **Every paid play prices through `_play_cost` and spends through
   `_spend_play_discounts`.** Pass the playing ability's own "costs N less" as
   `_play_cost(…, extra_reduction=N)` (never subtract it afterwards: the opponent tax
   and The Starhawk's halving come last), use the same call in the candidate filter,
   and call `_spend_play_discounts` once after paying. A play "for free" costs 0 and
-  spends nothing. Smuggle and Piloting keep their own alternate-cost pricing.
+  spends nothing. Smuggle prices through `_smuggle_cost` (the same modifiers on the
+  Smuggle cost) and Piloting through `_piloting_cost` (upgrade discounts, per-name
+  tax, halving; spend with `_spend_piloting_discounts`). Both Smuggle actions go
+  through `hand._smuggle_play_targets` / `hand._smuggle_play`, which also charge a
+  Smuggle rider (First Light SHD_36: `upgrade_target_id` names the friendly unit).
+- **"When Attack Ends" for a defeated attacker.** The attack-end fire names an
+  attacker no longer in play under `attack_ended_departed` (not
+  `attack_ended_survivor`). Only `WhenAttackEnds(even_if_defeated=True)` matches it,
+  collected from the discard (or a leader's base zone). Use the flag when the card's
+  rules note says the unit "does not need to survive"; the default keeps the
+  survival reading.
+- **"Can't ready while this unit is in play"** is a `permanent` `ready_lock` modifier
+  sourced by that unit; `turn._ready_forbidden` reads it while the source is in play.
+  "Doesn't ready during the next regroup phase" is `game_memory.skip_next_ready`
+  (one ready step); `cannot_ready_this_round` is for "this round".
+- **Alternative costs** are `CostRoute` markers settled in the `cost_route` decision
+  (`discard_aspect_card` waives the whole cost). **Out-of-play trait grants** are
+  `OutOfPlayTraitGrant`, read by the trait layer; read a card's traits through
+  `has_trait` / `get_traits` even when it is in hand.
+- **"You may play it"** is `push_play_from_hand(up_to=True)`, which adds the
+  `DeclinePlayFromHand`. A mandatory "give a token" or "exhaust N" is
+  `push_select_token(mandatory=True)`.
+- **Leader constants are deployed-side by default.** The stat scans include the
+  undeployed leader, but it contributes only `ConstantAbility` specs flagged
+  `both_sides=True` (printed on both sides: Krennic SOR_1) or `undeployed_only=True`.
+- **Pilot hosts come from `_eligible_pilot_targets(state, ps, pilot_ci)`**, which
+  enforces the one-Pilot limit plus `AdditionalPilotSlots`. A card's own "without a
+  Pilot on it" targeting uses the `no_pilot` predicate instead.
+- **"Left play" is not "defeated".** Every way out of play (defeat, bounce, put on a
+  deck, capture) goes through `zones._note_left_play`, which feeds
+  `game_memory.left_play_controllers_this_phase` and the `*_UNIT_LEFT_PLAY_THIS_PHASE`
+  conditions. Non-defeat exits also fire `UnitLeftPlay`, matched by
+  `WhenUnitDefeated(leaves_play=True)`. Use the `*_DEFEATED_*` atoms only for cards
+  that say "defeated".
+- **Damage observers.** "When damage is dealt to …" uses the settle-point
+  `WhenDamageDealt` observer, which sees combat, ability and indirect damage
+  (`kind="base"` for bases). Every base hit, of any kind, goes through
+  `combat.record_base_damage`, which also writes the "damaged a base this phase"
+  ledgers; pass `dealer=` (the dealing card) so the unit ledger can see it.
+- **"While attacking a … unit" keyword grants** count only inside
+  `keywords.attack_context`, which the combat pipeline opens around its Overwhelm
+  check with a pre-damage `attack_snapshot`. Out of combat, and in the view, the
+  keyword is absent.
 - **Keywords.** Never string-match card text. Use
   `has_keyword(state, ci, Keyword.SENTINEL)` and `keyword_value(state, ci, Keyword.RAID)`
   from `engine/keywords.py`. Numeric values come from `text` (units) or `deploy_box`

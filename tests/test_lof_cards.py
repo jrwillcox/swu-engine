@@ -6291,7 +6291,7 @@ class TestDisturbanceInTheForce_LOF_216:
         state = _defeat_and_fire(state, doomed, "P0")
         state = _drain_lof(state)
         # ``_defeat_and_fire`` mimics the trigger fire, not _defeat_unit's ledger.
-        state.game_memory.defeated_controllers_this_round.append("P0")
+        state.game_memory.left_play_controllers_this_phase.append("P0")
         state, _evt = _play_event_from_hand(state, repo, "LOF", "216")
         assert state.player_by_id("P0").has_force_token is True
         assert state.pending_decisions[-1].kind == "select_token"

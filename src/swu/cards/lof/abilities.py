@@ -78,6 +78,8 @@ Force token)" clears it (the UseForce cost / the ``use_force`` decision), and
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from swu.abilities.registry import (
     card_ability,
     TriggerAbility,
@@ -143,6 +145,7 @@ from swu.abilities.registry import (
     ConditionCheck,
     Condition,
 )
+from swu.engine.discard_payoffs import discard_payoff
 
 
 @card_ability("LOF", "198")
@@ -469,7 +472,7 @@ def _luke_skywalker():
     a Shield token (bound together so "if you do" holds)."""
     def _fn(state, source_ci, target_id, event_ctx):
         from swu.engine.actions import spend_force_token
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         if not spend_force_token(state, ps):
             return state
         result = state.find_instance(source_ci.instance_id)
@@ -662,20 +665,18 @@ def _sith_holocron():
 
 
 def _merrin_on_attack(state, source_ci, target_id, event_ctx):
-    """Discard the first card from the controller's hand (the established
-    first-card discard simplification); if a card was discarded, deal 2 damage to
-    the chosen unit.  Cost and payoff are bound so "If you do" holds."""
+    """Discard a card of the controller's choice; if a card was discarded, the
+    ``damage_target_if_discarded`` payoff deals 2 damage to the chosen unit.  Cost
+    and payoff are bound so "If you do" holds."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
-    if not ps.hand:
-        return state  # cannot discard → "if you do" not satisfied → no damage
-    from swu.engine.state import Zone
-    card = ps.hand.pop(0)
-    card.zone = Zone.DISCARD
-    ps.discard.append(card)
-    from swu.abilities.resolver import _apply_deal_damage
-    _apply_deal_damage(state, target_id, 2)
+    from swu.engine.actions import push_discard_of_choice
+    push_discard_of_choice(state, actor_of(state, source_ci), 1,
+                           source_id=source_ci.instance_id,
+                           after_idx=1 - state.player_index(actor_of(state, source_ci)),
+                           payoff="damage_target_if_discarded",
+                           payoff_args={"target_id": target_id, "amount": 2,
+                                        "player_id": actor_of(state, source_ci)})
     return state
 
 
@@ -688,10 +689,8 @@ def _merrin():
     ``CONTROLLER_HAS_CARD_IN_HAND`` condition so it is not offered with an empty
     hand (the discard cost cannot be paid).  One ``CustomEffect`` carries a unit
     ``target`` (``controller="any"`` — "a unit", which includes Merrin herself);
-    the fn discards a card then deals 2, bound so "If you do" holds.  DEVIATION
-    (documented): the discard uses the established first-card simplification
-    (K-2SO SOR_145 / J-Type Nubian Starship LOF_194) — the controller doesn't pick
-    *which* card; only the forced discard itself is faithful."""
+    the fn has the controller discard a card of their choice, then deals 2, bound
+    so "If you do" holds."""
     return TriggerAbility(
         trigger=OnAttack(),
         optional=True,
@@ -895,7 +894,7 @@ def _use_force_debuff(power, hp):
     not None in practice."""
     def _fn(state, source_ci, target_id, event_ctx):
         from swu.engine.actions import spend_force_token
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         if not spend_force_token(state, ps):
             return state
         if target_id is None:
@@ -951,7 +950,7 @@ def _darth_sidious_fn(state, source_ci, target_id, event_ctx):
     from one defeat cannot retroactively spare/condemn another (the text defeats
     them simultaneously).  Darth Sidious is Sith, so the wipe never hits him."""
     from swu.engine.actions import spend_force_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not spend_force_token(state, ps):
         return state
     from swu.engine.actions import compute_hp
@@ -1011,7 +1010,7 @@ def _chirrut_imwe_fn(state, source_ci, target_id, event_ctx):
     ``event_ctx["attacker_id"]``) –2/–0 for this attack — reducing the damage it
     deals to Chirrut, since the trigger fires before combat damage."""
     from swu.engine.actions import spend_force_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not spend_force_token(state, ps):
         return state
     attacker_id = event_ctx.get("attacker_id")
@@ -1102,7 +1101,7 @@ def _infused_brawler_use_force(state, source_ci, target_id, event_ctx):
     """Spend the controller's Force token and give this unit 2 Experience tokens —
     bound together so "If you do" holds (the Luke Skywalker LOF_249 pattern)."""
     from swu.engine.actions import spend_force_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not spend_force_token(state, ps):
         return state
     from swu.engine.tokens import attach_token
@@ -1148,7 +1147,7 @@ def _infused_brawler():
 def _kylo_ren_use_force(state, source_ci, target_id, event_ctx):
     """Spend the controller's Force token and draw a card — bound for "If you do"."""
     from swu.engine.actions import spend_force_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not spend_force_token(state, ps):
         return state
     from swu.engine.actions import _draw_cards
@@ -1750,7 +1749,7 @@ def _yoda_use_force_heal(state, source_ci, target_id, event_ctx):
     token the spend fails and no healing happens (the Infused Brawler LOF_156
     pattern)."""
     from swu.engine.actions import spend_force_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not spend_force_token(state, ps):
         return state
     base_ci = ps.base_instance
@@ -1817,7 +1816,7 @@ def _baylan_skoll():
     def _fn(state, source_ci, target_id, event_ctx):
         from swu.engine.actions import spend_force_token, push_owner_may_replay
         from swu.abilities.resolver import _apply_return_to_hand
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         if not spend_force_token(state, ps):
             return state
         if target_id is None:
@@ -1893,7 +1892,7 @@ def _leia_lof98_move_to_ground(state, source_ci, target_id, event_ctx):
     """Leia Organa LOF_98's Action, relocation half: move her from the space arena
     to the ground arena (mirrors Blue Leader JTL_96's inline space→ground move)."""
     from swu.engine.state import Zone
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     for arena in (ps.ground_arena, ps.space_arena):
         if source_ci in arena:
             arena.remove(source_ci)
@@ -2135,7 +2134,7 @@ def _rey_lof_12_discard_hand_draw(state, source_ci, target_id, event_ctx):
     holding cards)."""
     from swu.engine.state import Zone
     from swu.engine.actions import _draw_cards
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     while ps.hand:
         ci = ps.hand.pop(0)
         ci.zone = Zone.DISCARD
@@ -2462,7 +2461,7 @@ def _heavy_blaster_cannon_lof_171_damage(state, source_ci, target_id, event_ctx)
     name = source_ci.card_def.display_name
     for _ in range(3):
         _apply_deal_damage(state, target_id, 1, source_name=name,
-                           dealer_id=source_ci.owner_id)
+                           dealer_id=actor_of(state, source_ci))
     return state
 
 
@@ -2494,13 +2493,13 @@ def _sorcerous_blast_lof_172_fn(state, source_ci, target_id, event_ctx):
     if target_id is None:
         return state
     from swu.engine.actions import spend_force_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not spend_force_token(state, ps):
         return state
     from swu.abilities.resolver import _apply_deal_damage
     _apply_deal_damage(state, target_id, 3,
                        source_name=source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id)
+                       dealer_id=actor_of(state, source_ci))
     return state
 
 
@@ -2523,29 +2522,18 @@ def _lightsaber_throw_lof_176_fn(state, source_ci, target_id, event_ctx):
     """Discard a Lightsaber card, then deal 4 and draw (LOF_176) — one CustomEffect
     so the cost and its payoff stay atomic.
 
-    The card to pitch is auto-picked (the first Lightsaber in hand — the K-2SO
-    SOR_145 first-card-discard convention); the target gate guarantees one exists."""
+    The player picks which Lightsaber to pitch; the target gate guarantees one
+    exists.  The ``damage_target_if_discarded`` payoff deals 4 and draws."""
     if target_id is None:
         return state
-    from swu.engine.state import Zone
-    from swu.engine.actions import (note_hand_or_deck_discard, record_hand_discard,
-                                    _draw_cards)
-    ps = state.player_by_id(source_ci.owner_id)
-    pitch = next((h for h in ps.hand
-                  if "Lightsaber" in (getattr(h.card_def, "traits", None) or ())),
-                 None)
-    if pitch is None:
-        return state
-    ps.hand.remove(pitch)
-    pitch.zone = Zone.DISCARD
-    ps.discard.append(pitch)
-    note_hand_or_deck_discard(state, pitch)
-    record_hand_discard(state, ps.player_id)
-    from swu.abilities.resolver import _apply_deal_damage
-    _apply_deal_damage(state, target_id, 4,
-                       source_name=source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id)
-    _draw_cards(state, ps, 1)
+    from swu.engine.actions import push_discard_of_choice
+    push_discard_of_choice(
+        state, actor_of(state, source_ci), 1, source_id=source_ci.instance_id,
+        after_idx=1 - state.player_index(actor_of(state, source_ci)),
+        eligible=lambda cd: "Lightsaber" in (getattr(cd, "traits", None) or ()),
+        payoff="damage_target_if_discarded",
+        payoff_args={"target_id": target_id, "amount": 4, "draw": 1,
+                     "player_id": actor_of(state, source_ci)})
     return state
 
 
@@ -2635,7 +2623,7 @@ def _consumed_by_the_dark_side_lof_239_fn(state, source_ci, target_id, event_ctx
     from swu.abilities.resolver import _apply_deal_damage
     _apply_deal_damage(state, target_id, 2,
                        source_name=source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id)
+                       dealer_id=actor_of(state, source_ci))
     return state
 
 
@@ -2674,8 +2662,8 @@ def _the_father_lof_260_fn(state, source_ci, target_id, event_ctx):
     from swu.abilities.resolver import _apply_deal_damage
     _apply_deal_damage(state, source_ci.instance_id, 1,
                        source_name=source_ci.card_def.display_name,
-                       dealer_id=source_ci.owner_id)
-    state.player_by_id(source_ci.owner_id).has_force_token = True
+                       dealer_id=actor_of(state, source_ci))
+    state.player_by_id(actor_of(state, source_ci)).has_force_token = True
     return state
 
 
@@ -2714,24 +2702,24 @@ def _kylo_ren_lof_1_discard(state, source_ci, target_id, event_ctx):
     """"Discard a card from your hand.  If you discarded an upgrade this way, draw a
     card" (LOF_1 undeployed).
 
-    Cost and payoff in ONE CustomEffect.  The card pitched is auto-picked (the first
-    in hand — the K-2SO SOR_145 first-card-discard convention); the collection gate
-    (``CONTROLLER_HAND_SIZE_MIN`` 1) guarantees one exists."""
-    from swu.cards.models import Upgrade
-    from swu.engine.state import Zone
-    from swu.engine.actions import (note_hand_or_deck_discard, record_hand_discard,
-                                    _draw_cards)
-    ps = state.player_by_id(source_ci.owner_id)
-    if not ps.hand:
-        return state
-    pitched = ps.hand.pop(0)
-    pitched.zone = Zone.DISCARD
-    ps.discard.append(pitched)
-    note_hand_or_deck_discard(state, pitched)
-    record_hand_discard(state, ps.player_id)
-    if isinstance(pitched.card_def, Upgrade):
-        _draw_cards(state, ps, 1)
+    The player picks the card (the collection gate, ``CONTROLLER_HAND_SIZE_MIN`` 1,
+    guarantees one exists); the ``kylo_ren_draw_if_upgrade`` payoff reads it."""
+    from swu.engine.actions import push_discard_of_choice
+    push_discard_of_choice(state, actor_of(state, source_ci), 1,
+                           source_id=source_ci.instance_id,
+                           after_idx=1 - state.player_index(actor_of(state, source_ci)),
+                           payoff="kylo_ren_draw_if_upgrade",
+                           payoff_args={"player_id": actor_of(state, source_ci)})
     return state
+
+
+@discard_payoff("kylo_ren_draw_if_upgrade")
+def _kylo_ren_draw_if_upgrade(state, source_id, discarded, args):
+    """"If you discarded an upgrade this way, draw a card.\""""
+    from swu.cards.models import Upgrade
+    from swu.engine.actions import _draw_cards
+    if any(isinstance(c.card_def, Upgrade) for c in discarded):
+        _draw_cards(state, state.player_by_id(args["player_id"]), 1)
 
 
 def _kylo_ren_lof_1_recur_upgrades(state, source_ci, target_id, event_ctx):
@@ -2782,16 +2770,16 @@ def _old_daka_lof_36_fn(state, source_ci, target_id, event_ctx):
 
     ONE targeted CustomEffect so "that unit" is unambiguous: the defeat and the
     free replay are bound together, and the instance id survives the trip to the
-    discard, so it is exactly the whitelist ``push_play_from_hand`` needs.
-    DOCUMENTED SIMPLIFICATION: ``play_from_hand`` has no decline, so the SECOND
-    "you may" collapses to mandatory; the first is the optional trigger."""
+    discard, so it is exactly the whitelist ``push_play_from_hand`` needs.  The
+    first "you may" is the optional trigger; ``up_to=True`` is the second one (the
+    replay can be declined)."""
     if target_id is None:
         return state
     from swu.abilities.resolver import _apply_defeat_unit
     _apply_defeat_unit(state, target_id)
     from swu.engine.actions import push_play_from_hand
     push_play_from_hand(state, source_ci, from_discard=True, free=True,
-                        eligible_ids=frozenset({target_id}))
+                        eligible_ids=frozenset({target_id}), up_to=True)
     return state
 
 
@@ -2849,7 +2837,7 @@ def _watto_lof_65_fn(state, source_ci, target_id, event_ctx):
     (and target for) the controller."""
     from swu.engine.actions import push_modal
     opponent_id = next(p.player_id for p in state.players
-                       if p.player_id != source_ci.owner_id)
+                       if p.player_id != actor_of(state, source_ci))
     push_modal(state, source_ci, ["give_experience_friendly_unit", "draw_card"],
                decider_id=opponent_id)
     return state
@@ -2916,7 +2904,7 @@ def _dagoyan_master_lof_115_fn(state, source_ci, target_id, event_ctx):
     """Spend the Force token, then run the top-5 Force-unit search (LOF_115) — cost
     and payoff in ONE CustomEffect ("If you do")."""
     from swu.engine.actions import spend_force_token
-    if not spend_force_token(state, state.player_by_id(source_ci.owner_id)):
+    if not spend_force_token(state, state.player_by_id(actor_of(state, source_ci))):
         return state
     return _force_unit_search(state, source_ci, target_id, event_ctx)
 
@@ -2991,11 +2979,11 @@ def _the_purrgil_king_lof_121_fn(state, source_ci, target_id, event_ctx):
     himself (12 HP) is a friendly unit and counts as printed."""
     from swu.engine.actions import compute_hp, _draw_cards
     res = state.find_instance(source_ci.instance_id)
-    ps = res[0] if res is not None else state.player_by_id(source_ci.owner_id)
+    ps = res[0] if res is not None else state.player_by_id(actor_of(state, source_ci))
     n = sum(1 for u in ps.ground_arena + ps.space_arena
             if compute_hp(state, u) - u.damage >= 7)
     if n:
-        _draw_cards(state, state.player_by_id(source_ci.owner_id), n)
+        _draw_cards(state, state.player_by_id(actor_of(state, source_ci)), n)
     return state
 
 
@@ -3090,7 +3078,7 @@ def _ki_adi_mundi_lof_146_fn(state, source_ci, target_id, event_ctx):
     """Spend the Force token, then draw 2 (LOF_146) — one CustomEffect binding the
     cost to its payoff."""
     from swu.engine.actions import spend_force_token, _draw_cards
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not spend_force_token(state, ps):
         return state
     _draw_cards(state, ps, 2)
@@ -3145,7 +3133,7 @@ def _second_sister_lof_184_fn(state, source_ci, target_id, event_ctx):
     discarded this way are counted."""
     from swu.engine.state import Zone
     from swu.engine.actions import note_hand_or_deck_discard
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     force_count = 0
     for _ in range(2):
         if not ps.deck:
@@ -3188,7 +3176,7 @@ def _as_i_have_foreseen_lof_188_fn(state, source_ci, target_id, event_ctx):
     paid for, so the card collapses to its "look" clause — no decision, no state
     change (a documented simplification: a look nobody can act on is unobservable)."""
     from swu.engine.actions import push_peek_top
-    if not getattr(state.player_by_id(source_ci.owner_id), "has_force_token", False):
+    if not getattr(state.player_by_id(actor_of(state, source_ci)), "has_force_token", False):
         return state
     push_peek_top(state, source_ci, mode="may_play", cost_reduction=4,
                   force_cost=True)
@@ -3614,7 +3602,7 @@ def _darth_revan_lof_17_exhaust_then_token(state, source_ci, target_id, event_ct
         return state
     source_ci.exhausted = True
     from swu.engine.tokens import attach_token
-    attach_token(state, state.player_by_id(source_ci.owner_id), attacker, "Experience")
+    attach_token(state, state.player_by_id(actor_of(state, source_ci)), attacker, "Experience")
     return state
 
 
@@ -3624,7 +3612,7 @@ def _darth_revan_lof_17_token(state, source_ci, target_id, event_ctx):
     if attacker is None:
         return state
     from swu.engine.tokens import attach_token
-    attach_token(state, state.player_by_id(source_ci.owner_id), attacker, "Experience")
+    attach_token(state, state.player_by_id(actor_of(state, source_ci)), attacker, "Experience")
     return state
 
 
@@ -3714,7 +3702,7 @@ def _itinerant_warrior_lof_48_heal(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import spend_force_token
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not spend_force_token(state, ps):
         return state
     from swu.abilities.resolver import _apply_heal
@@ -3831,7 +3819,7 @@ def _calm_in_the_storm_lof_54(state, source_ci, target_id, event_ctx):
         return state
     ci.exhausted = True
     from swu.engine.tokens import attach_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     attach_token(state, ps, ci, "Shield")
     for _ in range(2):
         attach_token(state, ps, ci, "Experience")
@@ -3937,7 +3925,7 @@ def _priestesses_of_the_force_lof_72(state, source_ci, target_id, event_ctx):
     ``CustomEffect`` (Bright Hope SOR_99), and the payoff is the long-standing
     ``select_token`` up-to-N loop (Medal Ceremony SOR_245)."""
     from swu.engine.actions import spend_force_token, push_select_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not spend_force_token(state, ps):
         return state
     push_select_token(state, source_ci, token_type="Shield", max_targets=5,
@@ -3969,7 +3957,7 @@ def _cure_wounds_lof_75(state, source_ci, target_id, event_ctx):
     heal then live in this one effect."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     from swu.engine.actions import spend_force_token
     if not spend_force_token(state, ps):
         return state
@@ -4058,7 +4046,7 @@ def _drengir_spawn_lof_86(state, source_ci, target_id, event_ctx):
     if cost <= 0:
         return state
     from swu.engine.tokens import attach_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     for _ in range(cost):
         attach_token(state, ps, source_ci, "Experience")
     return state
@@ -4087,7 +4075,7 @@ def _eighth_brother_lof_87_buff(state, source_ci, target_id, event_ctx):
     a declined/unpayable cost can never buff."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     from swu.engine.actions import spend_force_token
     if not spend_force_token(state, ps):
         return state
@@ -4174,7 +4162,7 @@ def _eeth_koth_lof_97_resource(state, source_ci, target_id, event_ctx):
     defeat already put the card in its owner's discard; move it from there into the
     resource zone facedown and EXHAUSTED — the CR default, since (unlike Superlaser
     Technician SOR_83) this card does not say "and ready it"."""
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     from swu.engine.actions import spend_force_token
     if not spend_force_token(state, ps):
         return state
@@ -4477,7 +4465,7 @@ def _unleash_rage_lof_173(state, source_ci, target_id, event_ctx):
     SOR_99), so an unpayable cost can never buff."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     from swu.engine.actions import spend_force_token
     if not spend_force_token(state, ps):
         return state
@@ -4535,7 +4523,7 @@ def _deceptive_shade_lof_180(state, source_ci, target_id, event_ctx):
     ``_put_unit_in_play``, before the enter-play keyword bus, so the granted Ambush
     fires on entry exactly as a printed one would."""
     state.game_memory.pending_keyword_grants.append(
-        {"player_id": source_ci.owner_id, "trait": "", "keyword": "Ambush"})
+        {"player_id": actor_of(state, source_ci), "trait": "", "keyword": "Ambush"})
     return state
 
 
@@ -4557,7 +4545,7 @@ def _premonition_of_doom_lof_203(state, source_ci, target_id, event_ctx):
     one entry on the new ``pending_initiative_effects`` list, consumed by this
     player's ``ClaimInitiative`` (the only place initiative is taken)."""
     state.game_memory.pending_initiative_effects.append(
-        {"player_id": source_ci.owner_id, "effect": "exhaust_all_units"})
+        {"player_id": actor_of(state, source_ci), "effect": "exhaust_all_units"})
     return state
 
 
@@ -4660,10 +4648,10 @@ def _disturbance_in_the_force_lof_216(state, source_ci, target_id, event_ctx):
     finish IS the "you may"."""
     from swu.abilities.registry import Condition, ConditionCheck
     from swu.engine.actions import push_select_token
-    gate = ConditionCheck(Condition.CONTROLLER_UNIT_DEFEATED_THIS_PHASE)
+    gate = ConditionCheck(Condition.CONTROLLER_UNIT_LEFT_PLAY_THIS_PHASE)
     if not gate.evaluate(state, source_ci):
         return state
-    state.player_by_id(source_ci.owner_id).has_force_token = True
+    state.player_by_id(actor_of(state, source_ci)).has_force_token = True
     push_select_token(state, source_ci, token_type="Shield", max_targets=1,
                       controller="any", kind="unit")
     return state
@@ -4671,11 +4659,8 @@ def _disturbance_in_the_force_lof_216(state, source_ci, target_id, event_ctx):
 
 @card_ability("LOF", "216")
 def _disturbance_in_the_force_lof_216_card():
-    """LOF_216 — Disturbance in the Force (Event, Force, cost 1).
-
-    DEVIATION: "left play" is read as ``CONTROLLER_UNIT_DEFEATED_THIS_PHASE`` — the
-    engine keeps no "left play" ledger, and defeat is how a unit leaves play in every
-    case bar a bounce to hand."""
+    """LOF_216 — Disturbance in the Force (Event, Force, cost 1).  "Left play" is
+    ``CONTROLLER_UNIT_LEFT_PLAY_THIS_PHASE`` (any route out of play)."""
     return EventAbility(effects=[
         CustomEffect(fn=_disturbance_in_the_force_lof_216)])
 
@@ -4704,7 +4689,7 @@ def _trust_your_instincts_lof_221(state, source_ci, target_id, event_ctx):
     ONE effect (Bright Hope SOR_99); "deals its combat damage before the defender" is
     First Strike, granted for the attack (Shoot First SOR_216's ``grant_keywords``)."""
     from swu.engine.actions import push_granted_attack, spend_force_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not spend_force_token(state, ps):
         return state
     push_granted_attack(state, source_ci, power_bonus=2,
@@ -4847,7 +4832,7 @@ def _the_daughter_lof_252(state, source_ci, target_id, event_ctx):
     routes through ``_apply_heal`` so Wolffe SOR_160's "bases can't be healed" lock
     still applies.  "Your base" is fixed, so there is nothing to target."""
     from swu.engine.actions import spend_force_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     base = ps.base_instance
     if base is None or not spend_force_token(state, ps):
         return state
@@ -4983,7 +4968,7 @@ def _third_sister_lof_10_arm(state, source_ci, target_id, event_ctx):
     """Deployed On Attack: "The next unit you play this phase gains Hidden" — the
     ``pending_keyword_grants`` seam (Deceptive Shade LOF_180)."""
     state.game_memory.pending_keyword_grants.append(
-        {"player_id": source_ci.owner_id, "trait": "", "keyword": "Hidden"})
+        {"player_id": actor_of(state, source_ci), "trait": "", "keyword": "Hidden"})
     return state
 
 
@@ -5024,7 +5009,7 @@ def _anakin_skywalker_lof_18(state, source_ci, target_id, event_ctx):
     is offered."""
     from swu.engine.actions import push_play_event_from_hand
     from swu.cards.models import Event
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     eligible = {c.instance_id for c in ps.hand
                 if isinstance(c.card_def, Event)
                 and "Villainy" in {a.name for a in
@@ -5260,7 +5245,7 @@ def _whirlwind_of_power_lof_78(state, source_ci, target_id, event_ctx):
     """Give the chosen unit -2/-2 for this phase, or -3/-3 if the controller
     controls a Force unit."""
     from swu.engine.traits import has_trait
-    ctrl = state.player_by_id(source_ci.owner_id)
+    ctrl = state.player_by_id(actor_of(state, source_ci))
     force = any(has_trait(state, u, "Force")
                 for u in (*ctrl.ground_arena, *ctrl.space_arena))
     amount = 3 if force else 2
@@ -5361,7 +5346,7 @@ def _kaadu_lof_114():
 
 def _directed_by_the_force_lof_123(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import push_play_from_hand
-    push_play_from_hand(state, source_ci)
+    push_play_from_hand(state, source_ci, up_to=True)
     return state
 
 
@@ -5371,10 +5356,9 @@ def _directed_by_the_force():
     you (create your Force token).  You may play a unit from your hand (paying its
     cost)."
 
-    ``CreateForceToken`` then ``push_play_from_hand`` (full price).  DEVIATION
-    (documented, the standing play_from_hand convention): the decision has no
-    decline, so "you may" collapses to mandatory whenever an affordable hand unit
-    exists — the decision simply isn't pushed when none does."""
+    ``CreateForceToken`` then ``push_play_from_hand`` (full price).  ``up_to=True``
+    is the printed "you may": the decision offers a decline (it is pushed only when
+    an affordable hand unit exists)."""
     return EventAbility(effects=[
         CreateForceToken(),
         CustomEffect(fn=_directed_by_the_force_lof_123),
@@ -5468,14 +5452,14 @@ def _marchion_ro_lof_186():
 
 def _liberated_by_darkness_lof_189(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import change_control, spend_force_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if not spend_force_token(state, ps):
         return state
     res = state.find_instance(target_id)
     if res is None:
         return state
     _, target_ci = res
-    change_control(state, target_ci, source_ci.owner_id)
+    change_control(state, target_ci, actor_of(state, source_ci))
     target_ci.return_control_to_owner_at_regroup = True
     return state
 
@@ -5523,7 +5507,7 @@ def _dooku_lof_211(state, source_ci, target_id, event_ctx):
     """Mark every friendly unit with Hidden as un-attackable for this phase."""
     from swu.engine.state import Modifier
     from swu.engine.keywords import has_keyword, Keyword
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     for unit in (*ps.ground_arena, *ps.space_arena):
         if not has_keyword(state, unit, Keyword.HIDDEN):
             continue
@@ -5576,7 +5560,7 @@ def _force_slow_lof_217():
 
 def _jocasta_nu_lof_248(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import push_move_upgrade
-    push_move_upgrade(state, source_ci, host_controller_id=source_ci.owner_id)
+    push_move_upgrade(state, source_ci, host_controller_id=actor_of(state, source_ci))
     return state
 
 

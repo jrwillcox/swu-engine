@@ -1875,6 +1875,9 @@ class TestProfundityJTL154:
         self._fill_hand(state, "P0", repo, 1)   # controller hand
         prof = _place(state, "P0", _get_card(repo, "JTL", "154"), "space")
         state = _fire_when_played(state, prof)
+        from tests.test_sor_cards import _resolve_discards
+        assert state.pending_decisions[-1].deciding_player_id == "P1", "their choice"
+        state = _resolve_discards(state)
         # First discard → P1 has 2 > P0's 1 → second discard → P1 has 1.
         assert len(state.player_by_id("P1").hand) == 1
         assert len(state.player_by_id("P1").discard) == 2
@@ -1885,6 +1888,8 @@ class TestProfundityJTL154:
         self._fill_hand(state, "P0", repo, 2)
         prof = _place(state, "P0", _get_card(repo, "JTL", "154"), "space")
         state = _fire_when_played(state, prof)
+        from tests.test_sor_cards import _resolve_discards
+        state = _resolve_discards(state)
         # First discard → P1 has 1, not > P0's 2 → no second discard.
         assert len(state.player_by_id("P1").hand) == 1
         assert len(state.player_by_id("P1").discard) == 1
@@ -1902,6 +1907,8 @@ class TestProfundityJTL154:
         ctx = {"defeated_id": prof.instance_id, "defeated_ci": prof,
                "defeated_controller_id": "P0"}
         state = fire_triggered_abilities(state, evt, after_all_player_idx=0, event_ctx=ctx)
+        from tests.test_sor_cards import _resolve_discards
+        state = _resolve_discards(state)
         assert len(state.player_by_id("P1").hand) == 1   # 3 → 1 (two discards)
 
     def test_jtl_154_empty_opponent_hand_no_op(self, repo):

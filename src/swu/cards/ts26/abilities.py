@@ -17,6 +17,8 @@ is above the token block and carries no hazard.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from swu.abilities.registry import (
     card_ability,
     TriggerAbility, EventAbility, ActivatedAbility, ConstantAbility,
@@ -113,7 +115,7 @@ def _executioners_arena_damage(state, source_ci, target_id, event_ctx):
     readings coincide."""
     from swu.engine.actions import push_select_damage
     from swu.abilities.resolver import _is_leader_unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = sum(1 for u in ps.ground_arena + ps.space_arena
             if _is_leader_unit(u))
     if n <= 0:
@@ -151,7 +153,7 @@ def _sundari_palace_ramp(state, source_ci, target_id, event_ctx):
     the whole thing schedules nothing, which is the printed "If you do"."""
     from swu.engine.actions import push_resource_from_hand
     from swu.abilities.resolver import _is_leader_unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = sum(1 for u in ps.ground_arena + ps.space_arena
             if _is_leader_unit(u))
     if n <= 0:
@@ -811,7 +813,7 @@ def _mechanize_replay(state, source_ci, target_id, event_ctx):
     ``restrict_played`` — the only ordering that runs after the play (LOF_125)."""
     from swu.engine.actions import push_play_from_hand
     from swu.cards.models import Unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     eligible = frozenset(
         ci.instance_id for ci in ps.discard
         if isinstance(ci.card_def, Unit)
@@ -937,7 +939,7 @@ def _anakin_shield_an_entrant(state, source_ci, target_id, event_ctx):
     token is created)".  So the gate lives here — failing it pushes nothing and
     prompts for nothing, while the Action itself stays available."""
     from swu.engine.actions import push_select_token
-    ids = _entered_play_this_phase_ids(state, source_ci.owner_id)
+    ids = _entered_play_this_phase_ids(state, actor_of(state, source_ci))
     if len(ids) < 2:
         return state
     push_select_token(state, source_ci, token_type="Shield", max_targets=1,
@@ -984,7 +986,7 @@ def _padme_attack_with_an_entrant(state, source_ci, target_id, event_ctx):
     ``no_base`` is the last sentence; the attack is MANDATORY ("you must attack with a
     unit, if able")."""
     from swu.engine.actions import push_granted_attack
-    ids = _entered_play_this_phase_ids(state, source_ci.owner_id)
+    ids = _entered_play_this_phase_ids(state, actor_of(state, source_ci))
     if len(ids) < 2:
         return state
     push_granted_attack(state, source_ci,
@@ -998,11 +1000,9 @@ def _padme_followup_attack(state, source_ci, target_id, event_ctx):
     unit that entered play this phase, even if it's exhausted.  It can't attack bases
     for this attack."
 
-    ``exclude_source`` is the "another" (the attack that just ended was hers).
-    DOCUMENTED DEVIATION: ``WhenAttackEnds`` fires off ``attack_ended_survivor``, so a
-    Padmé who died in the attack she made does not get the follow-up, while her rules
-    note says she "does not need to survive the attack in order to attack with another
-    unit"."""
+    ``exclude_source`` is the "another" (the attack that just ended was hers).  The
+    trigger is ``WhenAttackEnds(even_if_defeated=True)``: her rules note says she "does
+    not need to survive the attack in order to attack with another unit"."""
     from swu.engine.actions import push_granted_attack
     push_granted_attack(state, source_ci,
                         attacker_predicates=["played_this_phase"],
@@ -1027,7 +1027,7 @@ def _padme_amidala_ts26():
             undeployed_only=True,
         ),
         TriggerAbility(
-            trigger=WhenAttackEnds(),
+            trigger=WhenAttackEnds(even_if_defeated=True),
             effects=[CustomEffect(fn=_padme_followup_attack)],
             optional=True,
             deployed_only=True,
@@ -1088,7 +1088,7 @@ def _rex_ready_and_discount(state, source_ci, target_id, event_ctx):
     note_unit_readied(state, unit)
     unit.exhausted = False
     state.game_memory.pending_play_discounts.append({
-        "player_id": source_ci.owner_id,
+        "player_id": actor_of(state, source_ci),
         "trait": "",
         "amount": 2,
         "units_only": False,
@@ -1191,7 +1191,7 @@ def _first_battle_memorial_tokens(state, source_ci, target_id, event_ctx):
     unit"."""
     from swu.engine.actions import push_select_token
     from swu.abilities.resolver import _is_leader_unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = sum(1 for u in ps.ground_arena + ps.space_arena if _is_leader_unit(u))
     if n <= 0:
         return state
@@ -1231,7 +1231,7 @@ def _dookus_palace_play(state, source_ci, target_id, event_ctx):
     the price cannot disagree."""
     from swu.engine.actions import push_play_from_hand
     from swu.abilities.resolver import _is_leader_unit
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     n = sum(1 for u in ps.ground_arena + ps.space_arena if _is_leader_unit(u))
     push_play_from_hand(state, source_ci, cost_reduction=n)
     return state
@@ -1534,7 +1534,7 @@ def _ahsoka_sabers_shield_and_discount(state, source_ci, target_id, event_ctx):
     from swu.engine.tokens import attach_token
     attach_token(state, holder, unit, "Shield")
     state.game_memory.pending_play_discounts.append({
-        "player_id": source_ci.owner_id,
+        "player_id": actor_of(state, source_ci),
         "trait": "",
         "amount": 2,
         "units_only": False,
@@ -1844,7 +1844,7 @@ def _wartime_mercenaries_gift(state, source_ci, target_id, event_ctx):
     token to either side."""
     from swu.engine.actions import push_select_token
     opp_id = next(p.player_id for p in state.players
-                  if p.player_id != source_ci.owner_id)
+                  if p.player_id != actor_of(state, source_ci))
     push_select_token(state, source_ci, token_type="Experience", max_targets=1,
                       controller="any", decider_id=opp_id)
     return state
@@ -1878,7 +1878,7 @@ def _jedi_general_clones(state, source_ci, target_id, event_ctx):
     from swu.engine.traits import has_trait
     from swu.engine.actions import _create_token_units
     from swu.engine.tokens import attach_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     leaders = [ci for ci in (ps.base_zone + ps.ground_arena + ps.space_arena)
                if isinstance(ci.card_def, Leader) and has_trait(state, ci, "Republic")]
     for _ldr in leaders:
@@ -2058,7 +2058,7 @@ def _wartime_profiteer_ready(state, source_ci, target_id, event_ctx):
     the printed "may" collapses to taking it (the Foresight TWI_68 reading).  An
     exhausted resource is chosen, since readying a ready one is a no-op."""
     for ps in state.players:
-        if ps.player_id == source_ci.owner_id:
+        if ps.player_id == actor_of(state, source_ci):
             continue
         for r in ps.resources:
             if r.exhausted:
@@ -2091,7 +2091,7 @@ def _droideka_pay_for_tokens(state, source_ci, target_id, event_ctx):
     offered unaffordable."""
     from swu.engine.actions import _exhaust_resources
     from swu.engine.tokens import attach_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if ps.available_resources < 2:
         return state
     _exhaust_resources(ps, 2)
@@ -2234,7 +2234,7 @@ def _yoda_ts26_clone(state, source_ci, target_id, event_ctx):
     duration sweep."""
     from swu.engine.actions import _create_token_units
     from swu.engine.state import Modifier
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     for token in _create_token_units(state, ps, "Clone Trooper", 1):
         state.modifiers.append(Modifier(
             modifier_id=state.alloc_modifier_id(),
@@ -2288,7 +2288,7 @@ def _fortune_and_glory_bounty(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import _apply_capture, compute_power
     collector_id = event_ctx.get("defeated_controller_id")
     if collector_id is None:
-        collector_id = source_ci.owner_id
+        collector_id = actor_of(state, source_ci)
     idx = state.player_index(collector_id)
     collector = state.players[1 - idx]
     captors = [ci for ci in collector.ground_arena + collector.space_arena]
@@ -2395,7 +2395,7 @@ def _wartime_refugee_heal(state, source_ci, target_id, event_ctx):
     Wolffe SOR_160 lock and the base-heal ledger both apply."""
     from swu.abilities.resolver import _apply_heal
     for ps in state.players:
-        if ps.player_id == source_ci.owner_id:
+        if ps.player_id == actor_of(state, source_ci):
             continue
         base = ps.base_instance
         if base is not None:
@@ -2454,7 +2454,7 @@ def _wartime_pirate_opponent_snipe(state, source_ci, target_id, event_ctx):
     out, and with no unit on the board nothing is pushed."""
     from swu.engine.actions import push_select_damage
     opp_id = next(p.player_id for p in state.players
-                  if p.player_id != source_ci.owner_id)
+                  if p.player_id != actor_of(state, source_ci))
     push_select_damage(state, source_ci, max_targets=1, decider_id=opp_id)
     return state
 
@@ -2485,7 +2485,7 @@ def _reveal_intentions(state, source_ci, target_id, event_ctx):
     Pushed in REVERSE seat order so the CONTROLLER's pick resolves first on the LIFO
     stack, which is the printed "in player order"."""
     from swu.engine.actions import push_name_and_discard
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(state, source_ci)
     order = [controller_id] + [p.player_id for p in state.players
                                if p.player_id != controller_id]
     for pid in reversed(order):

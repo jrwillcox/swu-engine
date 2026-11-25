@@ -29,6 +29,8 @@ another family, which is why it could be extracted first.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass
 from typing import Optional
@@ -377,7 +379,7 @@ def push_opponent_chooses_target(
         mandatory stage as ``"defeat"``, paired with ``units_only=True`` and
         ``ready_only=True`` so only a ready unit of theirs can be picked (an
         already-exhausted unit would be a no-op) — with none, nothing is pushed."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     opponent_id = next(
         p.player_id for p in s.players if p.player_id != controller_id)
     ctx = {
@@ -591,7 +593,7 @@ def push_opponent_split_bounce(s: GameState, source_ci: CardInstance) -> None:
     source's controller chooses (stage "choose"); a two-pick pool later shifts to
     the opponent (stage "split").  Only pushed when at least one non-leader unit is
     in play (else the event fizzles cleanly)."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     opponent_id = next(p.player_id for p in s.players if p.player_id != controller_id)
     candidate_ids: list[str] = []
     for p in s.players:
@@ -660,7 +662,7 @@ def push_owner_may_replay(
             "owner_id": ci.owner_id,
             "grant_keyword": grant_keyword,
         },
-        after_resolve_player_index=s.player_index(source_ci.owner_id),
+        after_resolve_player_index=s.player_index(actor_of(s, source_ci)),
     )
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
@@ -732,7 +734,7 @@ def push_each_player_defeats(
     ``include_leaders`` widens the ``"defeat"`` choice the same way, for a card
     printed as plain "a unit they control" with no non-leader clause (Governor's
     Shuttle LAW_99)."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     opponent_id = next(p.player_id for p in s.players if p.player_id != controller_id)
     order = [opponent_id] if only_opponent else [controller_id, opponent_id]
     ctx = {
@@ -868,7 +870,7 @@ def push_choose_units_sacrifice_rest(
     (a list of ``[token_name, count]``) and every OTHER friendly arena unit is
     defeated.  Pushed only when ≥ ``required_count`` units are eligible (else the
     "If you do" fails and nothing happens)."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ctx = {
         "source_id": source_ci.instance_id,
         "controller_id": controller_id,

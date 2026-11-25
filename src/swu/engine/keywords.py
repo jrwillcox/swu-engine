@@ -23,6 +23,8 @@ Raid 2 → Raid 4).  Boolean keywords are present/absent.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import re
 from enum import Enum
 from typing import Optional, TYPE_CHECKING
@@ -31,6 +33,71 @@ from swu.engine.state import ability_suppressed, borrowed_ability_sources
 
 if TYPE_CHECKING:
     from swu.engine.state import CardInstance, GameState
+
+
+# ── The attack in progress ("while attacking a … unit" keyword grants) ─────────
+# A ConstantAbility's KeywordGrant gated "while attacking a unit" (Moff Gideon
+# SHD_7), "… a unit with a Bounty" (Jango Fett SHD_138) or "… a damaged unit"
+# (Miraj Scintel SEC_139) counts only for the attacker of the attack the combat
+# pipeline is resolving.  The pipeline pushes a snapshot of that attack, taken
+# BEFORE combat damage (so "a damaged unit" means damaged before this attack hit it)
+# with ``attack_context``; outside it, such a grant is simply absent.  A plain
+# module-level stack, never part of the game state: it lives only for the duration
+# of one keyword query inside the pipeline.
+_ATTACK_STACK: list = []
+
+
+class attack_context:
+    """``with attack_context(snapshot):`` — make ``snapshot`` (from
+    ``attack_snapshot``) the attack in progress for keyword queries."""
+
+    def __init__(self, snapshot: dict) -> None:
+        self.snapshot = snapshot
+
+    def __enter__(self) -> dict:
+        _ATTACK_STACK.append(self.snapshot)
+        return self.snapshot
+
+    def __exit__(self, *exc) -> None:
+        _ATTACK_STACK.pop()
+
+
+def attack_snapshot(state: "GameState", attacker_ci: "CardInstance",
+                    defenders: list) -> dict:
+    """The facts a "while attacking a … unit" grant reads, for ``attacker_ci``
+    attacking ``defenders`` (one unit; two for a two-unit attack — any of them
+    satisfying the condition is enough)."""
+    from swu.abilities.resolver import _unit_has_bounty
+    return {
+        "attacker": attacker_ci.instance_id,
+        "damaged": any(d.damage > 0 for d in defenders),
+        "bounty": any(_unit_has_bounty(state, d) for d in defenders),
+        "arenas": sorted({"space" if d.zone.name == "SPACE_ARENA" else "ground"
+                          for d in defenders}),
+    }
+
+
+def _while_attacking_gate_ok(spec, unit_ci: "CardInstance") -> bool:
+    """False when ``spec`` is a "while attacking a … unit" constant and ``unit_ci``
+    is not, right now, the attacker of an attack that satisfies it."""
+    wau = getattr(spec, "while_attacking_unit", False)
+    wb = getattr(spec, "while_attacking_bounty_unit", False)
+    wd = getattr(spec, "while_attacking_damaged_unit", False)
+    arena = getattr(spec, "while_attacking_unit_arena", None)
+    if not (wau or wb or wd or arena):
+        return True
+    if not _ATTACK_STACK:
+        return False
+    ctx = _ATTACK_STACK[-1]
+    if ctx["attacker"] != unit_ci.instance_id:
+        return False
+    if wb and not ctx["bounty"]:
+        return False
+    if wd and not ctx["damaged"]:
+        return False
+    if arena and arena not in ctx["arenas"]:
+        return False
+    return True
 
 
 class Keyword(str, Enum):
@@ -463,6 +530,8 @@ def has_keyword(state: "GameState", unit_ci: "CardInstance", keyword: Keyword) -
                     if not any(isinstance(eff, KeywordGrant) and eff.keyword == kw_name
                                for eff in spec.effects):
                         continue
+                    if not _while_attacking_gate_ok(spec, unit_ci):
+                        continue
                     if spec.condition and not spec.condition.evaluate(state, source_ci):
                         continue
                     if not _spec_matches_ci(spec.target, unit_ci, source_ci, state, {}):
@@ -639,7 +708,7 @@ def _keyword_grant_value(state: "GameState", eff, source_ci) -> int:
     if not count:
         return eff.value
     if count == "damaged_enemy_units":
-        own = state.player_index(source_ci.owner_id)
+        own = state.player_index(actor_of(state, source_ci))
         return sum(1 for i, ps in enumerate(state.players) if i != own
                    for u in ps.ground_arena + ps.space_arena if u.damage > 0)
     if count == "upgrades_on_controller_base":
@@ -730,6 +799,8 @@ def keyword_value(state: "GameState", unit_ci: "CardInstance", keyword: Keyword)
                     if not grants:
                         continue  # keyword filter before the condition — see the
                                   # recursion note in ``has_keyword``
+                    if not _while_attacking_gate_ok(spec, unit_ci):
+                        continue
                     if spec.condition and not spec.condition.evaluate(state, source_ci):
                         continue
                     if not _spec_matches_ci(spec.target, unit_ci, source_ci, state, {}):
@@ -877,6 +948,23 @@ def parse_smuggle_cost(text: str | None) -> Optional[tuple[int, tuple[str, ...]]
         if re.search(rf"\b{re.escape(a)}\b", inner, re.IGNORECASE)
     )
     return n, aspects
+
+
+_SMUGGLE_RIDER_DAMAGE_RE = re.compile(
+    r"deal\s+(\d+)\s+damage\s+to\s+a\s+friendly\s+unit", re.IGNORECASE)
+
+
+def parse_smuggle_rider_damage(text: str | None) -> int:
+    """The "deal N damage to a friendly unit" part of a printed Smuggle cost (First
+    Light SHD_36: ``Smuggle [7 resources Vigilance Villainy, deal 4 damage to a
+    friendly unit]``), or 0.  Only text inside the Smuggle bracket counts."""
+    if not text:
+        return 0
+    m = _SMUGGLE_BRACKET_RE.search(text)
+    if not m:
+        return 0
+    r = _SMUGGLE_RIDER_DAMAGE_RE.search(m.group(1))
+    return int(r.group(1)) if r else 0
 
 
 # ── Piloting cost parsing ─────────────────────────────────────────────────────

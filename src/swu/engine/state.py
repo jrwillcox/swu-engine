@@ -180,12 +180,18 @@ class GameMemory:
     # deck this phase, play it from your discard pile" (Kylo's TIE Silencer SHD_135).
     cards_discarded_this_phase: set = field(default_factory=set)  # instance_ids
     units_attacked_this_round: set = field(default_factory=set)  # instance_ids
-    # instance_ids of units that dealt combat damage to a base this round ("this
-    # round" == "this phase" — base attacks happen only in ACTION, cleared at the
-    # round rollover; the units_attacked_this_round precedent).  Recorded at the
-    # base-combat damage step.  Gates "Defeat a unit that dealt damage to a base
-    # this phase" (Retaliation SEC_77).
+    # instance_ids of units that dealt damage to a base this round, in combat
+    # (including Overwhelm) or by an ability ("this round" == "this phase", cleared
+    # at the round rollover).  Recorded by ``combat.record_base_damage``.  Gates
+    # "Defeat a unit that dealt damage to a base this phase" (Retaliation SEC_77) and
+    # Cassian Andor SEC_12.
     units_dealt_base_damage_this_round: set = field(default_factory=set)
+    # Units that skip the NEXT regroup ready step only — "doesn't ready during the
+    # next regroup phase" (Dryden Vos SEC_137), "can't ready during this regroup
+    # phase" (Patient Hunter LAW_73).  ``_ready_all_cards`` skips and removes each,
+    # so under Max Rebo LAW_72's second regroup they ready normally.  Cleared at the
+    # round rollover as a backstop.
+    skip_next_ready: set = field(default_factory=set)
     # base-owner player_id -> list of enemy unit instance_ids that DECLARED an
     # attack against that player's base this round ("this round" == "this phase" —
     # base attacks happen only in ACTION, cleared at the round rollover; the
@@ -219,6 +225,13 @@ class GameMemory:
     # times each game").  Incremented by every ``UseAbility`` and read by the
     # ``SOURCE_ABILITY_USES_MAX`` condition; never cleared, like epic_actions_spent.
     activated_ability_use_counts: dict = field(default_factory=dict)
+    # instance_id → the player who controls a card OUTSIDE the arenas and resource
+    # rows, where control is not implicit in where the card sits: the player who
+    # played an upgrade (it keeps control even on an enemy unit), the player who
+    # played an event, and a defeated unit's last-known controller.  Overwritten each
+    # time one of those happens, never cleared; read by ``actor_of`` and
+    # ``controller_id`` (attached upgrades only).  Absent ⇒ the owner.
+    card_controller: dict = field(default_factory=dict)
     # Activated abilities flagged ``once_per_round`` that have been used this round
     # (MagnaGuard Wing Leader TWI_82).  Each entry: ``f"{instance_id}:{ability_idx}"``;
     # cleared at the round rollover.
@@ -262,12 +275,10 @@ class GameMemory:
     # phase", e.g. Darth Vader SOR_10) key off the source's own controller — an
     # OPPONENT playing a Villainy card must NOT satisfy the condition for you.
     villainy_players_this_phase: set = field(default_factory=set)  # player_ids
-    # Per-player total combat damage dealt to an ENEMY base this phase, keyed
-    # player_id -> int (Cassian Andor SOR_13's undeployed "If you've dealt 3 or
-    # more damage to an enemy base this phase").  Accumulated at the direct
-    # base-combat damage step (the common case, alongside
-    # units_dealt_base_damage_this_round); non-combat / Overwhelm-spillover base
-    # damage is a documented uncovered edge.  Cleared at the phase rollover.
+    # Per-player total damage dealt to an ENEMY base this phase, of any kind
+    # (combat, Overwhelm, ability, indirect), keyed player_id -> int (Cassian Andor
+    # SOR_13's undeployed "If you've dealt 3 or more damage to an enemy base this
+    # phase").  Accumulated by ``combat.record_base_damage``.  Phase-cleared.
     base_damage_dealt_this_phase: dict = field(default_factory=dict)  # player_id -> int
     # instance_ids that have already spent their once-per-phase whole-instance
     # damage prevention ("The first time this unit would take damage each phase,
@@ -603,6 +614,15 @@ class GameMemory:
     # ASH_211) needs the side, which the id-keyed set deliberately does not carry.
     # Phase-cleared.
     leader_unit_defeat_controllers_this_phase: set = field(default_factory=set)
+    # One entry per unit that LEFT PLAY this phase by any route (defeated, returned to
+    # hand, put on a deck, captured): the player who controlled it as it left.  Fed by
+    # ``zones._note_left_play``; gates "If a (friendly) unit left play this phase"
+    # (Yoda TWI_4, Disturbance in the Force LOF_216, Let's Talk SEC_131).
+    # Phase-cleared.
+    left_play_controllers_this_phase: list = field(default_factory=list)
+    # The LEADER-unit slice of the ledger above, as a set of controllers ("If a
+    # friendly leader unit left play this phase", Fateful Goodbye ASH_211).
+    leader_left_play_controllers_this_phase: set = field(default_factory=set)
     # player_id -> how many NON-UNIT cards (events + upgrades) that player has played
     # this phase, fed at the same CardPlayed chokepoint as the trait ledgers.  A COUNT
     # rather than a trait set, because "the FIRST non-unit card you play each phase"
@@ -672,6 +692,8 @@ class GameMemory:
         self.upgrades_defeated_this_phase.clear()
         self.leader_units_defeated_this_phase.clear()
         self.leader_unit_defeat_controllers_this_phase.clear()
+        self.left_play_controllers_this_phase.clear()
+        self.leader_left_play_controllers_this_phase.clear()
         self.non_units_played_this_phase.clear()
         self.bases_healed_this_phase.clear()
 
@@ -682,6 +704,7 @@ class GameMemory:
         self.units_attacked_this_round.clear()
         self.token_unit_attackers_this_round.clear()
         self.units_dealt_base_damage_this_round.clear()
+        self.skip_next_ready.clear()
         self.base_attackers_this_round.clear()
         self.attackers_defeated_this_round.clear()
         self.defeated_controllers_this_round.clear()
@@ -716,6 +739,7 @@ class GameMemory:
             "cards_discarded_this_phase": sorted(self.cards_discarded_this_phase),
             "units_attacked_this_round": sorted(self.units_attacked_this_round),
             "units_dealt_base_damage_this_round": sorted(self.units_dealt_base_damage_this_round),
+            "skip_next_ready": sorted(self.skip_next_ready),
             "token_unit_attackers_this_round": sorted(self.token_unit_attackers_this_round),
             "base_attackers_this_round": {k: list(v) for k, v in self.base_attackers_this_round.items()},
             "attackers_defeated_this_round": sorted(self.attackers_defeated_this_round),
@@ -780,6 +804,10 @@ class GameMemory:
                 self.leader_units_defeated_this_phase),
             "leader_unit_defeat_controllers_this_phase": sorted(
                 self.leader_unit_defeat_controllers_this_phase),
+            "left_play_controllers_this_phase": list(
+                self.left_play_controllers_this_phase),
+            "leader_left_play_controllers_this_phase": sorted(
+                self.leader_left_play_controllers_this_phase),
             "non_units_played_this_phase": dict(self.non_units_played_this_phase),
             "unit_entries": list(self.unit_entries),
             "bases_healed_this_phase": sorted(self.bases_healed_this_phase),
@@ -815,6 +843,7 @@ class GameMemory:
             cards_discarded_this_phase=set(d.get("cards_discarded_this_phase", [])),
             units_attacked_this_round=set(d.get("units_attacked_this_round", [])),
             units_dealt_base_damage_this_round=set(d.get("units_dealt_base_damage_this_round", [])),
+            skip_next_ready=set(d.get("skip_next_ready", [])),
             token_unit_attackers_this_round=set(
                 d.get("token_unit_attackers_this_round", [])),
             base_attackers_this_round={k: list(v) for k, v in d.get("base_attackers_this_round", {}).items()},
@@ -884,6 +913,10 @@ class GameMemory:
                 d.get("leader_units_defeated_this_phase", [])),
             leader_unit_defeat_controllers_this_phase=set(
                 d.get("leader_unit_defeat_controllers_this_phase", [])),
+            left_play_controllers_this_phase=list(
+                d.get("left_play_controllers_this_phase", [])),
+            leader_left_play_controllers_this_phase=set(
+                d.get("leader_left_play_controllers_this_phase", [])),
             non_units_played_this_phase={
                 k: int(v) for k, v in
                 d.get("non_units_played_this_phase", {}).items()},
@@ -1372,17 +1405,19 @@ def controller_id(state: "GameState", ci: "CardInstance") -> str:
     """The player who CONTROLS ``ci`` right now.
 
     Control is implicit in this engine: a unit is controlled by the player whose
-    arena holds it (``change_control`` moves it; ``owner_id`` never changes), an
-    attached upgrade by its host's controller, a resource by the player whose
-    resource row holds it.  Everything else — hand, deck, discard, base zone, a card
-    in limbo — is controlled by its owner.  "Friendly" and "enemy" are judged by
-    this, never by ``owner_id`` (the known-deviation fix of 2026-11-23).
+    arena holds it (``change_control`` moves it; ``owner_id`` never changes), a
+    resource by the player whose resource row holds it.  An attached upgrade is
+    controlled by the player who PLAYED it, even on an enemy unit (Comprehensive
+    Rules: "If a player plays an upgrade onto an enemy unit, that player still
+    controls that upgrade"), recorded in ``game_memory.card_controller``.
+    Everything else — hand, deck, discard, base zone, a card in limbo — is
+    controlled by its owner.  "Friendly" and "enemy" are judged by this, never by
+    ``owner_id``.  For "you" in an ability, use ``actor_of``.
 
     Hot path (condition checks inside ``compute_power``): a card outside the arenas
     and resource rows answers immediately, and the owner's side is checked first."""
     zone = ci.zone
     if zone in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
-        # A unit, or an upgrade (which carries its host's zone).
         players = state.players
         if players and players[0].player_id != ci.owner_id:
             players = list(reversed(players))
@@ -1393,14 +1428,16 @@ def controller_id(state: "GameState", ci: "CardInstance") -> str:
                     return p.player_id
                 for up in u.attached_upgrades:
                     if up is ci or up.instance_id == iid:
-                        return p.player_id
+                        return _upgrade_controller(state, ci)
             for u in p.space_arena:
                 if u is ci or u.instance_id == iid:
                     return p.player_id
                 for up in u.attached_upgrades:
                     if up is ci or up.instance_id == iid:
-                        return p.player_id
-        return ci.owner_id
+                        return _upgrade_controller(state, ci)
+        # Still tagged with an arena but in none: a unit in the middle of leaving
+        # play (UnitDefeated fires before it is homed) — its last-known controller.
+        return _upgrade_controller(state, ci)
     if zone == Zone.RESOURCES:
         iid = ci.instance_id
         for p in state.players:
@@ -1408,6 +1445,39 @@ def controller_id(state: "GameState", ci: "CardInstance") -> str:
                 if r is ci or r.instance_id == iid:
                     return p.player_id
     return ci.owner_id
+
+
+def _upgrade_controller(state: "GameState", ci: "CardInstance") -> str:
+    """The recorded controller of a card whose control isn't where it sits (an
+    attached upgrade, a unit leaving play), else its owner."""
+    return str(state.game_memory.card_controller.get(ci.instance_id) or ci.owner_id)
+
+
+def actor_of(state: "GameState", ci: "CardInstance") -> str:
+    """"You" for an ability of ``ci``: the player it resolves for.
+
+    In an arena or a resource row, that is the card's controller (``controller_id``;
+    an attached upgrade's is whoever played it).  In a discard pile or in limbo it is
+    the player recorded in ``game_memory.card_controller`` — a defeated unit's
+    last-known controller (its When Defeated resolves for the player who controlled
+    it), or the player who played an event.  In a hand or deck it is the owner."""
+    zone = ci.zone
+    if zone in (Zone.HAND, Zone.DECK):
+        return ci.owner_id
+    if zone in (Zone.GROUND_ARENA, Zone.SPACE_ARENA, Zone.RESOURCES):
+        return controller_id(state, ci)
+    return str(state.game_memory.card_controller.get(ci.instance_id) or ci.owner_id)
+
+
+def note_card_controller(state: "GameState", ci: "CardInstance", player_id: str) -> None:
+    """Record ``player_id`` as ``ci``'s controller for ``actor_of`` /
+    ``controller_id`` (an upgrade or event they played, a unit they controlled as
+    it left play).  Only a non-owner needs an entry; the owner clears one."""
+    memo = state.game_memory.card_controller
+    if player_id == ci.owner_id:
+        memo.pop(ci.instance_id, None)
+    else:
+        memo[ci.instance_id] = player_id
 
 
 # ── Name-based ability suppression (Galen Erso P25_31) ────────────────────────

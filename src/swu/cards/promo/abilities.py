@@ -50,6 +50,8 @@ Groups encoded:
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 from swu.abilities.registry import (
     card_ability,
     TriggerAbility, ConstantAbility, GrantedAbility, EventAbility,
@@ -250,7 +252,7 @@ def _use_force_then(fn):
     token — the "If you do" binding (the Infused Brawler LOF_156 shape)."""
     def _inner(state, source_ci, target_id, event_ctx):
         from swu.engine.actions import spend_force_token
-        ps = state.player_by_id(source_ci.owner_id)
+        ps = state.player_by_id(actor_of(state, source_ci))
         if not spend_force_token(state, ps):
             return state
         return fn(state, source_ci, target_id, event_ctx)
@@ -381,20 +383,17 @@ def _darth_sidious_g25_2():
 # ── Qi'ra: scaling self-debuff + discard-then-deal ────────────────────────────
 
 def _qira_discard_deal(state, source_ci, target_id, event_ctx):
-    """Discard the first hand card (first-card simplification); if a card was
-    discarded, deal 3 to the chosen unit — bound so "If you do" holds (Merrin
-    LOF_160 pattern)."""
+    """Discard a card of the player's choice; if a card was discarded, deal 3 to
+    the chosen unit — bound so "If you do" holds (Merrin LOF_160 pattern)."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
-    if not ps.hand:
-        return state
-    from swu.engine.state import Zone
-    card = ps.hand.pop(0)
-    card.zone = Zone.DISCARD
-    ps.discard.append(card)
-    from swu.abilities.resolver import _apply_deal_damage
-    _apply_deal_damage(state, target_id, 3, source_ci.card_def.name)
+    from swu.engine.actions import push_discard_of_choice
+    push_discard_of_choice(state, actor_of(state, source_ci), 1,
+                           source_id=source_ci.instance_id,
+                           after_idx=1 - state.player_index(actor_of(state, source_ci)),
+                           payoff="damage_target_if_discarded",
+                           payoff_args={"target_id": target_id, "amount": 3,
+                                        "player_id": actor_of(state, source_ci)})
     return state
 
 
@@ -428,7 +427,7 @@ def _bb8_pay_ready(state, source_ci, target_id, event_ctx):
     "If you do" holds.  The gate guarantees ≥2 ready resources when offered."""
     if target_id is None:
         return state
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     from swu.engine.actions import _exhaust_resources
     _exhaust_resources(ps, 2)
     result = state.find_instance(target_id)
@@ -475,7 +474,7 @@ def _darth_nihilus_p26_79(state, source_ci, target_id, event_ctx):
     is_non_vehicle = "Vehicle" not in (getattr(target_ci.card_def, "traits", None) or ())
     from swu.abilities.resolver import _apply_deal_damage
     state = _apply_deal_damage(state, target_id, 3, source_ci.card_def.display_name,
-                               dealer_id=source_ci.owner_id)
+                               dealer_id=actor_of(state, source_ci))
     if is_non_vehicle:
         src = state.find_instance(source_ci.instance_id)
         if src is not None:
@@ -622,7 +621,7 @@ def _shatterpoint_use_force(state, source_ci, target_id, event_ctx):
     Pursuit TWI_221 "If you do" gate).  With no token the flag stays unset, so the
     defeat has no candidates and is skipped."""
     from swu.engine.actions import spend_force_token
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     if spend_force_token(state, ps):
         event_ctx["prior_target_id"] = source_ci.instance_id
     return state
@@ -693,7 +692,7 @@ def _poe_jtlp6(state, source_ci, target_id, event_ctx):
     offer to attach Poe himself onto a friendly Vehicle without a Pilot as a
     Pilot upgrade (the pilot_self_attach primitive)."""
     from swu.engine.actions import _create_token_units, push_attach_unit_as_pilot
-    ps = state.player_by_id(source_ci.owner_id)
+    ps = state.player_by_id(actor_of(state, source_ci))
     _create_token_units(state, ps, "X-Wing", 1)
     push_attach_unit_as_pilot(state, source_ci)
     return state
@@ -741,7 +740,7 @@ def _jabba_ash42_return_and_replay(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import push_play_upgrade_from_hand
     state = _apply_return_to_hand(state, target_id)
     # Only the controller may replay it, and only if it landed in their hand.
-    if owner_id == source_ci.owner_id:
+    if owner_id == actor_of(state, source_ci):
         push_play_upgrade_from_hand(state, source_ci,
                                     upgrade_id=target_id, free=True)
     return state

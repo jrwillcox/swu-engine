@@ -467,18 +467,20 @@ class HeuristicBot:
                 if type(a).__name__ == "SelectExcessHandCardToDiscard"]
         if not acts:
             return legal[0]
-        hand_by_id = {c.instance_id: c for c in view.my.hand}
+        return min(acts, key=lambda a: self._hand_keep_value(view, a))
 
-        def keep_value(act: "Action") -> float:
-            cv = hand_by_id.get(getattr(act, "instance_id", None))
-            if cv is None:
-                return 0.0
-            v = 6.0 if cv.card_type == "Unit" else 0.0
-            v += max(0, RESOURCE_KEEP_COST + 1 - cv.cost) * 1.5
-            v += _card_value(cv) * 0.1
-            return v
-
-        return min(acts, key=keep_value)
+    @staticmethod
+    def _hand_keep_value(view: "PlayerView", act: "Action") -> float:
+        """How much we want to keep the hand card ``act`` would discard: bodies and
+        cheap, castable cards are kept (the resourcing reading)."""
+        cv = next((c for c in view.my.hand
+                   if c.instance_id == getattr(act, "instance_id", None)), None)
+        if cv is None:
+            return 0.0
+        v = 6.0 if cv.card_type == "Unit" else 0.0
+        v += max(0, RESOURCE_KEEP_COST + 1 - cv.cost) * 1.5
+        v += _card_value(cv) * 0.1
+        return v
 
     # ── Main ACTION phase ─────────────────────────────────────────────────
 
@@ -558,7 +560,10 @@ class HeuristicBot:
             # never-buff-an-enemy guard — applies unchanged.  Before this they
             # scored a flat 0.0, i.e. barely above Pass, so the bot almost never
             # smuggled and never valued the card it was getting.
-            return self._score_play_card(a, idx)
+            score = self._score_play_card(a, idx)
+            if kind in ("SmugglePlay", "PlayViaSmuggle"):
+                score -= self._smuggle_rider_cost(a, idx)
+            return score
         if kind == "AttackWithUnit":
             return self._score_attack(a, idx, base_remaining)
         if kind == "AttackTwoUnits":
@@ -566,6 +571,23 @@ class HeuristicBot:
         if kind == "PilotPlay":
             return self._score_pilot_play(a, idx)
         return 0.0
+
+    def _smuggle_rider_cost(self, a: "Action", idx: dict) -> float:
+        """What a Smuggle rider costs us (First Light SHD_36: "deal 4 damage to a
+        friendly unit"): a non-upgrade smuggled with an ``upgrade_target_id`` names
+        the friendly unit that takes the damage.  Killing it costs its printed cost;
+        otherwise a small penalty, so the healthiest unit is picked."""
+        tgt = getattr(a, "upgrade_target_id", None)
+        cv = idx.get(getattr(a, "instance_id", None), (None, None))[0]
+        if tgt is None or cv is None or cv.card_type == "Upgrade":
+            return 0.0
+        unit = idx.get(tgt, (None, None))[0]
+        if unit is None:
+            return 0.0
+        remaining = int(unit.effective_hp or 0) - int(unit.damage or 0)
+        if remaining <= 4:
+            return 2.0 * float(unit.cost or 1)
+        return 1.0 / max(1, remaining)
 
     def _score_pilot_play(self, a: "Action", idx: dict) -> float:
         """PilotPlay: a Piloting unit from hand, attached to a friendly Vehicle."""
@@ -761,6 +783,13 @@ class HeuristicBot:
         pays = [a for a in legal if type(a).__name__ == "PayCostRoute"]
         if not pays:
             return legal[0]
+        # "Discard a Cunning card instead of paying" (Bamboozle SOR_199): the
+        # payment is a hand card — give up the one we least want to keep.
+        hand_ids = {c.instance_id for c in view.my.hand}
+        if all(a.target_id in hand_ids for a in pays):
+            from types import SimpleNamespace
+            return min(pays, key=lambda a: self._hand_keep_value(
+                view, SimpleNamespace(instance_id=a.target_id)))
         idx = _card_index(view)
 
         def remaining(a: "Action") -> float:
@@ -1077,10 +1106,15 @@ class HeuristicBot:
         (a deep hand can spare one), otherwise we keep the card."""
         discard = next((a for a in legal
                         if type(a).__name__ == "DiscardRandomCard"), None)
+        chosen = [a for a in legal if type(a).__name__ == "DiscardChosenCard"]
         decline = next((a for a in legal
                         if type(a).__name__ == "DeclineDiscard"), None)
-        if discard is not None and len(view.my.hand) >= 4:
-            return discard
+        if len(view.my.hand) >= 4:
+            if chosen:
+                # Syril Karn SEC_133 / TS26_33: our pick — the least useful card.
+                return min(chosen, key=lambda a: self._hand_keep_value(view, a))
+            if discard is not None:
+                return discard
         return decline if decline is not None else _safe_default(legal)
 
     def _choose_exhaust_for_base_damage(

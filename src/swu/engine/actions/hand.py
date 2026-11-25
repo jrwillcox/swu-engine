@@ -35,6 +35,8 @@ person to notice the seam does not have to re-measure it.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass
 from typing import Optional
@@ -47,6 +49,7 @@ from swu.engine.events import (
 )
 from swu.engine.state import CardInstance, GameState, PlayerState, Zone
 from swu.engine.triggers import get_bus
+from swu.engine.traits import has_trait
 
 from swu.engine.actions.base import (
     Action, IllegalActionError,
@@ -55,10 +58,13 @@ from swu.engine.actions.dispatch import (
     register_decisions,
 )
 from swu.engine.actions.costs import (
-    _affordable_with_credits, _aspect_penalty, _event_aspect_waiver, _exhaust_resources, _ignorable_aspect_penalty, _pay_play_cost, _piloting_cost, _piloting_discount_entry, _play_cost, _play_reduction_for, _smuggle_cost, _spend_play_discounts, _usable_credits,
+    _affordable_with_credits, _aspect_penalty, _event_aspect_waiver, _exhaust_resources, _ignorable_aspect_penalty, _pay_play_cost, _piloting_cost, _play_cost, _play_reduction_for, _smuggle_cost, _spend_piloting_discounts, _spend_play_discounts, _unit_resource_pool, _usable_credits, smuggle_rider_damage,
+)
+from swu.engine.actions.damage import (
+    _deal_damage_with_shield, _hp_lethal,
 )
 from swu.engine.actions.zones import (
-    _apply_capture, _attach_upgrade, _draw_cards, _eligible_upgrade_targets, _find_in_arenas, _put_unit_in_play, _resolve_event_ability,
+    _apply_capture, _attach_upgrade, _defeat_unit, _draw_cards, _eligible_upgrade_targets, _find_in_arenas, _put_unit_in_play, _resolve_event_ability,
 )
 from swu.engine.actions.shared import (
     _fire_card_played, _apply_defeat_unit_by_id, _attach_pilot, _candidate_card_views, _eligible_pilot_targets, _resource_top_of_deck, _take_from_hand,
@@ -165,6 +171,15 @@ class PlayFromHand(Action):
         ctx = top.context
         deciding_ps = s.player_by_id(top.deciding_player_id)
 
+        if ctx.get("any_card"):
+            # "Play a CARD from your hand": an event or upgrade goes to its own play.
+            pick = next((c for c in _non_unit_source_zone(s, deciding_ps, ctx)
+                         if c.instance_id == self.instance_id), None)
+            if pick is not None and isinstance(pick.card_def, (Event, Upgrade)):
+                if pick not in _playable_non_units_from_hand(s, deciding_ps, ctx):
+                    raise IllegalActionError("That card can't be played now")
+                return _play_non_unit_from_hand(s, top, deciding_ps, pick)
+
         from_discard = bool(ctx.get("from_discard"))
         played_from_discard = from_discard and any(
             c.instance_id == self.instance_id for c in deciding_ps.discard)
@@ -189,7 +204,7 @@ class PlayFromHand(Action):
         if not isinstance(ci.card_def, Unit):
             raise IllegalActionError("Chosen card is not a unit")
         trait = ctx.get("trait")
-        if trait is not None and trait not in (getattr(ci.card_def, "traits", ()) or ()):
+        if trait is not None and not has_trait(s, ci, trait):
             raise IllegalActionError(f"Chosen unit lacks required trait {trait}")
         aspect = ctx.get("aspect")
         if aspect is not None and aspect not in {
@@ -212,6 +227,8 @@ class PlayFromHand(Action):
             ctx.get("cost_reduction_if_trait"))
         if bool(ctx.get("ignore_aspect_penalty")):
             cost_reduction += _ignorable_aspect_penalty(ci.card_def, deciding_ps, s)
+        cost_reduction += _event_aspect_waiver(
+            ci.card_def, deciding_ps, bool(ctx.get("ignore_all_aspect_penalties")), s)
         cost_reduction += _waived_aspect_penalty(
             ci.card_def, deciding_ps, s, ctx.get("waive_aspect"))
         # Exploit applies to an ability-driven play too: hand the play over to the
@@ -292,13 +309,7 @@ class PlayFromHand(Action):
             _push_opponents_ready(s, deciding_ps, after_idx)
         if resources_of is not None and bool(
                 ctx.get("then_owner_resources_deck_top")):
-            # "If you do, that opponent resources the top card of their deck."
-            # LAW_66's own rules note: "Resources enter play exhausted."
-            robbed = s.player_by_id(resources_of)
-            before = len(robbed.resources)
-            _resource_top_of_deck(s, robbed)
-            if len(robbed.resources) > before:
-                robbed.resources[-1].exhausted = True
+            _robbed_resources_deck_top(s, s.player_by_id(resources_of))
         _put_unit_in_play(
             s, deciding_ps, ci, enters_ready=enters_ready,
             then_damage=then_damage, then_damage_source=then_damage_source,
@@ -585,7 +596,7 @@ class SelectCapturedToPlay(Action):
         return _finish_play_captured(s, self.instance_id)
 
     def describe(self) -> str:
-        return f"Play captured {self.instance_id} for free"
+        return f"Choose captured {self.instance_id}"
 
 
 @dataclass
@@ -616,6 +627,21 @@ def _finish_play_captured(s: GameState, instance_id: str) -> GameState:
     ps = s.player_by_id(ctx["controller_id"])
     ci = next((c for c in ps.capture_pile if c.instance_id == instance_id), None)
     name = "nothing"
+    if ci is not None and ctx.get("mode") == "discard":
+        # "Discard a captured card guarded by a friendly unit" (Altering the Deal
+        # SHD_243): to its OWNER's discard pile, for good.
+        ps.capture_pile.remove(ci)
+        ci.captured_by = None
+        ci.face_down = False
+        ci.zone = Zone.DISCARD
+        s.player_by_id(ci.owner_id).discard.append(ci)
+        s.event_log.append(DecisionResolved(
+            deciding_player_id=top.deciding_player_id,
+            kind="play_captured_card",
+            choice=f"discarded {ci.card_def.display_name}"))
+        if not s.is_terminal() and not s.pending_decisions:
+            s.active_player_index = top.after_resolve_player_index
+        return s
     if ci is not None:
         ps.capture_pile.remove(ci)
         ci.captured_by = None
@@ -642,34 +668,45 @@ def _finish_play_captured(s: GameState, instance_id: str) -> GameState:
 
 def push_play_captured_card(
     s: GameState, source_ci: CardInstance, *, up_to: bool = True,
+    mode: str = "play",
 ) -> None:
     """Push a 'play_captured_card' decision: choose one Unit captive in the
     controller's capture pile and play it for free under their control (Dryden Vos
     SHD_192).  Candidates are the Unit captives (all guarded by the controller's
-    units); fizzles cleanly (no prompt) if none.  ``up_to`` adds a decline."""
+    units); fizzles cleanly (no prompt) if none.  ``up_to`` adds a decline.
+
+    ``mode="discard"`` discards the chosen captive to its owner's discard pile
+    instead — "Discard a captured card guarded by a friendly unit" (Altering the Deal
+    SHD_243): any card type, guarded by a unit the controller has in play."""
     from swu.cards.models import Unit
-    ps = s.player_by_id(source_ci.owner_id)
-    candidate_ids = [ci.instance_id for ci in ps.capture_pile
-                     if isinstance(ci.card_def, Unit)]
+    ps = s.player_by_id(actor_of(s, source_ci))
+    if mode == "discard":
+        guards = {u.instance_id for u in ps.ground_arena + ps.space_arena}
+        candidate_ids = [ci.instance_id for ci in ps.capture_pile
+                         if ci.captured_by in guards]
+    else:
+        candidate_ids = [ci.instance_id for ci in ps.capture_pile
+                         if isinstance(ci.card_def, Unit)]
     if not candidate_ids:
         return
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="play_captured_card",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "candidate_ids": candidate_ids,
             "candidates": _candidate_card_views(s, candidate_ids),
             "up_to": bool(up_to),
+            "mode": mode,
         },
         after_resolve_player_index=1 - owner_idx,
     )
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id, kind="play_captured_card"))
+        deciding_player_id=actor_of(s, source_ci), kind="play_captured_card"))
 
 
 def _play_captured_actions(state: GameState, top) -> list["Action"]:
@@ -786,18 +823,18 @@ def push_play_resource_units(
     prompt) if none.  ``up_to`` is accepted for symmetry — the loop can always be
     stopped (the "any number"), so a decline is always offered."""
     from swu.cards.models import Unit
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     candidate_ids = [r.instance_id for r in ps.resources
                      if isinstance(r.card_def, Unit)]
     if not candidate_ids:
         return
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     s.pending_decisions.append(PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="play_resource_units",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "candidate_ids": candidate_ids,
             "candidates": _candidate_card_views(s, candidate_ids),
             "up_to": bool(up_to),
@@ -806,7 +843,7 @@ def push_play_resource_units(
     ))
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id, kind="play_resource_units"))
+        deciding_player_id=actor_of(s, source_ci), kind="play_resource_units"))
 
 
 def _play_resource_units_actions(state: GameState, top) -> list["Action"]:
@@ -849,23 +886,23 @@ def push_look_opponent_hand(s: GameState, source_ci: CardInstance) -> None:
     player's decision context so the UI can display them; a single AckLookHand
     resolves it.  A HandInspected event still logs that the look happened."""
     from swu.engine.events import HandInspected
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     opp = s.players[1 - owner_idx]
     revealed = [
         {"card_id": ci.card_def.id, "card_name": ci.card_def.display_name}
         for ci in opp.hand
     ]
     s.event_log.append(HandInspected(
-        inspecting_player_id=source_ci.owner_id,
+        inspecting_player_id=actor_of(s, source_ci),
         revealed_player_id=opp.player_id,
         card_count=len(opp.hand),
     ))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="look_hand",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "revealed_player_id": opp.player_id,
             "revealed_hand": revealed,
         },
@@ -874,7 +911,7 @@ def push_look_opponent_hand(s: GameState, source_ci: CardInstance) -> None:
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="look_hand",
     ))
 
@@ -916,15 +953,10 @@ def _play_event_from_hand_actions(state: GameState, top: PendingDecision) -> lis
 
 def _play_via_smuggle_actions(state: GameState, top: PendingDecision) -> list[Action]:
     deciding_ps = state.player_by_id(top.deciding_player_id)
-    cost_reduction = top.context.get("cost_reduction", 0)
-    acts: list[Action] = []
-    for ci in _smuggle_eligible_from_resources(state, deciding_ps, cost_reduction):
-        if isinstance(ci.card_def, Upgrade):
-            for target in _eligible_upgrade_targets(state, ci):
-                acts.append(PlayViaSmuggle(ci.instance_id, target.instance_id))
-        else:
-            acts.append(PlayViaSmuggle(ci.instance_id))
-    return acts
+    cost_reduction = int(top.context.get("cost_reduction", 0) or 0)
+    return [PlayViaSmuggle(ci.instance_id, target)
+            for ci in deciding_ps.resources
+            for target in _smuggle_play_targets(state, deciding_ps, ci, cost_reduction)]
 
 
 # ── Play a card using Piloting as an ability (Wedge Antilles, JTL_8) ───
@@ -974,10 +1006,14 @@ def _look_hand_actions(state: GameState, top: PendingDecision) -> list[Action]:
 def _play_from_hand_candidates(
     state: GameState, ps: PlayerState, ctx: dict
 ) -> list[CardInstance]:
-    """The units a pending ``play_from_hand`` decision may currently play, derived
+    """The cards a pending ``play_from_hand`` decision may currently play, derived
     from its own context.  One place, so the legal-action enumeration and the
-    "play up to N" re-push (``PlayFromHand.apply``) can never disagree."""
-    return _playable_units_from_hand(
+    "play up to N" re-push (``PlayFromHand.apply``) can never disagree.
+
+    Units always; with ``ctx['any_card']`` ("Play a CARD from your hand" — Daimyo's
+    Palace LAW_20, Agent Kallus LAW_3, Count Dooku TWI_5) also the hand's playable
+    events and upgrades (``_playable_non_units_from_hand``)."""
+    units = _playable_units_from_hand(
         state, ps, ctx.get("trait"),
         int(ctx.get("cost_reduction", 0) or 0), ctx.get("cost_max"),
         aspect=ctx.get("aspect"),
@@ -990,7 +1026,154 @@ def _play_from_hand_candidates(
         cost_reduction_if_trait=ctx.get("cost_reduction_if_trait"),
         shares_keyword_with_id=ctx.get("shares_keyword_with_id"),
         resources_of=ctx.get("resources_of"),
-        waive_aspect=ctx.get("waive_aspect"))
+        waive_aspect=ctx.get("waive_aspect"),
+        ignore_all_aspect_penalties=bool(ctx.get("ignore_all_aspect_penalties")))
+    if ctx.get("any_card"):
+        return units + _playable_non_units_from_hand(state, ps, ctx)
+    return units
+
+
+def _any_card_reduction(state: GameState, ps: PlayerState, card, ctx: dict) -> int:
+    """The discount an ``any_card`` play gives ``card``: the decision's flat
+    ``cost_reduction`` plus its aspect waiver — one V/C/A/Cunning pip
+    (``ignore_aspect_penalty``, Daimyo's Palace LAW_20) or the whole penalty
+    (``ignore_all_aspect_penalties``, Agent Kallus LAW_3)."""
+    r = int(ctx.get("cost_reduction", 0) or 0)
+    if ctx.get("ignore_all_aspect_penalties"):
+        r += _event_aspect_waiver(card, ps, True, state)
+    elif ctx.get("ignore_aspect_penalty"):
+        r += _ignorable_aspect_penalty(card, ps, state)
+    return r
+
+
+def _robbed_resources_deck_top(s: GameState, robbed: PlayerState) -> None:
+    """"If you do, that opponent resources the top card of their deck" (Tear This
+    Ship Apart LAW_66) — exhausted, per the card's rules note ("Resources enter play
+    exhausted")."""
+    before = len(robbed.resources)
+    _resource_top_of_deck(s, robbed)
+    if len(robbed.resources) > before:
+        robbed.resources[-1].exhausted = True
+
+
+def _non_unit_source_zone(state: GameState, ps: PlayerState,
+                          ctx: dict) -> list[CardInstance]:
+    """Where an ``any_card`` play's events and upgrades come from: the decider's
+    hand, or ``resources_of``'s resource row (Tear This Ship Apart LAW_66)."""
+    if ctx.get("resources_of") is not None:
+        return state.player_by_id(ctx["resources_of"]).resources
+    return ps.hand
+
+
+def _playable_non_units_from_hand(state: GameState, ps: PlayerState,
+                                  ctx: dict) -> list[CardInstance]:
+    """The events and upgrades in ``ps``'s hand an ``any_card`` ``play_from_hand``
+    decision may play: matching ``trait``, affordable after ``_any_card_reduction``
+    (always, for a ``free`` play), and — for an upgrade — with at least one legal
+    host it is affordable on.  ``resources_of`` reads that player's resource row
+    instead of the hand."""
+    out: list[CardInstance] = []
+    trait = ctx.get("trait")
+    free = bool(ctx.get("free"))
+    budget = ps.available_resources + _usable_credits(state, ps)
+    defeat_ids = set(ctx.get("then_defeat_ids") or ())
+    for ci in _non_unit_source_zone(state, ps, ctx):
+        cd = ci.card_def
+        if not isinstance(cd, (Event, Upgrade)):
+            continue
+        if trait is not None and not has_trait(state, ci, trait):
+            continue
+        r = _any_card_reduction(state, ps, cd, ctx)
+        if isinstance(cd, Event):
+            if free or _play_cost(state, ci, ps, extra_reduction=r) <= budget:
+                out.append(ci)
+            continue
+        if any(free or _play_cost(state, ci, ps, target_host_id=h.instance_id,
+                                  extra_reduction=r) <= budget
+               for h in _eligible_upgrade_targets(state, ci)
+               if h.instance_id not in defeat_ids):
+            out.append(ci)
+    return out
+
+
+def _play_non_unit_from_hand(s: GameState, top: PendingDecision,
+                             ps: PlayerState, card: CardInstance) -> GameState:
+    """An ``any_card`` ``play_from_hand`` decision resolved with an EVENT or UPGRADE:
+    hand the play to the existing event / upgrade play with the same discount.
+
+    * An event replaces this decision with a one-card ``play_event_from_hand`` and
+      plays it straight away (``PlayEventFromHand``).
+    * An upgrade replaces it with a one-upgrade ``play_upgrade_from_hand``, where
+      the player picks the host.
+
+    ``then_defeat_ids`` (the units Count Dooku TWI_5's Exploit gives up) ride along:
+    an event's are defeated as it is played, an upgrade's once its host is chosen
+    (``PlayUpgradeFromHand``), so a declined upgrade costs no unit."""
+    ctx = top.context
+    r = _any_card_reduction(s, ps, card.card_def, ctx)
+    after_idx = top.after_resolve_player_index
+    defeat_ids = list(ctx.get("then_defeat_ids") or ())
+    s.pending_decisions.remove(top)
+    robbed_id = ctx.get("resources_of")
+    if robbed_id is not None and isinstance(card.card_def, Event):
+        # An event out of another player's resource row (Tear This Ship Apart
+        # LAW_66, "for free"): it resolves for the decider and goes to its OWNER's
+        # discard pile; "If you do, that opponent resources the top card".
+        robbed = s.player_by_id(robbed_id)
+        robbed.resources.remove(card)
+        card.face_down = False
+        card.exhausted = False
+        evt = CardPlayed(player_id=ps.player_id, instance_id=card.instance_id,
+                         card_name=card.card_def.display_name, cost_paid=0)
+        s.event_log.append(evt)
+        if "Villainy" in {a.name for a in (getattr(card.card_def, "aspects", None) or ())}:
+            s.game_memory.villainy_players_this_phase.add(ps.player_id)
+        if ctx.get("then_owner_resources_deck_top"):
+            _robbed_resources_deck_top(s, robbed)
+        card.zone = Zone.DISCARD
+        s.player_by_id(card.owner_id).discard.append(card)
+        _resolve_event_ability(s, ps, card, after_idx)
+        _fire_card_played(s, evt, after_idx)
+        if not s.is_terminal() and not s.pending_decisions:
+            s.active_player_index = after_idx
+        return s
+    if isinstance(card.card_def, Event):
+        dec = PendingDecision(
+            deciding_player_id=ps.player_id, kind="play_event_from_hand",
+            context={"source_id": ctx.get("source_id"), "cost_reduction": r,
+                     "free": False, "eligible_ids": [card.instance_id],
+                     "optional": False, "ignore_aspect_penalty": False},
+            after_resolve_player_index=after_idx)
+        s.pending_decisions.append(dec)
+        for cid in defeat_ids:
+            if s.find_instance(cid) is not None:
+                _apply_defeat_unit_by_id(s, cid)
+        if s.pending_decisions and s.pending_decisions[-1] is dec:
+            return PlayEventFromHand(card.instance_id).apply(s)
+        return s   # a When Defeated is resolving first; the play waits beneath it
+    s.pending_decisions.append(PendingDecision(
+        deciding_player_id=ps.player_id, kind="play_upgrade_from_hand",
+        context={
+            "trait": None, "from_resources": False, "host_controller": None,
+            "host_predicates": [], "then_resource_top_of_deck": False,
+            "then_ready_source": False, "then_damage_host": 0,
+            "then_defeat_at_regroup": False, "source_id": ctx.get("source_id"),
+            "controller_id": ps.player_id, "upgrade_id": card.instance_id,
+            "free": bool(ctx.get("free")), "cost_reduction": r,
+            "include_discards": False,
+            "ignore_aspect_penalty": False, "from_discard_only": False,
+            "host_id": None, "repeat": False, "then_defeat_ids": defeat_ids,
+            # Tear This Ship Apart LAW_66: the upgrade comes out of that player's
+            # resource row, and a real play makes them resource their deck top.
+            "resources_of": robbed_id,
+            "then_owner_resources_deck_top": bool(
+                ctx.get("then_owner_resources_deck_top")),
+        },
+        after_resolve_player_index=after_idx))
+    s.active_player_index = s.player_index(ps.player_id)
+    s.event_log.append(DecisionPushed(deciding_player_id=ps.player_id,
+                                      kind="play_upgrade_from_hand"))
+    return s
 
 
 def _waived_aspect_penalty(card, ps: PlayerState, state: GameState,
@@ -1017,6 +1200,7 @@ def _playable_units_from_hand(
     shares_keyword_with_id: Optional[str] = None,
     resources_of: Optional[str] = None,
     waive_aspect: Optional[str] = None,
+    ignore_all_aspect_penalties: bool = False,
 ) -> list[CardInstance]:
     """Units in ``ps``'s hand that match ``trait`` (if given) and are currently
     affordable at their effective cost, less ``cost_reduction`` (floored at 0).
@@ -1069,7 +1253,7 @@ def _playable_units_from_hand(
                           for k in (getattr(other[1].card_def, "keywords", None) or ())}
                 if not (mine and mine & theirs):
                     continue
-            if trait is not None and trait not in (getattr(cd, "traits", ()) or ()):
+            if trait is not None and not has_trait(state, ci, trait):
                 continue
             if aspect is not None and aspect not in {
                     a.name for a in (getattr(cd, "aspects", None) or ())}:
@@ -1084,6 +1268,7 @@ def _playable_units_from_hand(
             reduction = base_reduction + (
                 _ignorable_aspect_penalty(cd, ps, state) if ignore_aspect_penalty else 0)
             reduction += _waived_aspect_penalty(cd, ps, state, waive_aspect)
+            reduction += _event_aspect_waiver(cd, ps, ignore_all_aspect_penalties, state)
             if resources_of is None:
                 reduction += _exploit_best_case(state, ci, ps)  # Exploit applies too
             # A card played out of its player's OWN resource row (Osha HMW_17)
@@ -1167,9 +1352,19 @@ def push_play_from_hand(
     up_to: bool = False,
     then_defeat_played: bool = False,
     waive_aspect: Optional[str] = None,
+    any_card: bool = False,
+    ignore_all_aspect_penalties: bool = False,
 ) -> None:
     """Push a 'play_from_hand' decision: the source's controller plays a unit
     (matching ``trait`` if given) from hand, paying its cost (Admiral Ozzel).
+
+    ``any_card`` widens it to "Play a CARD from your hand": events and upgrades are
+    offered too and, once picked, handed to the event / upgrade play with the same
+    discount (``_play_non_unit_from_hand``).  Only ``trait``, ``cost_reduction``, the
+    aspect waivers and ``then_defeat_ids`` apply to them — the unit-entry riders
+    have nothing to act on.  ``ignore_all_aspect_penalties`` waives the card's WHOLE
+    aspect penalty ("ignoring its aspect penalties", Agent Kallus LAW_3), where
+    ``ignore_aspect_penalty`` waives one V/C/A/Cunning pip (Daimyo's Palace LAW_20).
 
     ``resources_of`` swaps the source zone from the controller's own hand to
     ANOTHER player's RESOURCE row — "Look at all of an opponent's resources.  You
@@ -1262,8 +1457,8 @@ def push_play_from_hand(
     step (when requested).  The decision carries no transient state, so it
     serialises cleanly.
     """
-    owner_idx = s.player_index(source_ci.owner_id)
-    owner_ps = s.player_by_id(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
+    owner_ps = s.player_by_id(actor_of(s, source_ci))
     after_idx = 1 - owner_idx
     candidates = _playable_units_from_hand(
         s, owner_ps, trait, cost_reduction, cost_max,
@@ -1271,7 +1466,15 @@ def push_play_from_hand(
         ignore_aspect_penalty=ignore_aspect_penalty, exclude_aspect=exclude_aspect,
         eligible_ids=eligible_ids, cost_reduction_if_trait=cost_reduction_if_trait,
         shares_keyword_with_id=shares_keyword_with_id, resources_of=resources_of,
-        waive_aspect=waive_aspect)
+        waive_aspect=waive_aspect,
+        ignore_all_aspect_penalties=ignore_all_aspect_penalties)
+    if any_card:
+        candidates = candidates + _playable_non_units_from_hand(s, owner_ps, {
+            "trait": trait, "cost_reduction": cost_reduction,
+            "ignore_aspect_penalty": ignore_aspect_penalty,
+            "ignore_all_aspect_penalties": ignore_all_aspect_penalties,
+            "then_defeat_ids": list(then_defeat_ids or ()),
+            "free": free, "resources_of": resources_of})
     if candidates:
         # Candidates sitting in the DISCARD pile are not clickable board subjects
         # in the web client (the discard is a non-interactive pile), so surface
@@ -1288,7 +1491,7 @@ def push_play_from_hand(
             discard_candidates = _candidate_card_views(
                 s, [c.instance_id for c in candidates])
         dec = PendingDecision(
-            deciding_player_id=source_ci.owner_id,
+            deciding_player_id=actor_of(s, source_ci),
             kind="play_from_hand",
             context={
                 "source_id": source_ci.instance_id,
@@ -1362,13 +1565,15 @@ def push_play_from_hand(
                 # beneath its own When Played triggers.
                 "then_defeat_played": bool(then_defeat_played),
                 "waive_aspect": waive_aspect,
+                "any_card": bool(any_card),
+                "ignore_all_aspect_penalties": bool(ignore_all_aspect_penalties),
             },
             after_resolve_player_index=after_idx,
         )
         s.pending_decisions.append(dec)
         s.active_player_index = owner_idx
         s.event_log.append(DecisionPushed(
-            deciding_player_id=source_ci.owner_id,
+            deciding_player_id=actor_of(s, source_ci),
             kind="play_from_hand",
         ))
     elif then_opponents_ready:
@@ -1413,15 +1618,15 @@ def push_play_event_from_hand(
     Mandatory if able and pushed only when ≥1 affordable event exists — Bib's
     activated ability is gated by ``CONTROLLER_CAN_PLAY_EVENT_FROM_HAND`` so the
     exhaust is never wasted; it fizzles silently if somehow none remain."""
-    owner_idx = s.player_index(source_ci.owner_id)
-    owner_ps = s.player_by_id(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
+    owner_ps = s.player_by_id(actor_of(s, source_ci))
     after_idx = 1 - owner_idx
     if not _playable_events_from_hand(
             s, owner_ps, cost_reduction, free=free, eligible_ids=eligible_ids,
             ignore_aspect_penalty=ignore_aspect_penalty):
         return
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="play_event_from_hand",
         context={
             "source_id": source_ci.instance_id,
@@ -1439,7 +1644,7 @@ def push_play_event_from_hand(
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="play_event_from_hand",
     ))
 
@@ -1510,29 +1715,113 @@ class PlayEventFromHand(Action):
 
 # ── Play a card using Smuggle as an ability (Lando Calrissian SHD_17) ──────────
 
+def _smuggle_affordable(state: GameState, ps: PlayerState, ci: CardInstance,
+                        cost: int) -> bool:
+    """Can ``ps`` pay ``cost`` to smuggle ``ci`` WITHOUT ``ci`` itself?  The smuggled
+    card leaves the resource row before the cost is paid, so only the OTHER ready
+    resources count, plus Credit tokens and Vuutun Palaa SEC_122's unit pool — the
+    same tiers ``_pay_play_cost`` spends.  Works before and after ``ci`` is popped."""
+    other_ready = sum(1 for r in ps.resources
+                      if not r.exhausted and r.instance_id != ci.instance_id)
+    return (other_ready + _usable_credits(state, ps)
+            + len(_unit_resource_pool(ps))) >= cost
+
+
+def _smuggle_play_targets(state: GameState, ps: PlayerState, ci: CardInstance,
+                          cost_reduction: int = 0) -> list[Optional[str]]:
+    """The ``upgrade_target_id`` values with which ``ps`` may smuggle ``ci`` now, or
+    [] when it can't be smuggled.
+
+    An upgrade lists each legal host.  A card whose Smuggle cost also deals damage
+    to a friendly unit (First Light SHD_36) lists each friendly unit that could take
+    it: the same field names it, since a unit has no host.  Any other card lists
+    just ``None``.  Each entry is priced through ``_smuggle_cost`` (with that host)
+    and checked against ``_smuggle_affordable``, so the offered actions and
+    ``_smuggle_play`` never disagree."""
+    if _smuggle_cost(state, ci, ps) is None:
+        return []
+    is_upgrade = isinstance(ci.card_def, Upgrade)
+    targets: list[Optional[str]]
+    if is_upgrade:
+        targets = [t.instance_id for t in _eligible_upgrade_targets(state, ci)]
+    elif smuggle_rider_damage(ci):
+        targets = [u.instance_id for u in ps.ground_arena + ps.space_arena]
+    else:
+        targets = [None]
+    out: list[Optional[str]] = []
+    for t in targets:
+        cost = _smuggle_cost(state, ci, ps, t if is_upgrade else None, cost_reduction)
+        if cost is not None and _smuggle_affordable(state, ps, ci, cost):
+            out.append(t)
+    return out
+
+
 def _smuggle_eligible_from_resources(
     state: GameState, ps: PlayerState, cost_reduction: int = 0,
 ) -> list[CardInstance]:
-    """Resource-zone cards ``ps`` may play via Smuggle at ``cost_reduction`` off,
-    affordable from the OTHER ready resources (the smuggled card leaves the zone and is
-    replaced from the deck top).  Mirrors ``_enumerate_smuggle_plays``' affordability;
-    an eligible Upgrade must also have ≥1 legal host, so this list and the offered
-    ``PlayViaSmuggle`` actions never disagree (no empty-decision stuck)."""
-    out: list[CardInstance] = []
-    for ci in ps.resources:
-        base = _smuggle_cost(state, ci, ps)
-        if base is None:
-            continue
-        cost = max(0, base - cost_reduction)
-        other_ready = sum(
-            1 for r in ps.resources
-            if not r.exhausted and r.instance_id != ci.instance_id)
-        if other_ready < cost:
-            continue
-        if isinstance(ci.card_def, Upgrade) and not _eligible_upgrade_targets(state, ci):
-            continue
-        out.append(ci)
-    return out
+    """Resource-zone cards ``ps`` may play via Smuggle at ``cost_reduction`` off
+    (Lando Calrissian SHD_17's gate) — those with at least one entry in
+    ``_smuggle_play_targets``, so the gate and the offered actions never disagree."""
+    return [ci for ci in ps.resources
+            if _smuggle_play_targets(state, ps, ci, cost_reduction)]
+
+
+def _smuggle_play(s: GameState, ps: PlayerState, ci: CardInstance,
+                  target_id: Optional[str], cost_reduction: int = 0) -> CardPlayed:
+    """Pay for and announce a Smuggle play of ``ci``, which the caller has already
+    taken out of ``ps``'s resource row.  Returns the logged ``CardPlayed``; the
+    caller then puts the card into play and fires the event.
+
+    Pays the full ``_smuggle_cost`` (and spends the discounts it counted), deals a
+    Smuggle rider's damage to the friendly unit ``target_id`` names (First Light
+    SHD_36), then replaces the smuggled card with the top card of the deck."""
+    is_upgrade = isinstance(ci.card_def, Upgrade)
+    host_id = target_id if is_upgrade else None
+    cost = _smuggle_cost(s, ci, ps, host_id, cost_reduction)
+    if cost is None:
+        raise IllegalActionError(
+            f"{ci.card_def.display_name} cannot be played using Smuggle")
+    rider = 0 if is_upgrade else smuggle_rider_damage(ci)
+    rider_unit = None
+    if rider:
+        rider_unit = (_find_in_arenas(ps, target_id) if target_id else None)
+        if rider_unit is None:
+            raise IllegalActionError(
+                f"Smuggling {ci.card_def.display_name} needs a friendly unit to "
+                f"deal {rider} damage to")
+    if not _smuggle_affordable(s, ps, ci, cost):
+        raise IllegalActionError(
+            f"Insufficient resources: need {cost}, have {ps.available_resources}")
+    _pay_play_cost(s, ps, cost)
+    _spend_play_discounts(s, ci, ps, host_id)
+    if rider_unit is not None:
+        _deal_damage_with_shield(s, ps, rider_unit, rider,
+                                 source_name=ci.card_def.display_name,
+                                 dealer_source_id=ci.instance_id)
+        if _hp_lethal(s, rider_unit) and _find_in_arenas(
+                ps, rider_unit.instance_id) is not None:
+            _defeat_unit(s, ps, rider_unit)
+
+    # Replace the smuggled card with the top card of the deck (deterministic).
+    if ps.deck:
+        repl = ps.deck.pop(0)
+        repl.zone = Zone.RESOURCES
+        repl.face_down = True
+        repl.exhausted = False
+        ps.resources.append(repl)
+        s.event_log.append(CardResourced(
+            player_id=ps.player_id, instance_id=repl.instance_id,
+            card_name=repl.card_def.display_name))
+
+    ci.face_down = False
+    card_played_evt = CardPlayed(
+        player_id=ps.player_id, instance_id=ci.instance_id,
+        card_name=ci.card_def.display_name, cost_paid=cost)
+    s.event_log.append(card_played_evt)
+    card_aspects = {a.name for a in (getattr(ci.card_def, "aspects", None) or ())}
+    if "Villainy" in card_aspects:
+        s.game_memory.villainy_players_this_phase.add(ps.player_id)
+    return card_played_evt
 
 
 def push_play_via_smuggle(
@@ -1546,13 +1835,13 @@ def push_play_via_smuggle(
     Mandatory if able and pushed only when ≥1 smuggle-eligible resource exists (Lando's
     ability is gated by ``CONTROLLER_CAN_SMUGGLE`` so its Exhaust / once-per-round is
     not wasted); fizzles silently if somehow none remain."""
-    owner_idx = s.player_index(source_ci.owner_id)
-    owner_ps = s.player_by_id(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
+    owner_ps = s.player_by_id(actor_of(s, source_ci))
     after_idx = 1 - owner_idx
     if not _smuggle_eligible_from_resources(s, owner_ps, cost_reduction):
         return
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="play_via_smuggle",
         context={
             "source_id": source_ci.instance_id,
@@ -1564,7 +1853,7 @@ def push_play_via_smuggle(
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id, kind="play_via_smuggle"))
+        deciding_player_id=actor_of(s, source_ci), kind="play_via_smuggle"))
 
 
 @dataclass
@@ -1599,39 +1888,11 @@ class PlayViaSmuggle(Action):
         if ci is None:
             raise IllegalActionError(
                 f"Smuggle source {self.instance_id} not in resource zone")
-        base = _smuggle_cost(s, ci, ps)
-        if base is None:
-            raise IllegalActionError(
-                f"{ci.card_def.display_name} cannot be played using Smuggle")
-        cost = max(0, base - cost_reduction)
-        if ps.available_resources < cost:
-            raise IllegalActionError(
-                f"Insufficient resources: need {cost}, have {ps.available_resources}")
-        _exhaust_resources(ps, cost)
-
-        # Replace the smuggled card with the top card of the deck (deterministic).
-        if ps.deck:
-            repl = ps.deck.pop(0)
-            repl.zone = Zone.RESOURCES
-            repl.face_down = True
-            repl.exhausted = False
-            ps.resources.append(repl)
-            s.event_log.append(CardResourced(
-                player_id=ps.player_id, instance_id=repl.instance_id,
-                card_name=repl.card_def.display_name))
-
-        ci.face_down = False
-        card_played_evt = CardPlayed(
-            player_id=ps.player_id, instance_id=ci.instance_id,
-            card_name=ci.card_def.display_name, cost_paid=cost)
-        s.event_log.append(card_played_evt)
-        card_aspects = {a.name for a in (getattr(ci.card_def, "aspects", None) or ())}
-        if "Villainy" in card_aspects:
-            s.game_memory.villainy_players_this_phase.add(ps.player_id)
-
-        # Pop before playing so the card's own triggers/resolution land on a clean
-        # stack (the "pop, then act" gotcha).
+        # Pop before paying and playing so the card's own triggers/resolution, and a
+        # Smuggle rider's defeat, land on a clean stack (the "pop, then act" gotcha).
         s.pending_decisions.pop()
+        card_played_evt = _smuggle_play(s, ps, ci, self.upgrade_target_id,
+                                        cost_reduction)
 
         if isinstance(ci.card_def, (Unit, Leader)):
             _put_unit_in_play(s, ps, ci, via_smuggle=True, play_source="smuggle")
@@ -1673,18 +1934,14 @@ def _piloting_eligible_from_hand(
 
     Enumerated as PAIRS so the offered actions and the gate never disagree: a
     Piloting card with no friendly Vehicle to ride is not playable this way."""
-    hosts = _eligible_pilot_targets(state, ps)
-    if not hosts:
-        return []
     out: list[tuple[CardInstance, CardInstance]] = []
     for ci in ps.hand:
-        base = _piloting_cost(state, ci, ps)
-        if base is None:
+        if _piloting_cost(state, ci, ps) is None:
             continue
-        if not _affordable_with_credits(ps, max(0, base - cost_reduction), state):
-            continue
-        for host in hosts:
-            out.append((ci, host))
+        for host in _eligible_pilot_targets(state, ps, ci):
+            cost = _piloting_cost(state, ci, ps, host.instance_id, cost_reduction)
+            if cost is not None and _affordable_with_credits(ps, cost, state):
+                out.append((ci, host))
     return out
 
 
@@ -1697,12 +1954,12 @@ def push_play_via_piloting(
     Mandatory if able and pushed only when ≥1 (pilot, host) pair exists — the
     activating ability is gated by ``CONTROLLER_CAN_PILOT`` so its Exhaust is never
     wasted; fizzles silently if somehow none remain."""
-    owner_idx = s.player_index(source_ci.owner_id)
-    owner_ps = s.player_by_id(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
+    owner_ps = s.player_by_id(actor_of(s, source_ci))
     if not _piloting_eligible_from_hand(s, owner_ps, cost_reduction):
         return
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="play_via_piloting",
         context={
             "source_id": source_ci.instance_id,
@@ -1713,7 +1970,7 @@ def push_play_via_piloting(
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id, kind="play_via_piloting"))
+        deciding_player_id=actor_of(s, source_ci), kind="play_via_piloting"))
 
 
 @dataclass
@@ -1748,12 +2005,10 @@ class PlayViaPiloting(Action):
 
         ci = next(c for c in ps.hand if c.instance_id == self.instance_id)
         ps.hand.remove(ci)
-        cost = max(0, _piloting_cost(s, ci, ps) - cost_reduction)
-        # Consume any pending Piloting-aware discount the cost already reflects.
-        _disc_idx = _piloting_discount_entry(s, ci, ps)
-        if _disc_idx is not None:
-            del s.game_memory.pending_play_discounts[_disc_idx]
+        cost = _piloting_cost(s, ci, ps, self.vehicle_target_id, cost_reduction) or 0
         _pay_play_cost(s, ps, cost)
+        # Spend the discounts the cost already reflects.
+        _spend_piloting_discounts(s, ci, ps, self.vehicle_target_id)
 
         card_aspects = {a.name for a in (getattr(ci.card_def, "aspects", None) or ())}
         if "Villainy" in card_aspects:
@@ -1839,7 +2094,7 @@ def push_say_no(
     resolve_effects decision can auto-finish and hand off the turn.  Fizzles
     cleanly (no decision pushed) when ``target_id`` is None or no longer in play.
     """
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     if effect == "opponent_heal_base":
         # "Each opponent MAY heal N damage from their base.  For each player that
         # does, give M Experience tokens to a unit" (Lom Pyke TS26_51) — the OPT-IN
@@ -1895,7 +2150,9 @@ def push_say_no(
 
 @dataclass
 class DeclinePlayFromHand(Action):
-    """Stop a "Play UP TO N units …" loop (Dathomiri Magicks ASH_104).
+    """Stop a "Play UP TO N units …" loop (Dathomiri Magicks ASH_104), or decline a
+    single "you MAY play it" (Directed by the Force LOF_123, The Invisible Hand
+    JTL_89, Old Daka LOF_36, Tear This Ship Apart LAW_66).
 
     The ordinary ``play_from_hand`` decision is mandatory-if-able — it is pushed
     only when something IS playable — so this is offered only while its context

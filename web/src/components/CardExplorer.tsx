@@ -242,18 +242,23 @@ export function CardExplorer({ onBack }: { onBack: () => void }) {
     if (!deck) return { count: 0, canAdd: false, canRemove: false, addTitle: "Loading…" };
     const nameKey = groupKey(card);
     const kind = cardKind(card);
+    // The engine can't play this card yet, so it can't join a deck (the server
+    // refuses it too). Removing a copy an older deck already holds still works.
+    const unplayable = "Not available to play yet";
     if (kind === "leader" || kind === "base") {
       const slotId = kind === "leader" ? deck.leader_id : deck.base_id;
       const here = slotId === card.id;
       return {
         count: here ? 1 : 0,
-        canAdd: !here,
+        canAdd: !here && card.playable,
         canRemove: here,
         addTitle: here
           ? `Already your ${kind}`
-          : slotId != null
-            ? `Replace your ${kind}`
-            : `Set as ${kind}`,
+          : !card.playable
+            ? unplayable
+            : slotId != null
+              ? `Replace your ${kind}`
+              : `Set as ${kind}`,
       };
     }
     // Cap by title+subtitle across printings: sum every pool entry whose card
@@ -277,13 +282,15 @@ export function CardExplorer({ onBack }: { onBack: () => void }) {
     const atCap = groupCount >= cap;
     return {
       count,
-      canAdd: !atCap && !poolFull,
+      canAdd: card.playable && !atCap && !poolFull,
       canRemove: count > 0,
-      addTitle: atCap
-        ? `Max ${cap} copies (incl. other printings)`
-        : poolFull
-          ? `Deck full (${target})`
-          : "",
+      addTitle: !card.playable
+        ? unplayable
+        : atCap
+          ? `Max ${cap} copies (incl. other printings)`
+          : poolFull
+            ? `Deck full (${target})`
+            : "",
     };
   };
 

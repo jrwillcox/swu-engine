@@ -27,6 +27,8 @@ payoff.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from collections import Counter
 from dataclasses import dataclass
@@ -65,7 +67,7 @@ from swu.engine.actions.scheduling import (
     push_may_discard_else_damage,
 )
 from swu.engine.actions.discard import (
-    push_name_and_discard,
+    push_discard_of_choice, push_name_and_discard,
 )
 
 
@@ -192,20 +194,20 @@ def push_reveal_cull_draw(
     ``cull`` is capped so at least one card survives for the draw (a short deck
     still yields a legal, meaningful decision), and the whole effect fizzles cleanly
     with no prompt on an empty deck."""
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     revealed = ps.deck[:int(count)]
     if not revealed:
         return
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     opponent_id = s.players[1 - owner_idx].player_id
     cull_n = max(0, min(int(cull), len(revealed) - 1))
     ids = [c.instance_id for c in revealed]
     dec = PendingDecision(
-        deciding_player_id=opponent_id if cull_n else source_ci.owner_id,
+        deciding_player_id=opponent_id if cull_n else actor_of(s, source_ci),
         kind="reveal_cull_draw",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "opponent_id": opponent_id,
             "stage": "cull" if cull_n else "draw",
             "cull_count": cull_n,
@@ -331,17 +333,17 @@ def push_reveal_cost_damage(
     """
     if target_id is None or s.find_instance(target_id) is None:
         return
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     if not ps.deck:
         return  # empty deck — nothing to reveal
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="reveal_cost_damage",
         context={
             "source_id": source_ci.instance_id,
             "source_name": source_ci.card_def.display_name,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "target_id": target_id,
             "revealed_ids": [],
             "revealed": [],
@@ -354,7 +356,7 @@ def push_reveal_cost_damage(
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="reveal_cost_damage",
     ))
 
@@ -743,7 +745,7 @@ def push_reveal_top_discard_reorder(
     decision is pushed.  When the deck has no cards there is nothing to reveal —
     no damage, no decision.  When the damage ends the game, no decision is pushed.
     """
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     revealed = ps.deck[:count]
     if revealed and deal_aspect_damage:
         n_aspect = sum(
@@ -751,20 +753,20 @@ def push_reveal_top_discard_reorder(
             if aspect in {a.name for a in (getattr(c.card_def, "aspects", None) or ())}
         )
         if n_aspect > 0:
-            opp = s.players[1 - s.player_index(source_ci.owner_id)]
+            opp = s.players[1 - s.player_index(actor_of(s, source_ci))]
             if opp.base_instance is not None:
                 from swu.abilities.resolver import _apply_deal_damage
                 _apply_deal_damage(s, opp.base_instance.instance_id, n_aspect,
                                    source_ci.card_def.display_name)
     if not revealed or s.is_terminal():
         return
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="reveal_top",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "disposition": disposition,
             "pending": [c.instance_id for c in revealed],
             "kept_order": [],
@@ -787,7 +789,7 @@ def push_reveal_top_discard_reorder(
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="reveal_top",
     ))
 
@@ -848,7 +850,7 @@ def push_disclose(
     cannot cover the requirement — the penalty must still land, and the discloser is
     simply left with only the Decline."""
     from collections import Counter
-    discloser = discloser_id or source_ci.owner_id
+    discloser = discloser_id or actor_of(s, source_ci)
     required = {a: int(c) for a, c in Counter(required_aspects).items()}
     if any_of:
         # DISJUNCTIVE requirement (Leia Organa SEC_4): one card bearing ANY of the
@@ -906,7 +908,7 @@ def _resolve_disclose(s: GameState, top, *, success: bool) -> GameState:
         # ledger (Migs Mayfeld SHD_163 must not fire on a Disclose).
         if ctx.get("revealed"):
             record_hand_discard(s, ctx["discloser_id"], kind="reveal")
-        _apply_disclose_payoff(s, ctx)
+        _apply_disclose_payoff(s, {**ctx, "_after_idx": top.after_resolve_player_index})
     elif ctx.get("decline_payoff"):
         # "If you DON'T, …" (Warrior of Clan Ordo SEC_164) — the same payoff
         # dispatcher, keyed off the decline arm.
@@ -936,8 +938,7 @@ def _apply_disclose_payoff(s: GameState, ctx: dict) -> None:
         # Leia Organa SEC_4: "give an Experience token to a unit that doesn't share
         # an aspect with the disclosed card."  The disclosed card's aspects come off
         # ctx["revealed"]; every in-play unit sharing none of them is whitelisted
-        # into a select_token.  DOCUMENTED DEVIATION: select_token is an "up to",
-        # so the printed mandatory gift can be declined.
+        # into a ``mandatory`` select_token (the gift has no "up to").
         source_result = s.find_instance(ctx["source_id"])
         if source_result is None or not ctx.get("revealed"):
             return
@@ -956,7 +957,7 @@ def _apply_disclose_payoff(s: GameState, ctx: dict) -> None:
             return
         push_select_token(s, source_result[1], token_type="Experience",
                           max_targets=1, restrict_ids=eligible,
-                          decider_id=discloser_id)
+                          decider_id=discloser_id, mandatory=True)
         return
     if payoff == "name_and_discard":
         # Charged with Espionage SEC_230: "look at an opponent's hand and discard a
@@ -984,22 +985,15 @@ def _apply_disclose_payoff(s: GameState, ctx: dict) -> None:
         return
     if payoff == "opponent_discard":
         # Luthen's Haulcraft SEC_153: "that opponent discards N cards from their
-        # hand" — the first-card discard convention (K-2SO SOR_145).
+        # hand" — of their choice.
         opp = next((p for p in s.players if p.player_id != discloser_id), None)
         if opp is None:
             return
-        moved = 0
-        for _ in range(int(args.get("count", 1))):
-            if not opp.hand:
-                break
-            card = opp.hand.pop(0)
-            card.zone = Zone.DISCARD
-            opp.discard.append(card)
-            note_hand_or_deck_discard(s, card)
-            moved += 1
-        if moved:
-            # ONE record per discard instruction, however many cards moved.
-            record_hand_discard(s, opp.player_id, kind="discard")
+        after = ctx.get("_after_idx")
+        push_discard_of_choice(
+            s, opp.player_id, int(args.get("count", 1)),
+            source_id=ctx.get("source_id"),
+            after_idx=(1 - s.player_index(discloser_id)) if after is None else after)
         return
     if payoff == "create_token":
         # Faith in Your Friends SEC_211: create N token units (the plain sibling of
@@ -1085,11 +1079,10 @@ def _apply_disclose_payoff(s: GameState, ctx: dict) -> None:
     if payoff == "exhaust_unit":
         # Bog Down in Procedure SEC_234: exhaust the pre-chosen "another" unit
         # (honours Protection, mirroring the declarative ExhaustCard arm).
-        # ``lock_round`` also flags the unit ``cannot_ready_this_round`` — Cantwell
-        # Arrestor Cruiser SEC_37 ("That unit can't ready while this unit is in
-        # play"): a documented simplification to "this round" using the existing
-        # No-Good-to-Me-Dead SOR_186 keep-tapped flag (the persistent while-in-play
-        # lock would need a new ready-lock modifier kind, out of scope here).
+        # ``lock_while_source_in_play`` also lands a ``ready_lock`` modifier —
+        # Cantwell Arrestor Cruiser SEC_37 ("That unit can't ready while this unit is
+        # in play"): ``permanent`` (it ends when the source leaves play), read by
+        # ``turn._ready_forbidden`` at every ready site that honours restrictions.
         tid = args.get("target_id")
         res = s.find_instance(tid) if tid is not None else None
         if res is not None:
@@ -1098,8 +1091,16 @@ def _apply_disclose_payoff(s: GameState, ctx: dict) -> None:
             from swu.abilities.resolver import _target_protected
             if src_ci is None or not _target_protected(s, tid, src_ci, "exhaust"):
                 res[1].exhausted = True
-                if args.get("lock_round"):
-                    res[1].cannot_ready_this_round = True
+                if args.get("lock_while_source_in_play") and src_ci is not None:
+                    from swu.engine.state import Modifier
+                    s.modifiers.append(Modifier(
+                        modifier_id=s.alloc_modifier_id(),
+                        source_instance_id=src_ci.instance_id,
+                        target_instance_id=tid,
+                        kind="ready_lock",
+                        value={},
+                        duration="permanent",
+                    ))
         return
     if payoff == "select_token":
         # Vice Admiral Rampart SEC_85: "give an Experience token to each of up to
@@ -1116,6 +1117,9 @@ def _apply_disclose_payoff(s: GameState, ctx: dict) -> None:
             kind=str(args.get("kind", "unit")),
             traits=list(args.get("traits", []) or []),
             predicates=list(args.get("predicates", []) or []),
+            # "give an Experience token to a unit" (Senate Warden SEC_59) has no
+            # "up to": a ``mandatory`` payoff must give while a unit is eligible.
+            mandatory=bool(args.get("mandatory", False)),
         )
         return
     if payoff == "grant_keyword":
@@ -1220,7 +1224,7 @@ def push_reveal_play_credit(s: GameState, source_ci: CardInstance) -> None:
     sequence the turn passes to the source controller's opponent (the attack is
     over), stored in ``final_active_idx``.
     """
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     opponent_id = next(p.player_id for p in s.players if p.player_id != controller_id)
     deck_player_ids = [p.player_id for p in s.players if p.deck]
     if not deck_player_ids:

@@ -120,3 +120,16 @@ def test_catalog_endpoint(client):
     assert with_img is not None
     ri = client.get(f"/api/cards/{with_img['id']}/image")
     assert ri.status_code == 200
+
+
+def test_catalog_endpoint_carries_copy_caps(client):
+    """Reported 2026-11-22: the Explorer stopped Swarming Vulture Droid at 3.
+    build_catalog computed 15, but the response model had no field for it, so
+    the endpoint dropped it and the client fell back to 3."""
+    from tests.dbpath import skip_on_fixture
+    skip_on_fixture("the catalog is assembled from every card in the DB")
+    cards = client.get("/api/catalog/cards").json()["cards"]
+    caps = {c["id"]: c["deckbuild_max_copies"] for c in cards}
+    assert caps[20751] == 15 and caps[24672] == 15  # JTL_256 + JTLP_20
+    assert next(c for c in cards if c["set_code"] == "SOR"
+                and c["type"] == "Unit")["deckbuild_max_copies"] == 3

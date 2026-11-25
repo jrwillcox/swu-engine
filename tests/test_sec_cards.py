@@ -109,18 +109,19 @@ class TestJabbaTheHutt_SEC_2:
         hurt = _place(state, "P0", _get_card(repo, "SOR", "46"), "ground")
         hurt.damage = 3
         enemy = _place(state, "P1", _get_card(repo, "SOR", "46"), "ground")
-        state = fire_triggered_abilities(
-            state, None, after_all_player_idx=0,
-            event_ctx={"dealt_combat_damage_to": hurt.instance_id,
-                       "combat_damage_amount": 3})
+        def _hit(amount):
+            return {"damage_event": {"target_id": hurt.instance_id,
+                                     "target_player": "P0", "is_base": False,
+                                     "amount": amount, "dealer_player": "P1",
+                                     "combat": True}}
+        state = fire_triggered_abilities(state, None, after_all_player_idx=0,
+                                         event_ctx=_hit(3))
         state = _accept_optional_and_run(state)
         state = _choose(state, enemy.instance_id)
         assert _find_instance(state, enemy.instance_id).damage == 3
         # The round's single use is now spent — a second hit offers nothing.
-        state2 = fire_triggered_abilities(
-            state, None, after_all_player_idx=0,
-            event_ctx={"dealt_combat_damage_to": hurt.instance_id,
-                       "combat_damage_amount": 2})
+        state2 = fire_triggered_abilities(state, None, after_all_player_idx=0,
+                                          event_ctx=_hit(2))
         from swu.engine.actions import legal_actions, AcceptTrigger
         assert not any(isinstance(a, AcceptTrigger)
                        and a.source_id == jabba.instance_id
@@ -612,14 +613,21 @@ class TestArihndaPryce_SEC_136:
 class TestMirajScintel_SEC_139:
     """Friendly attackers gain Overwhelm; When Played, 3 damage to an undamaged unit."""
 
-    def test_SEC_139_grants_overwhelm_to_friendly_units(self, repo):
-        from swu.engine.keywords import has_keyword, Keyword
+    def test_SEC_139_grants_overwhelm_only_while_attacking_a_damaged_unit(self, repo):
+        from swu.engine.keywords import (
+            has_keyword, Keyword, attack_context, attack_snapshot)
         state = _make_state()
         _place(state, "P0", _get_card(repo, "SEC", "139"), "ground")
         friend = _place(state, "P0", _get_card(repo, "SOR", "46"), "ground")
         foe = _place(state, "P1", _get_card(repo, "SOR", "46"), "ground")
-        assert has_keyword(state, friend, Keyword.OVERWHELM)
-        assert not has_keyword(state, foe, Keyword.OVERWHELM)
+        assert not has_keyword(state, friend, Keyword.OVERWHELM)   # not attacking
+        with attack_context(attack_snapshot(state, friend, [foe])):
+            assert not has_keyword(state, friend, Keyword.OVERWHELM)  # undamaged
+        foe.damage = 1
+        with attack_context(attack_snapshot(state, friend, [foe])):
+            assert has_keyword(state, friend, Keyword.OVERWHELM)
+        with attack_context(attack_snapshot(state, foe, [friend])):
+            assert not has_keyword(state, foe, Keyword.OVERWHELM)     # an enemy
 
     def test_SEC_139_when_played_hits_only_undamaged_units(self, repo):
         from swu.engine.actions import legal_actions, ChooseTarget
@@ -663,8 +671,10 @@ class TestTheEliteSquad_SEC_143:
         unique = _place(state, "P1", _get_card(repo, "SOR", "51"), "ground")
         state = fire_triggered_abilities(
             state, None, after_all_player_idx=0,
-            event_ctx={"dealt_combat_damage_to": squad.instance_id,
-                       "combat_damage_amount": 2})
+            event_ctx={"damage_event": {"target_id": squad.instance_id,
+                                        "target_player": "P0", "is_base": False,
+                                        "amount": 2, "dealer_player": "P1",
+                                        "combat": True}})
         state = _accept_optional_and_run(state)
         state = _choose(state, unique.instance_id)
         assert _find_instance(state, unique.instance_id).damage == 2
@@ -2685,7 +2695,14 @@ class TestDrydenVos_SEC_137:
         state = _drain(state)
         after = _find_instance(state, dryden.instance_id)
         assert compute_power(state, after) == 4
-        assert after.cannot_ready_this_round
+        assert after.instance_id in state.game_memory.skip_next_ready
+        # Skips exactly the next ready step; Max Rebo's second regroup readies him.
+        from swu.engine.actions.turn import _ready_all_cards
+        after.exhausted = True
+        _ready_all_cards(state)
+        assert after.exhausted
+        _ready_all_cards(state)
+        assert not after.exhausted
 
     def test_SEC_137_declining_changes_nothing(self, repo):
         from swu.engine.actions import legal_actions, apply, compute_power, DeclineTrigger
@@ -3771,7 +3788,7 @@ class TestLetsTalk_SEC_131:
             evt = _put_in_hand(state, "P0", _get_card(repo, "SEC", "131"))
             _give_resources(state, "P0", 30)
             if with_death:
-                state.game_memory.defeated_controllers_this_round.append("P0")
+                state.game_memory.left_play_controllers_this_phase.append("P0")
             act = next(a for a in legal_actions(state)
                        if isinstance(a, PlayCard) and a.instance_id == evt.instance_id)
             after = apply(state, act)
@@ -3875,6 +3892,9 @@ class TestLuthensHaulcraft_SEC_153:
         state = _drain(_fire_when_defeated(state, craft))
         assert state.pending_decisions[-1].kind == "disclose"
         state = _drain(_disclose_fully(state))
+        assert state.pending_decisions[-1].deciding_player_id == "P1", "their choice"
+        from tests.test_sor_cards import _resolve_discards
+        state = _resolve_discards(state)
         assert len(state.player_by_id("P1").hand) == 1
 
     def test_SEC_153_no_prompt_without_the_icons(self, repo):

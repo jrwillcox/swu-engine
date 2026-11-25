@@ -39,14 +39,16 @@ from swu.engine.events import (
     DecisionPushed, LeaderDeployed, UpgradePlayed,
 )
 from swu.engine.keywords import Keyword, has_keyword
-from swu.engine.state import CardInstance, GameState, Phase, PlayerState, Zone
+from swu.engine.state import (
+    CardInstance, GameState, Phase, PlayerState, Zone, note_card_controller,
+)
 from swu.engine.triggers import get_bus
 
 from swu.engine.actions.base import (
     Action, IllegalActionError,
 )
 from swu.engine.actions.costs import (
-    _affordable_with_credits, _effective_cost, _exhaust_resources, _pay_play_cost, _play_cost, _spend_play_discounts,
+    _affordable_with_credits, _effective_cost, _exhaust_resources, _pay_play_cost, _pilot_slot_free, _play_cost, _spend_play_discounts,
 )
 from swu.engine.actions.zones import (
     _attach_upgrade, _eligible_upgrade_targets, _find_in_arenas, _put_unit_in_play, _resolve_event_ability, note_upgrade_attached,
@@ -613,14 +615,14 @@ def _enumerate_discard_play_actions(
     return out
 
 
-def _eligible_pilot_targets(state: GameState, ps: PlayerState) -> list[CardInstance]:
-    """Friendly Vehicle units the active player may attach a Pilot upgrade to."""
+def _eligible_pilot_targets(state: GameState, ps: PlayerState,
+                            pilot_ci: Optional[CardInstance] = None) -> list[CardInstance]:
+    """Friendly Vehicle units ``ps`` may attach the Pilot ``pilot_ci`` to: each one
+    with a free Pilot slot (one Pilot per Vehicle, plus ``AdditionalPilotSlots``),
+    or any Vehicle for a Pilot that ignores the limit (R2-D2 JTL_245)."""
     from swu.engine.traits import has_trait
-    targets = []
-    for ci in ps.ground_arena + ps.space_arena:
-        if has_trait(state, ci, "Vehicle"):
-            targets.append(ci)
-    return targets
+    return [ci for ci in ps.ground_arena + ps.space_arena
+            if has_trait(state, ci, "Vehicle") and _pilot_slot_free(ci, pilot_ci)]
 
 
 def _attach_pilot(
@@ -628,6 +630,7 @@ def _attach_pilot(
 ) -> None:
     """Attach a Unit pilot to a friendly Vehicle unit, firing UpgradePlayed."""
     pilot_ci.face_down = False
+    note_card_controller(s, pilot_ci, ps.player_id)   # whoever played it controls it
     for owner_ps in s.players:
         for unit_ci in owner_ps.ground_arena + owner_ps.space_arena:
             if unit_ci.instance_id == vehicle_target_id:

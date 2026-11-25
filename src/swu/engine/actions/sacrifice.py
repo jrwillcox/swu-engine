@@ -27,6 +27,8 @@ sacrifice is a cost rather than an effect.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass
 from typing import Optional
@@ -48,7 +50,7 @@ from swu.engine.actions.stats import (
     compute_hp, compute_power,
 )
 from swu.engine.actions.costs import (
-    _affordable_with_credits, _spend_play_discounts,
+    _affordable_with_credits, _effective_cost, _spend_play_discounts,
     _exhaust_resources, _pay_play_cost, _play_cost,
 )
 from swu.engine.actions.zones import (
@@ -407,7 +409,7 @@ def push_per_exploit_damage(
     Pushed only when ≥1 positive amount AND ≥1 enemy unit exist; otherwise the
     effect fizzles cleanly."""
     amts = [int(a) for a in amounts if int(a) > 0]
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ctx = {
         "source_id": source_ci.instance_id,
         "controller_id": controller_id,
@@ -776,14 +778,33 @@ def _cost_route_affordable(state: GameState, ci: CardInstance, ps, cost: int,
     if route.kind == "damage_friendly_unit":
         units = len(ps.ground_arena) + len(ps.space_arena)
         return max(0, cost - route.discount * units) <= ready
+    if route.kind == "discard_aspect_card":
+        # Paying normally, or discarding another hand card with the aspect.
+        if _affordable_with_credits(ps, cost, state):
+            return True
+        alt = _play_cost(state, ci, ps,
+                         extra_reduction=_effective_cost(ci.card_def, ps, state))
+        return (_affordable_with_credits(ps, alt, state)
+                and any(c.instance_id != ci.instance_id
+                        and _has_aspect(c, route.aspect) for c in ps.hand))
     return ready >= cost
 
 
+def _has_aspect(ci: CardInstance, aspect: Optional[str]) -> bool:
+    return any(a.name == aspect for a in (getattr(ci.card_def, "aspects", None) or ()))
+
+
 def _cost_route_price(state: GameState, ps, ctx: dict) -> int:
-    """The buffered card's price after the picks made so far."""
+    """The buffered card's price after the picks made so far.  An alternative cost
+    (``discard_aspect_card``) waives the whole cost once picked — only increases
+    such as an opponent's tax remain."""
     if not ps.play_buffer:
         return 0
-    return _play_cost(state, ps.play_buffer[0], ps,
+    ci = ps.play_buffer[0]
+    if ctx["route_kind"] == "discard_aspect_card":
+        waived = _effective_cost(ci.card_def, ps, state) if ctx["picks"] else 0
+        return _play_cost(state, ci, ps, extra_reduction=waived)
+    return _play_cost(state, ci, ps,
                       extra_reduction=int(ctx["discount"]) * len(ctx["picks"]))
 
 
@@ -797,6 +818,7 @@ def push_cost_route(s: GameState, ps, ci: CardInstance, route) -> None:
         kind="cost_route",
         context={"route_kind": route.kind,
                  "discount": int(route.discount),
+                 "aspect": getattr(route, "aspect", None),
                  "picks": [],
                  "source_id": ci.instance_id},
         after_resolve_player_index=1 - s.player_index(ps.player_id),
@@ -815,6 +837,11 @@ def _cost_route_targets(state: GameState, top: PendingDecision) -> list[Optional
         if ps.available_resources > 0 and _cost_route_price(state, ps, ctx) > 0:
             return [None]
         return []
+    if ctx["route_kind"] == "discard_aspect_card":
+        # One discard, from hand, of a card with the aspect (Bamboozle SOR_199).
+        if ctx["picks"]:
+            return []
+        return [c.instance_id for c in ps.hand if _has_aspect(c, ctx.get("aspect"))]
     picked = set(ctx["picks"])
     return [u.instance_id for u in ps.ground_arena + ps.space_arena
             if u.instance_id not in picked]
@@ -823,8 +850,9 @@ def _cost_route_targets(state: GameState, top: PendingDecision) -> list[Optional
 @dataclass
 class PayCostRoute(Action):
     """Pay one step of a "while playing this unit" cost: defeat a ready resource
-    (Greater Sarlacc HMW_49; ``target_id`` is None) or deal 1 damage to the chosen
-    friendly unit (The Marauder HMW_125)."""
+    (Greater Sarlacc HMW_49; ``target_id`` is None), deal 1 damage to the chosen
+    friendly unit (The Marauder HMW_125), or discard the chosen hand card instead of
+    paying (Bamboozle SOR_199)."""
     target_id: Optional[str] = None
 
     def apply(self, state: GameState) -> GameState:
@@ -845,6 +873,15 @@ class PayCostRoute(Action):
                                             instance_id=res.instance_id,
                                             card_name=res.card_def.display_name))
             top.context["picks"].append(res.instance_id)
+        elif top.context["route_kind"] == "discard_aspect_card":
+            card = next(c for c in ps.hand if c.instance_id == self.target_id)
+            ps.hand.remove(card)
+            card.zone = Zone.DISCARD
+            card.face_down = False
+            ps.discard.append(card)
+            note_hand_or_deck_discard(s, card)
+            record_hand_discard(s, ps.player_id)
+            top.context["picks"].append(self.target_id)
         else:
             from swu.abilities.resolver import _apply_deal_damage
             buffered = ps.play_buffer[0] if ps.play_buffer else None
@@ -858,7 +895,7 @@ class PayCostRoute(Action):
     def describe(self) -> str:
         if self.target_id is None:
             return "Defeat a ready resource to lower the cost"
-        return f"Deal 1 damage to {self.target_id} to lower the cost"
+        return f"Use {self.target_id} to lower the cost"
 
 
 @dataclass
@@ -933,7 +970,7 @@ def push_reveal_resource_ramp(
     may reveal" side); the undeployed Action side passes ``optional=False`` and is
     itself gated by CONTROLLER_HAS_REVEAL_RAMP_RESOURCE so it is offered only when a
     match exists."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     if not _reveal_ramp_candidates(s, controller_id):
         return
     owner_idx = s.player_index(controller_id)
@@ -985,7 +1022,7 @@ def push_sacrifice_resource_for_damage(
     ``create_credit`` additionally creates a Credit token for the controller when
     the sacrifice happens ("… deal 2 damage to a unit **and create a Credit
     token**", both halves of LAW_13)."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ps = s.player_by_id(controller_id)
     ctx = {
         "source_id": source_ci.instance_id,
@@ -1136,7 +1173,7 @@ def push_cull_for_damage(
     ``ChooseCullDamageTarget`` (one distinct READY enemy unit each — exhausting an
     already-exhausted unit does nothing, so it is never offered).  When the count
     covers every candidate they are all exhausted without a prompt."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ctx = {
         "source_id": source_ci.instance_id,
         "controller_id": controller_id,
@@ -1434,7 +1471,7 @@ def push_exhaust_for_base_damage(
     The defending player is the opponent of the source's controller; its base id is
     recorded at push time.  Pushed only when at least one eligible ready unit
     exists (else the effect fizzles — exhausting nothing would deal no damage)."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     opponent_id = next(p.player_id for p in s.players if p.player_id != controller_id)
     enemy_base = s.player_by_id(opponent_id).base_instance
     ctx = {
@@ -1561,7 +1598,7 @@ def push_exhaust_combined_cost(
     actually exhausted ("For each unit exhausted this way, create an X-Wing token").
     Pushed only when ≥1 eligible unit exists; "any number" includes 0, so a
     FinishExhaustCombined is always offered while the decision is up."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ctx = {
         "source_id": source_ci.instance_id,
         "controller_id": controller_id,
@@ -1694,7 +1731,7 @@ def push_capture_combined_hp(
     fires triggers synchronously).  ``then_create_token_per_unit`` names a token unit
     created for the controller once per unit actually defeated this way ("Create a
     Mandalorian token for each unit defeated this way")."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ctx = {
         "source_id": source_ci.instance_id,
         "controller_id": controller_id,

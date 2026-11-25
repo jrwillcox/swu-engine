@@ -25,11 +25,14 @@ for the wrong reason.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass
 from typing import Callable, Optional
 
 from swu.engine.decisions import PendingDecision
+from swu.engine.discard_payoffs import discard_payoff, get_discard_payoff
 from swu.engine.events import (
     CardResourced,
     DecisionPushed, DecisionResolved,
@@ -215,17 +218,17 @@ def push_resource_from_discard(
     qualifying cards; fizzles cleanly (no prompt) if none qualify.  ``up_to`` adds a
     DeclineResourceFromDiscard for a "you may" variant (SHD_102/105 are mandatory
     among the qualifiers, so both pass up_to=False)."""
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     candidate_ids = [ci.instance_id for ci in ps.discard if eligible(ci)]
     if not candidate_ids:
         return
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="resource_from_discard",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "candidate_ids": candidate_ids,
             "candidates": _candidate_card_views(s, candidate_ids),
             "up_to": bool(up_to),
@@ -235,7 +238,7 @@ def push_resource_from_discard(
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id, kind="resource_from_discard"))
+        deciding_player_id=actor_of(s, source_ci), kind="resource_from_discard"))
 
 
 def _resource_from_discard_actions(state: GameState, top) -> list["Action"]:
@@ -319,20 +322,20 @@ def push_discard_for_experience(s: GameState, source_ci: CardInstance) -> None:
     """Push a 'discard_for_experience' decision (Echo SHD_99): the candidates are the
     controller's hand cards whose name matches a friendly unit in play.  Fizzles
     cleanly if no hand card matches (nothing to gain from the optional discard)."""
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     unit_names = {u.card_def.display_name
                   for arena in (ps.ground_arena, ps.space_arena) for u in arena}
     candidate_ids = [c.instance_id for c in ps.hand
                      if c.card_def.display_name in unit_names]
     if not candidate_ids:
         return
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="discard_for_experience",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "candidate_ids": candidate_ids,
             "candidates": _candidate_card_views(s, candidate_ids),
         },
@@ -341,7 +344,7 @@ def push_discard_for_experience(s: GameState, source_ci: CardInstance) -> None:
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id, kind="discard_for_experience"))
+        deciding_player_id=actor_of(s, source_ci), kind="discard_for_experience"))
 
 
 def _discard_for_experience_actions(state: GameState, top) -> list["Action"]:
@@ -592,7 +595,7 @@ def push_bottom_from_discard(
     bottomed card's "When Played" abilities and resolves them now, as its own
     ("put up to 2 units … on the bottom of your deck.  This unit gains those units'
     'When Played' abilities" — Vernestra Rwoh HMW_48; the Fives TS26_34 borrow)."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     owner_idx = s.player_index(controller_id)
     piles = ([s.player_by_id(controller_id)] if own_only else list(s.players))
     skip = set(exclude_ids or ())
@@ -663,19 +666,19 @@ def push_return_from_discard(
     Pushed only when at least one eligible card is present; otherwise the effect
     fizzles cleanly with no prompt and the caller hands the turn over.
     """
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     candidate_ids = [ci.instance_id for ci in ps.discard
                      if eligible(ci.card_def)
                      and (eligible_instance is None or eligible_instance(ci))]
     if not candidate_ids or int(count) <= 0:
         return  # nothing eligible — fizzle cleanly
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="return_from_discard",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "candidate_ids": candidate_ids,
             "candidates": _candidate_card_views(s, candidate_ids),
             "selected_ids": [],
@@ -687,7 +690,7 @@ def push_return_from_discard(
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="return_from_discard",
     ))
 
@@ -771,7 +774,7 @@ def push_select_distinct_return_random(
     """Push Doctor Aphra SHD_15's deploy decision.  Pushed only when the controller
     has ≥ ``count`` distinct card names in their discard pile; otherwise "Choose N
     cards … with different names" cannot be satisfied, so the effect does nothing."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ps = s.player_by_id(controller_id)
     distinct_names = {ci.card_def.display_name for ci in ps.discard}
     if int(count) <= 0 or len(distinct_names) < int(count):
@@ -932,7 +935,7 @@ def push_discard_unit_then_damage(
     recycle is mandatory-if-able); the damage step is conditional on a legal target
     existing at select time."""
     from swu.cards.models import Unit
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ps = s.player_by_id(controller_id)
     candidate_ids = [ci.instance_id for ci in ps.discard if isinstance(ci.card_def, Unit)]
     if not candidate_ids:
@@ -1083,7 +1086,7 @@ def push_discard_for_search(
     fizzles cleanly with no prompt (so R2-D2's mandatory trigger no-ops on an empty
     hand without needing a hand-size condition)."""
     from swu.cards.models import Unit
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ps = s.player_by_id(controller_id)
     if discard_units_only:
         candidate_ids = [ci.instance_id for ci in ps.hand if isinstance(ci.card_def, Unit)]
@@ -1131,7 +1134,7 @@ def push_discard_unit_for_search(
     window, name-match, units-only, mandatory)."""
     push_discard_for_search(
         s, source_ci,
-        search_window=len(s.player_by_id(source_ci.owner_id).deck),
+        search_window=len(s.player_by_id(actor_of(s, source_ci)).deck),
         search_count=1, search_up_to=False,
         search_name=search_name, discard_units_only=True, optional=False,
     )
@@ -1331,7 +1334,7 @@ def push_recur_and_buff(
     by default, mirroring the literal "units") are recomputed live so the cap of K
     = the number recurred is honoured even as units leave play."""
     from swu.cards.models import Unit
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ps = s.player_by_id(controller_id)
     candidate_ids = [ci.instance_id for ci in ps.discard
                      if isinstance(ci.card_def, Unit) and trait in ci.card_def.traits]
@@ -1401,13 +1404,18 @@ class SelectExcessHandCardToDiscard(Action):
         if card is None or len(ps.hand) <= _discard_excess_keep(ctx, current):
             raise IllegalActionError(
                 f"{self.instance_id} is not a discardable excess card")
+        elig = ctx.get("eligible_ids")
+        if elig is not None and card.instance_id not in elig:
+            raise IllegalActionError(f"{self.instance_id} may not be discarded here")
         ps.hand.remove(card)
         card.zone = Zone.DISCARD
+        card.face_down = False
         ps.discard.append(card)
         note_hand_or_deck_discard(s, card)
         tally = dict(ctx.get("discarded", {}))
         tally[current] = tally.get(current, 0) + 1
         ctx["discarded"] = tally
+        ctx["discarded_ids"] = list(ctx.get("discarded_ids") or []) + [card.instance_id]
         s.event_log.append(DecisionResolved(
             deciding_player_id=current,
             kind="discard_excess_from_hand",
@@ -1432,12 +1440,60 @@ class SelectExcessHandCardToDiscard(Action):
         for pid, n in (ctx.get("then_draw") or {}).items():
             if n:
                 _draw_cards(s, s.player_by_id(pid), int(n))
+        _run_discard_payoff(s, ctx, ctx.get("discarded_ids") or [])
         if not s.is_terminal() and not s.pending_decisions:
             s.active_player_index = top.after_resolve_player_index
         return s
 
     def describe(self) -> str:
         return f"Discard {self.instance_id} (down to hand size)"
+
+
+@discard_payoff("create_token_if_discarded")
+def _create_token_if_discarded(s: GameState, source_id, discarded: list,
+                               args: dict) -> None:
+    """"…If you do, create a <token> token" (Bail Organa SEC_198, Beast Lair
+    HMW_147) for ``args["player_id"]``."""
+    if discarded:
+        _create_token_units(s, s.player_by_id(args["player_id"]), args["token"],
+                            int(args.get("count", 1)))
+
+
+@discard_payoff("create_credit_if_discarded")
+def _create_credit_if_discarded(s: GameState, source_id, discarded: list,
+                                args: dict) -> None:
+    """"…If you do, create a Credit token" (Bix Caleen LAW_236)."""
+    if discarded:
+        from swu.engine.tokens import create_credit_token
+        create_credit_token(s, s.player_by_id(args["player_id"]))
+
+
+@discard_payoff("damage_target_if_discarded")
+def _damage_target_if_discarded(s: GameState, source_id, discarded: list,
+                                args: dict) -> None:
+    """"…If you do, deal N damage to a unit" with the unit already chosen
+    (``args["target_id"]``) — Merrin LOF_160, Qi'ra ASH_226; ``draw`` adds
+    "…and draw a card" (Lightsaber Throw LOF_176)."""
+    if not discarded or s.find_instance(args.get("target_id") or "") is None:
+        return
+    from swu.abilities.resolver import _apply_deal_damage
+    src = s.find_instance(source_id or "")
+    _apply_deal_damage(s, args["target_id"], int(args["amount"]),
+                       source_name=src[1].card_def.display_name if src else "",
+                       dealer_id=args.get("player_id"))
+    if args.get("draw"):
+        _draw_cards(s, s.player_by_id(args["player_id"]), int(args["draw"]))
+
+
+def _run_discard_payoff(s: GameState, ctx: dict, discarded_ids: list) -> None:
+    """Run the ``swu.engine.discard_payoffs`` payoff named in ``ctx``, if any."""
+    name = ctx.get("payoff")
+    if not name or s.is_terminal():
+        return
+    cards = [res[1] for res in (s.find_instance(i) for i in discarded_ids)
+             if res is not None]
+    get_discard_payoff(name)(s, ctx.get("source_id"), cards,
+                             dict(ctx.get("payoff_args") or {}))
 
 
 def _discard_excess_keep(ctx: dict, player_id: str) -> int:
@@ -1467,7 +1523,7 @@ def push_discard_excess_from_hand(
     their choice" (Guerilla Insurgency TWI_177) — each player's target hand size is
     their current size minus ``count``, floored at 0, so a short hand just discards
     all of it."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     opponent_id = next(p.player_id for p in s.players if p.player_id != controller_id)
     order = [controller_id, opponent_id]
     keeps = None
@@ -1506,8 +1562,10 @@ def push_discard_excess_from_hand(
 
 
 def push_discard_of_choice(
-    s: GameState, player_id: str, count: int, *, source_id: str,
+    s: GameState, player_id: str, count: int, *, source_id: Optional[str],
     after_idx: int, then_draw: int = 0,
+    eligible: Optional[Callable[[object], bool]] = None,
+    payoff: Optional[str] = None, payoff_args: Optional[dict] = None,
 ) -> None:
     """``player_id`` discards ``count`` cards of THEIR choice from their hand — "an
     opponent discards a card" / "discard a card from your hand".
@@ -1518,33 +1576,56 @@ def push_discard_of_choice(
     fewer cards is discarded whole, inline.  ``then_draw`` draws that many cards for
     the same player AFTER the discard ("Discard a card, then draw a card").
 
+    ``eligible`` (a predicate on the card_def) narrows which hand cards may go
+    ("discard a Lightsaber card",
+    "a card that costs 3 or more"); the inline no-choice rule then counts only
+    eligible cards.  ``payoff`` names a ``@discard_payoff`` run after the choice
+    with the cards actually discarded — "Discard a card.  If you do, …" and "If it's
+    a unit, …" (``payoff_args`` must be plain data).  It runs even when nothing
+    could be discarded, with an empty list, so the payoff owns its "if you do".
+
+    Because the choice may be a decision, the payoff resolves AFTER any effects the
+    calling ability still has to resolve inline: put everything that depends on the
+    discard in the payoff.
+
     Replaced the old first-card auto-discard (``DiscardFromHand``, K-2SO's and Poe's
-    modal discards), a known deviation fixed 2026-11-23."""
+    modal discards, and about 25 card-module discards), known deviations fixed
+    2026-11-23/24."""
     ps = s.player_by_id(player_id)
-    if not ps.hand or len(ps.hand) <= int(count):
-        gone = list(ps.hand)
-        for ci in gone:
+    pool = [ci for ci in ps.hand if eligible is None or eligible(ci.card_def)]
+    if len(pool) <= int(count):
+        for ci in pool:
             ps.hand.remove(ci)
             ci.zone = Zone.DISCARD
+            ci.face_down = False
             ps.discard.append(ci)
             note_hand_or_deck_discard(s, ci)
-        if gone:
+        if pool:
             record_hand_discard(s, player_id)
         if then_draw:
             _draw_cards(s, ps, int(then_draw))
+        _run_discard_payoff(s, {"payoff": payoff, "payoff_args": payoff_args,
+                                "source_id": source_id},
+                            [ci.instance_id for ci in pool])
         return
+    ctx: dict = {
+        "source_id": source_id,
+        "order": [player_id],
+        "idx": 0,
+        "keep": 0,
+        "keeps": {player_id: len(ps.hand) - int(count)},
+        "discarded": {},
+        "discarded_ids": [],
+        "then_draw": {player_id: int(then_draw)} if then_draw else {},
+        "payoff": payoff,
+        "payoff_args": dict(payoff_args or {}),
+    }
+    if eligible is not None:
+        ctx["eligible_ids"] = [ci.instance_id for ci in pool]
     s.pending_decisions.append(PendingDecision(
         deciding_player_id=player_id,
         kind="discard_excess_from_hand",
-        context={
-            "source_id": source_id,
-            "order": [player_id],
-            "idx": 0,
-            "keep": 0,
-            "keeps": {player_id: len(ps.hand) - int(count)},
-            "discarded": {},
-            "then_draw": {player_id: int(then_draw)} if then_draw else {},
-        },
+        context=ctx,
         after_resolve_player_index=after_idx,
     ))
     s.active_player_index = s.player_index(player_id)
@@ -1560,7 +1641,9 @@ def _discard_excess_from_hand_actions(state: GameState, top) -> list["Action"]:
     ps = state.player_by_id(ctx["order"][ctx["idx"]])
     if len(ps.hand) <= _discard_excess_keep(ctx, ps.player_id):
         return []
-    return [SelectExcessHandCardToDiscard(ci.instance_id) for ci in ps.hand]
+    elig = ctx.get("eligible_ids")
+    return [SelectExcessHandCardToDiscard(ci.instance_id) for ci in ps.hand
+            if elig is None or ci.instance_id in elig]
 
 
 # ── Name a card; an opponent reveals their hand and discards a card of that name
@@ -1702,7 +1785,7 @@ def push_name_and_discard(
     # the source's controller — the say_no SOR_233 decider shift.  "In player order,
     # each player discards a card from the hand of the player to their right"
     # (Reveal Intentions TS26_80) is two pushes of this decision, one per seat.
-    controller_id = namer_id or source_ci.owner_id
+    controller_id = namer_id or actor_of(s, source_ci)
     owner_idx = s.player_index(controller_id)
     opp = s.players[1 - owner_idx]
     if not opp.hand:

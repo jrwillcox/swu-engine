@@ -27,6 +27,7 @@ from swu.web.deckstore import (
     DeckStore,
     InvalidCard,
     _custom_decks_root,
+    resolve_custom_deck,
 )
 from tests.dbpath import require_db
 
@@ -282,6 +283,66 @@ class TestDeckStoreEditing:
         assert d.count == 50
         assert d.complete is True
         assert d.errors == []
+
+
+# ── cards the engine can't play yet (reported 2026-11-22) ───────────────────────
+
+class TestUnplayableCards:
+    """A card the engine can't play yet can't join a custom deck, and a deck that
+    already holds one is incomplete, so it can't seat a game."""
+
+    BLOCKED = {UNITS[0], LEADER, BASE}
+
+    @pytest.fixture()
+    def gated(self, tmp_path, repo) -> DeckStore:
+        return DeckStore(tmp_path / "custom_decks", repo=repo,
+                         playable=lambda cid: cid not in self.BLOCKED)
+
+    def test_add_card_refuses_unplayable(self, gated):
+        d = gated.create("Bob", "Deck")
+        with pytest.raises(InvalidCard, match="can't be played"):
+            gated.add_card("Bob", d.id, UNITS[0], 1)
+        assert gated.get("Bob", d.id).cards == {}
+
+    def test_slots_refuse_unplayable(self, gated):
+        d = gated.create("Bob", "Deck")
+        with pytest.raises(InvalidCard, match="can't be played"):
+            gated.set_cards("Bob", d.id, leader_id=LEADER)
+        with pytest.raises(InvalidCard, match="can't be played"):
+            gated.set_cards("Bob", d.id, base_id=BASE)
+
+    def test_pool_replacement_refuses_new_unplayable(self, gated):
+        d = gated.create("Bob", "Deck")
+        with pytest.raises(InvalidCard, match="can't be played"):
+            gated.set_cards("Bob", d.id, cards={str(UNITS[0]): 1})
+
+    def test_older_deck_is_incomplete_but_can_be_trimmed(self, tmp_path, repo):
+        # Built before the check (everything playable), then reloaded under it.
+        root = tmp_path / "custom_decks"
+        old = DeckStore(root, repo=repo, playable=lambda cid: True)
+        gated = DeckStore(root, repo=repo, playable=lambda cid: cid != UNITS[0])
+        d = old.create("Bob", "Old")
+        old.set_cards("Bob", d.id, leader_id=LEADER, base_id=BASE, cards=_full_pool())
+        assert old.get("Bob", d.id).complete is True
+
+        d = gated.get("Bob", d.id)
+        assert d.complete is False
+        assert any("can't be played in the game yet" in e for e in d.errors)
+        with pytest.raises(FileNotFoundError, match="incomplete"):
+            resolve_custom_deck(f"custom:bob:{d.id}", store=gated)
+
+        # Removing the copies it already has still works.
+        d = gated.add_card("Bob", d.id, UNITS[0], -1)
+        assert d.cards[str(UNITS[0])] == 2
+        pool = dict(d.cards)
+        pool.pop(str(UNITS[0]))
+        d = gated.set_cards("Bob", d.id, cards=pool)
+        assert not any("can't be played" in e for e in d.errors)
+
+    def test_default_check_uses_the_explorer_classifier(self, store):
+        # The real classifier: an encoded SOR unit is playable, a token id isn't.
+        assert store.is_playable(UNITS[0]) is True
+        assert store.is_playable(TOKEN) is False
 
 
 # ── isolation + storage location ────────────────────────────────────────────────

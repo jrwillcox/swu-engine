@@ -31,6 +31,8 @@ abilities are suppressed.
 """
 from __future__ import annotations
 
+from swu.engine.actor import actor_of
+
 import copy
 from dataclasses import dataclass
 from typing import Callable, Optional
@@ -67,6 +69,9 @@ from swu.engine.actions.combat import (
 )
 from swu.engine.actions.hand import (
     _divert_to_exploit, _exploit_best_case, push_play_from_hand,
+)
+from swu.engine.actions.upgrades import (
+    push_play_upgrade_from_hand,
 )
 
 
@@ -143,7 +148,7 @@ def push_put_on_deck(s: GameState, source_ci: CardInstance, target_id: str) -> N
             "card_id": target_id,
             "owner_id": ci.owner_id,
         },
-        after_resolve_player_index=s.player_index(source_ci.owner_id),
+        after_resolve_player_index=s.player_index(actor_of(s, source_ci)),
     )
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
@@ -491,9 +496,8 @@ def _finish_deck_search(s: GameState) -> GameState:
     # "…reveal it, and draw it.  If it costs 2 or less, you may play it for free"
     # (The Invisible Hand JTL_89).  Pushed AFTER the draw and after this decision is
     # popped, so the free play lands on a clean stack; the whitelist pins the play to
-    # exactly the just-drawn card.  DEVIATION: play_from_hand has no decline, so the
-    # "you may" collapses to mandatory — a free ≤N-cost unit entering play is never
-    # a downside, and declining the search entirely is still available upstream.
+    # exactly the just-drawn card.  ``up_to=True`` is the printed "you may" (the
+    # free play can be declined, keeping the card in hand).
     play_cap = ctx.get("then_play_free_cost_max")
     replay_ids = [ci.instance_id for ci in selected
                   if play_cap is not None
@@ -509,7 +513,7 @@ def _finish_deck_search(s: GameState) -> GameState:
         src = s.find_instance(ctx["source_id"])
         if src is not None:
             push_play_from_hand(s, src[1], free=True,
-                                eligible_ids=frozenset(replay_ids))
+                                eligible_ids=frozenset(replay_ids), up_to=True)
     # "If its cost is the chosen number, you may give N <token> tokens to a <trait>
     # unit" (Sense Through the Force ASH_235) — the number came down from the
     # choose_number decision that pushed this search.  The "you may" is the
@@ -533,6 +537,20 @@ def _finish_deck_search(s: GameState) -> GameState:
         src = s.find_instance(ctx["source_id"])
         if src is not None:
             push_bottom_from_hand(s, src[1], count=1, top_only=True)
+    # "You may play that upgrade (paying its cost)" (Bounty Posting SHD_228).
+    if ctx.get("then_play_upgrade") and not s.is_terminal():
+        src = s.find_instance(ctx["source_id"])
+        upg = next((ci for ci in selected if isinstance(ci.card_def, Upgrade)), None)
+        if src is not None and upg is not None:
+            push_play_upgrade_from_hand(s, src[1], upgrade_id=upg.instance_id,
+                                        free=False)
+    # "Then, … discard a card from your hand" (Enticing Reward SHD_222) — pushed
+    # last, so it resolves first, from the hand holding the drawn cards.
+    if int(ctx.get("then_discard", 0) or 0) and not s.is_terminal():
+        from swu.engine.actions.discard import push_discard_of_choice
+        push_discard_of_choice(s, top.deciding_player_id, int(ctx["then_discard"]),
+                               source_id=ctx.get("source_id"),
+                               after_idx=top.after_resolve_player_index)
     if not s.is_terminal() and not s.pending_decisions:
         s.active_player_index = top.after_resolve_player_index
     return s
@@ -897,6 +915,8 @@ def push_deck_search(
     then_borrowed_attack_by: Optional[str] = None,
     then_tokens_if_cost: Optional[dict] = None,
     then_top_from_hand: bool = False,
+    then_discard: int = 0,
+    then_play_upgrade: bool = False,
 ) -> None:
     """Push a 'deck_search' decision: "Search the top ``window`` cards of your deck
     for <eligible> cards, reveal and draw up to ``count`` of them, then put the
@@ -934,6 +954,14 @@ def push_deck_search(
         if able — a pick is forced while an eligible candidate remains.
     window
         How many top cards to search (default 5).
+    then_discard
+        "Then, … discard a card from your hand" (Enticing Reward SHD_222): after the
+        draw, the searcher discards this many cards of their choice — from the hand
+        that now holds the drawn cards.  Also applied when the deck is empty.
+    then_play_upgrade
+        "You may play that upgrade (paying its cost)" (Bounty Posting SHD_228): after
+        the draw, a drawn upgrade is offered to the ``play_upgrade_from_hand``
+        decision (which can be declined).
 
     The decision is pushed whenever the deck has at least one card in the window
     (even with no eligible candidate — the un-taken searched cards must still be
@@ -953,7 +981,7 @@ def push_deck_search(
     # decision context's ``controller_id`` is the deck owner throughout (the window,
     # the finish, and any discard/draw land on their side); ``deciding_player_id``
     # is the searcher.
-    searcher_id = decider_id or source_ci.owner_id
+    searcher_id = decider_id or actor_of(s, source_ci)
     deck_id = deck_owner_id or searcher_id
     ps = s.player_by_id(deck_id)
     # "If you would search a number of cards from your deck, search twice that
@@ -965,7 +993,15 @@ def push_deck_search(
         window = int(window) * 2
     searched = ps.deck[:window]
     if not searched:
-        return  # empty deck — nothing to search or bottom
+        # Empty deck — nothing to search or bottom, but a "Then, discard" still
+        # happens.
+        if then_discard:
+            from swu.engine.actions.discard import push_discard_of_choice
+            push_discard_of_choice(
+                s, searcher_id, int(then_discard), source_id=source_ci.instance_id,
+                after_idx=(1 - s.player_index(searcher_id)) if decider_id is None
+                else s.active_player_index)
+        return
     candidate_ids = [ci.instance_id for ci in searched if eligible(ci.card_def)]
     owner_idx = s.player_index(searcher_id)
     after_idx = (1 - owner_idx) if decider_id is None else s.active_player_index
@@ -1010,6 +1046,9 @@ def push_deck_search(
             # TS26_39) — settled AFTER the search, because the card it just drew is
             # part of what may be put back and the hand may be empty until then.
             "then_top_from_hand": bool(then_top_from_hand),
+            # Both settled at the draw branch, after the drawn cards are in hand.
+            "then_discard": int(then_discard),
+            "then_play_upgrade": bool(then_play_upgrade),
             **({"disposition": str(disposition)} if disposition else {}),
         },
         after_resolve_player_index=after_idx,
@@ -1065,7 +1104,7 @@ def push_search_and_play(
     # the OPPONENT of the dying host; Bounty Hunter's Quarry SHD_123, the
     # push_deck_search decider_id convention).  ``free`` plays the found unit at cost
     # 0 (candidates then need not be affordability-filtered).
-    actor_id = decider_id or source_ci.owner_id
+    actor_id = decider_id or actor_of(s, source_ci)
     ps = s.player_by_id(actor_id)
     searched = ps.deck[:window]
     if not searched:
@@ -1132,7 +1171,7 @@ def push_search_and_play_upgrade(
     eligible upgrade the decision still resolves cleanly (nothing played, the window
     bottomed in a seeded-random order)."""
     from swu.abilities.resolver import _spec_matches_ci
-    actor_id = source_ci.owner_id
+    actor_id = actor_of(s, source_ci)
     ps = s.player_by_id(actor_id)
     searched = ps.deck[:window]
     if not searched:
@@ -1210,20 +1249,20 @@ def push_search_and_play_multiple(
     in a seeded-random order.  An empty deck is a no-op.  ``then_damage`` deals that
     much damage to each played unit as it enters (Darth Vader HMW_43).
     """
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     searched = ps.deck[:window]
     if not searched:
         return  # empty deck — nothing to search or bottom
     candidate_ids = [ci.instance_id for ci in searched if eligible(ci.card_def)]
     max_select = (len(candidate_ids) if max_units is None
                   else min(len(candidate_ids), int(max_units)))
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="deck_search",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "candidate_ids": candidate_ids,
             "candidates": _candidate_card_views(s, candidate_ids),
             "selected_ids": [],
@@ -1242,7 +1281,7 @@ def push_search_and_play_multiple(
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="deck_search",
     ))
 
@@ -1304,17 +1343,17 @@ def push_peek_top(s: GameState, source_ci: CardInstance, *, mode: str,
     revealed card's identity so the UI can show it to the deciding player.  An empty
     deck is a clean no-op — no decision is pushed and the caller proceeds (the effect
     simply has nothing to look at)."""
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     if not ps.deck:
         return
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     top_ci = ps.deck[0]
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="peek_top",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "mode": mode,
             "cost_reduction": int(cost_reduction),
             "free": bool(free),
@@ -1337,7 +1376,7 @@ def push_peek_top(s: GameState, source_ci: CardInstance, *, mode: str,
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="peek_top",
     ))
 
@@ -1359,16 +1398,16 @@ def push_choose_number(
     ``{"kind": "deck_search_tokens_if_cost", …}`` — "Choose a number, then search
     the top 5 … and draw it.  If its cost is the chosen number, you may give 3
     Advantage tokens to a Force unit" (Sense Through the Force ASH_235)."""
-    ps = s.player_by_id(source_ci.owner_id)
+    ps = s.player_by_id(actor_of(s, source_ci))
     if not ps.deck:
         return
-    owner_idx = s.player_index(source_ci.owner_id)
+    owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="choose_number",
         context={
             "source_id": source_ci.instance_id,
-            "controller_id": source_ci.owner_id,
+            "controller_id": actor_of(s, source_ci),
             "lo": int(lo),
             "hi": int(hi),
             "then": dict(then) if then else None,
@@ -1378,7 +1417,7 @@ def push_choose_number(
     s.pending_decisions.append(dec)
     s.active_player_index = owner_idx
     s.event_log.append(DecisionPushed(
-        deciding_player_id=source_ci.owner_id,
+        deciding_player_id=actor_of(s, source_ci),
         kind="choose_number",
     ))
 
@@ -1485,7 +1524,7 @@ def push_bottom_from_hand(s: GameState, source_ci: CardInstance, *, count: int,
     exclusive form: ONLY the top placement is offered, so "put a card from your hand
     on the top of your deck **and another card on the bottom**" (Kreia's Whispers
     SEC_232) is two pushes of this one decision rather than a new kind."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ps = s.player_by_id(controller_id)
     cap = min(int(count), len(ps.hand))
     if cap <= 0:
@@ -1620,7 +1659,7 @@ def push_resource_from_hand(
     printed clause is a per-leader "you may" and ramping is a real cost (the card you
     give up, plus the scheduled resource defeat).  Fizzles cleanly with an empty hand
     or a non-positive count."""
-    controller_id = source_ci.owner_id
+    controller_id = actor_of(s, source_ci)
     ps = s.player_by_id(controller_id)
     cap = min(int(count), len(ps.hand))
     if cap <= 0:

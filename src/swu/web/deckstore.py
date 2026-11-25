@@ -30,7 +30,7 @@ import threading
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from pydantic import BaseModel
 
@@ -135,14 +135,42 @@ class DeckStore:
         root: str | Path | None = None,
         *,
         repo: CardRepository | None = None,
+        playable: Callable[[int], bool] | None = None,
     ) -> None:
         self._root = Path(root) if root is not None else _custom_decks_root()
         self._repo = repo
+        self._playable = playable
         self._lock = threading.RLock()
 
     @property
     def repo(self) -> CardRepository:
         return self._repo if self._repo is not None else _default_repo()
+
+    def is_playable(self, card_id: int) -> bool:
+        """Whether the engine can play this card yet (injectable for tests; by
+        default the explorer's classifier, so it matches the "Playable" badge)."""
+        if self._playable is not None:
+            return self._playable(card_id)
+        from swu.web.explorer import is_card_playable  # heavy; first use only
+        return is_card_playable(card_id)
+
+    def _require_playable(self, card) -> None:
+        if not self.is_playable(card.id):
+            raise InvalidCard(f"{card.name!r} can't be played in the game yet.")
+
+    def _unplayable_errors(self, leader, base, cards: dict[str, int]) -> list[str]:
+        """One error per card in the deck that the engine can't play yet, so a
+        deck holding one is never complete and can't seat a game."""
+        out: list[str] = []
+        ids = [c.id for c in (leader, base) if c is not None]
+        ids += [int(k) for k in cards]
+        for cid in ids:
+            if self.is_playable(cid):
+                continue
+            card = self.repo.by_id(cid)
+            name = card.name if card is not None else str(cid)
+            out.append(f"{name} can't be played in the game yet.")
+        return out
 
     # -- path resolution / containment guard -----------------------------------
 
@@ -179,6 +207,7 @@ class DeckStore:
         leader = self.repo.by_id(deck["leader_id"]) if deck.get("leader_id") else None
         base = self.repo.by_id(deck["base_id"]) if deck.get("base_id") else None
         errors = deck_errors(leader, base, cards, self.repo)
+        errors += self._unplayable_errors(leader, base, cards)
         return CustomDeck(
             id=deck["id"],
             name=deck.get("name", ""),
@@ -210,6 +239,7 @@ class DeckStore:
         card = self._require_card(card_id)
         if not isinstance(card, Leader):
             raise InvalidCard(f"{card.name!r} is not a Leader card.")
+        self._require_playable(card)
 
     def _validate_base(self, card_id: Optional[int]) -> None:
         if card_id is None:
@@ -217,8 +247,13 @@ class DeckStore:
         card = self._require_card(card_id)
         if not isinstance(card, Base):
             raise InvalidCard(f"{card.name!r} is not a Base card.")
+        self._require_playable(card)
 
-    def _validate_pool(self, cards: dict) -> dict[str, int]:
+    def _validate_pool(self, cards: dict, previous: dict | None = None) -> dict[str, int]:
+        """Validate a whole replacement pool. An unplayable card may stay at (or
+        drop below) the count it already had, so an older deck can still be
+        trimmed, but it can't be added or increased."""
+        prev = {str(k): int(v) for k, v in (previous or {}).items()}
         out: dict[str, int] = {}
         for raw_id, count in cards.items():
             count = int(count)
@@ -227,6 +262,8 @@ class DeckStore:
             card = self._require_card(int(raw_id))
             if isinstance(card, (Leader, Base)):
                 raise InvalidCard(f"{card.name!r} cannot go in the deck pool.")
+            if count > prev.get(str(int(raw_id)), 0):
+                self._require_playable(card)
             out[str(int(raw_id))] = count
         return out
 
@@ -317,14 +354,17 @@ class DeckStore:
         """
         with self._lock:
             path, deck = self._load_raw(user, deck_id)
+            # Re-sending the slot card already there is a no-op, not a new add.
             if leader_id is not _UNSET:
-                self._validate_leader(leader_id)
+                if leader_id != deck.get("leader_id"):
+                    self._validate_leader(leader_id)
                 deck["leader_id"] = leader_id
             if base_id is not _UNSET:
-                self._validate_base(base_id)
+                if base_id != deck.get("base_id"):
+                    self._validate_base(base_id)
                 deck["base_id"] = base_id
             if cards is not _UNSET:
-                deck["cards"] = self._validate_pool(dict(cards or {}))
+                deck["cards"] = self._validate_pool(dict(cards or {}), deck.get("cards"))
             deck["updated"] = _ts(_now())
             self._write(path, deck)
             return self._model(deck)
@@ -340,6 +380,8 @@ class DeckStore:
             card = self._require_card(int(card_id))
             if isinstance(card, (Leader, Base)):
                 raise InvalidCard(f"{card.name!r} cannot go in the deck pool.")
+            if int(delta) > 0:
+                self._require_playable(card)
             key = str(int(card_id))
             pool = {str(k): int(v) for k, v in (deck.get("cards") or {}).items()}
             new_count = pool.get(key, 0) + int(delta)

@@ -162,6 +162,9 @@
   "DiscardForModal": [
    "card_id"
   ],
+  "DiscardChosenCard": [
+   "instance_id"
+  ],
   "DiscardForSearch": [
    "instance_id"
   ],
