@@ -126,6 +126,30 @@ const CATALOG: ExplorerResponse = {
       image_url: null,
       back_image_url: null,
     },
+    // A card that prints a higher copy cap ("up to 15 copies").
+    {
+      id: 303,
+      set_code: "JTL",
+      card_number: "256",
+      name: "Swarming Vulture Droid",
+      subtitle: null,
+      type: "Unit",
+      rarity: "Common",
+      cost: 1,
+      power: 1,
+      hp: 1,
+      unique: false,
+      aspects: [],
+      keywords: [],
+      traits: ["Droid"],
+      arenas: ["Space"],
+      status: "implemented",
+      playable: true,
+      deckbuild_max_copies: 15,
+      decks: [],
+      image_url: null,
+      back_image_url: null,
+    },
     // Two DIFFERENT printings of the SAME card (same name+subtitle, different id)
     // — a reprint/promo. The copy cap is by title+subtitle, so 3 total across BOTH.
     {
@@ -332,6 +356,21 @@ describe("CardExplorer add-to-deck mode", () => {
     expect(within(tile).getByLabelText("Add copy").getAttribute("title")).toBe(
       "Max 1 copies (incl. other printings)",
     );
+  });
+
+  it("lets a card with a printed cap of 15 go past 3 copies", async () => {
+    // Reported 2026-11-22: Swarming Vulture Droid seemed limited to 3.
+    deckState.cards["303"] = 3;
+    await renderAndSelectDeck("3/50");
+    // The deck rail lists the card too, so pick the explorer tile itself.
+    const tile = Array.from(document.querySelectorAll<HTMLElement>(".xtile")).find((t) =>
+      t.textContent?.includes("Swarming Vulture Droid"),
+    ) as HTMLElement;
+    const add = within(tile).getByLabelText("Add copy");
+    expect(add).not.toBeDisabled();
+    fireEvent.click(add);
+    await waitFor(() => expect(cardsFn).toHaveBeenCalledWith("d1", 303, 1));
+    await screen.findByText("4/50");
   });
 
   it("disables + for a card that isn't available to play yet", async () => {

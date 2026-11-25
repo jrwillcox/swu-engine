@@ -123,7 +123,8 @@ def validate_decklist(cards: list[AnyCard]) -> list[str]:
     * Exactly 1 Leader
     * Exactly 1 Base
     * Exactly 50 non-leader/non-base cards
-    * No more than 3 copies of any card, keyed on full name (title + subtitle).
+    * No more than 3 copies of any card (or the card's printed override, e.g.
+      Swarming Vulture Droid's 15), keyed on full name (title + subtitle).
       Uniqueness does NOT reduce the deck copy cap — a unique card may sit in a
       deck up to 3 copies; the unique rule only limits copies *in play*.  The cap
       is keyed on ``display_name`` (title + subtitle), NOT the DB id, so two
@@ -150,15 +151,18 @@ def validate_decklist(cards: list[AnyCard]) -> list[str]:
             f"Deck must have exactly {required} non-leader/base cards, "
             f"got {len(others)}")
 
-    # Copy limits — keyed on full name (title + subtitle), cap 3 for every card.
-    # Reprints (same title+subtitle, different id) count TOGETHER toward one cap.
-    from collections import Counter
-    name_counts: Counter[str] = Counter()
+    # Copy limits — keyed on full name (title + subtitle). Reprints (same
+    # title+subtitle, different id) count TOGETHER toward one cap. The cap is 3
+    # unless the card prints an override (Swarming Vulture Droid JTL_256: 15);
+    # a group takes its highest printing's cap, as deckrules.deck_errors does.
+    from swu.cards.deckrules import deckbuild_max_copies
+    groups: dict[str, list[AnyCard]] = {}
     for c in others:
-        name_counts[c.display_name] += 1
-    for name, cnt in name_counts.items():
-        if cnt > 3:
-            errors.append(f"Too many copies of {name!r}: {cnt} (limit 3)")
+        groups.setdefault(c.display_name, []).append(c)
+    for name, group in groups.items():
+        cap = max(deckbuild_max_copies(c) for c in group)
+        if len(group) > cap:
+            errors.append(f"Too many copies of {name!r}: {len(group)} (limit {cap})")
 
     return errors
 
