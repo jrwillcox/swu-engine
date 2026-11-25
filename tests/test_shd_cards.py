@@ -6930,6 +6930,9 @@ class TestNoBargain:
         p1_before = len(state.player_by_id("P1").hand)
         p0_hand_before = len(state.player_by_id("P0").hand)
         state, _evt = _play_event_from_hand(state, repo, "SHD", "244", owner="P0")
+        # Printed order: the draw waits for the opponent's discard choice.
+        assert state.pending_decisions[-1].kind == "discard_excess_from_hand"
+        assert len(state.player_by_id("P0").hand) == p0_hand_before
         state = _resolve_discards(state)
         assert not state.pending_decisions
         assert len(state.player_by_id("P1").hand) == p1_before - 1

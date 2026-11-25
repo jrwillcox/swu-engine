@@ -7,9 +7,11 @@ Decks marked **shippable** pass the automated graduation gate (100% implemented,
 | ahsoka-tano | 52 | ✅ shippable |
 | boba-fett | 52 | ✅ shippable |
 | chancellor-palpatine | 52 | ✅ shippable |
+| chewbacca | 52 | ✅ shippable |
 | darth-maul | 52 | ✅ shippable |
 | emperor-palpatine | 52 | ✅ shippable |
 | general-grievous | 52 | ✅ shippable |
+| grand-moff-tarkin | 52 | ✅ shippable |
 | han-solo | 52 | ✅ shippable |
 | jabba-the-hutt | 52 | ✅ shippable |
 | leia-organa | 52 | ✅ shippable |

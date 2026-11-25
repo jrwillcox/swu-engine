@@ -1032,7 +1032,10 @@ def _resolve_activated_effects(
     # the opponent, and the effect ("Take control of this unit") needs to know who.
     event_ctx: dict = {"ability_user_id": user_id}
     if _ability_can_inline(trigger_wrapper, s, res_ci, event_ctx):
-        s = _resolve_inline(s, trigger_wrapper, res_ci, event_ctx)
+        s = _resolve_inline(s, trigger_wrapper, res_ci, event_ctx, resume={
+            "set_code": source_ci.card_def.set_code or "",
+            "card_number": source_ci.card_def.card_number or "",
+            "ability_idx": ability_idx, "decider_id": user_id})
         # An inline effect may itself push a decision (e.g. Admiral Ozzel's
         # CustomEffect pushes a 'play_from_hand' decision).  Only hand the
         # turn over when the ability fully resolved with no decision pending —

@@ -44,6 +44,7 @@ from swu.engine.events import (
     DecisionPushed, DecisionResolved,
 )
 from swu.engine.state import CardInstance, GameState, Zone, ability_suppressed
+from swu.engine.traits import trait_view
 from swu.engine.triggers import get_bus
 
 from swu.engine.actions.base import (
@@ -1002,7 +1003,7 @@ def push_deck_search(
                 after_idx=(1 - s.player_index(searcher_id)) if decider_id is None
                 else s.active_player_index)
         return
-    candidate_ids = [ci.instance_id for ci in searched if eligible(ci.card_def)]
+    candidate_ids = [ci.instance_id for ci in searched if eligible(trait_view(s, ci))]
     owner_idx = s.player_index(searcher_id)
     after_idx = (1 - owner_idx) if decider_id is None else s.active_player_index
     dec = PendingDecision(
@@ -1114,7 +1115,7 @@ def push_search_and_play(
         cd = ci.card_def
         if not isinstance(cd, Unit):
             continue
-        if eligible is not None and not eligible(cd):
+        if eligible is not None and not eligible(trait_view(s, ci)):
             continue
         if free:
             candidate_ids.append(ci.instance_id)
@@ -1253,8 +1254,8 @@ def push_search_and_play_multiple(
     searched = ps.deck[:window]
     if not searched:
         return  # empty deck — nothing to search or bottom
-    candidate_ids = [ci.instance_id for ci in searched if eligible(ci.card_def)]
-    max_select = (len(candidate_ids) if max_units is None
+    candidate_ids = [ci.instance_id for ci in searched if eligible(trait_view(s, ci))]
+    max_select =(len(candidate_ids) if max_units is None
                   else min(len(candidate_ids), int(max_units)))
     owner_idx = s.player_index(actor_of(s, source_ci))
     dec = PendingDecision(

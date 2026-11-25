@@ -1,6 +1,6 @@
 # Encoding manifest — `ic27-set`
 
-Deck readiness: **91/194** cards playable. Encoding groups: **0/17** complete.
+Deck readiness: **104/194** cards playable. Encoding groups: **1/17** complete.
 
 Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py ic27-set --group NN`.
 
@@ -8,8 +8,8 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 
 | # | group id | kind | theme | cards | progress | new primitives | depends on |
 |--:|----------|------|-------|------:|----------|----------------|------------|
-| 1 | `ic27-set:01` | ability | Direct damage & removal | 7 | 0/7 | — | — |
-| 2 | `ic27-set:02` | ability | Direct damage & removal | 7 | 0/7 | — | — |
+| 1 | `ic27-set:01` | ability | Direct damage & removal | 7 | 6/7 | — | — |
+| 2 | `ic27-set:02` | ability | Direct damage & removal | 7 | 7/7 ✅ | — | — |
 | 3 | `ic27-set:03` | ability | Direct damage & removal | 3 | 0/3 | — | — |
 | 4 | `ic27-set:04` | ability | Card advantage & disruption | 7 | 0/7 | — | — |
 | 5 | `ic27-set:05` | ability | Card advantage & disruption | 7 | 0/7 | — | — |
@@ -30,13 +30,13 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 
 Paste the **id** line into the standing prompt. The card names are shown only so you know what you're submitting.
 
-### `ic27-set:01` — Direct damage & removal (0/7)
+### `ic27-set:01` — Direct damage & removal (6/7)
 ```
 ic27-set:01
 # Darth Maul (IC27_5), Dryden Vos (IC27_14), Darth Sidious (IC27_26), BB-8 (IC27_31), Ahsoka Tano (IC27_39), Mother Talzin (IC27_66), Third Sister (IC27_102)
 ```
 
-### `ic27-set:02` — Direct damage & removal (0/7)
+### `ic27-set:02` — Direct damage & removal (✅ done)
 ```
 ic27-set:02
 # Aurra Sing (IC27_107), Supreme Leader Snoke (IC27_109), Supremacy (IC27_110), Hera Syndulla (IC27_117), Sabine Wren (IC27_119), K-2SO (IC27_124), Act of Aggression (IC27_127)

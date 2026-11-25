@@ -181,6 +181,17 @@ class PlayFromDiscard(Action):
             _attach_upgrade(s, ps, ci, self.upgrade_target_id)
         elif isinstance(ci.card_def, (Unit, Leader)):
             _put_unit_in_play(s, ps, ci, play_source="discard", cost_paid=cost)
+            # A free replay's rider tokens (Tireless Magnaguard HMW_109).
+            riders = s.game_memory.discard_replay_tokens_this_phase.pop(
+                ci.instance_id, None) if self.free else None
+            if riders:
+                from swu.engine.tokens import attach_token
+                for tok in riders:
+                    live = s.find_instance(ci.instance_id)
+                    if live is None or live[1].zone not in (Zone.GROUND_ARENA,
+                                                            Zone.SPACE_ARENA):
+                        break
+                    attach_token(s, live[0], live[1], tok)
         elif isinstance(ci.card_def, Event):
             # An EVENT played from the discard pile (Aid from the Innocent TWI_201's
             # discounted permission) goes straight back to the discard and resolves

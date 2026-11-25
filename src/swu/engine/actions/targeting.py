@@ -40,7 +40,7 @@ from swu.engine.decisions import PendingDecision
 from swu.engine.events import (
     CardPlayed, DecisionPushed, DecisionResolved,
 )
-from swu.engine.state import CardInstance, GameState
+from swu.engine.state import CardInstance, GameState, Zone
 from swu.engine.tokens import attach_token
 
 from swu.engine.actions.base import (
@@ -50,7 +50,7 @@ from swu.engine.actions.dispatch import (
     register_decisions,
 )
 from swu.engine.actions.zones import (
-    _apply_put_on_deck, _defeat_unit, _put_unit_in_play,
+    _apply_put_on_deck, _create_token_units, _defeat_unit, _put_unit_in_play,
 )
 from swu.engine.actions.shared import (
     _fire_card_played, _take_from_hand,
@@ -331,8 +331,11 @@ def _opponent_chosen_targets(state: GameState, ctx: dict) -> list[str]:
     """
     opp = state.player_by_id(ctx["opponent_id"])
     ready_only = bool(ctx.get("ready_only"))
+    non_leader_only = bool(ctx.get("non_leader_only"))
 
     def _ok(u) -> bool:
+        if non_leader_only and isinstance(u.card_def, Leader):
+            return False
         return (not ready_only) or (not u.exhausted)
 
     if ctx.get("ground_only"):
@@ -351,6 +354,7 @@ def push_opponent_chooses_target(
     s: GameState, source_ci: CardInstance, *, amount: int = 0,
     ground_only: bool = False, units_only: bool = False,
     disposition: str = "damage", ready_only: bool = False,
+    non_leader_only: bool = False, chooser_id: Optional[str] = None,
 ) -> None:
     """Push an 'opponent_chooses_target' decision: "An opponent chooses a unit or
     base they control. You may deal ``amount`` damage to it" (Grey Squadron
@@ -378,9 +382,16 @@ def push_opponent_chooses_target(
       * ``"exhaust"`` — "Exhaust that unit" (Cal Kestis LOF_15): the same single
         mandatory stage as ``"defeat"``, paired with ``units_only=True`` and
         ``ready_only=True`` so only a ready unit of theirs can be picked (an
-        already-exhausted unit would be a no-op) — with none, nothing is pushed."""
+        already-exhausted unit would be a no-op) — with none, nothing is pushed.
+      * ``"defeat_for_beast"`` — "You may defeat that unit. If you do, that player
+        creates a Beast token" (Mysterious Disappearance HMW_58): the two-stage
+        choose → confirm flow, paired with ``units_only`` + ``non_leader_only``.
+
+    ``chooser_id`` names the player who picks ("A player chooses …", HMW_58); it
+    defaults to the source controller's opponent and may be the controller.  The
+    context key ``opponent_id`` always holds the chooser."""
     controller_id = actor_of(s, source_ci)
-    opponent_id = next(
+    opponent_id = chooser_id if chooser_id is not None else next(
         p.player_id for p in s.players if p.player_id != controller_id)
     ctx = {
         "source_id": source_ci.instance_id,
@@ -391,6 +402,7 @@ def push_opponent_chooses_target(
         "ground_only": bool(ground_only),
         "units_only": bool(units_only),
         "ready_only": bool(ready_only),
+        "non_leader_only": bool(non_leader_only),
         "disposition": disposition,
     }
     if not _opponent_chosen_targets(s, ctx):
@@ -443,6 +455,19 @@ def _resolve_opponent_chooses_target(
             result = s.find_instance(chosen_id)
             if result is not None:
                 result[1].exhausted = True  # "Exhaust that unit" (Cal Kestis LOF_15)
+    elif disposition == "defeat_for_beast":
+        s.event_log.append(DecisionResolved(
+            deciding_player_id=top.deciding_player_id,
+            kind="opponent_chooses_target",
+            choice=(f"defeated {chosen_id}" if deal else "declined"),
+        ))
+        result = s.find_instance(chosen_id) if (deal and chosen_id) else None
+        if result is not None and result[1].zone in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
+            _defeat_unit(s, result[0], result[1])
+            after = s.find_instance(chosen_id)
+            if after is None or after[1].zone not in (Zone.GROUND_ARENA, Zone.SPACE_ARENA):
+                # "If you do, that player creates a Beast token" (HMW_58).
+                _create_token_units(s, s.player_by_id(ctx["opponent_id"]), "Beast", 1)
     else:
         amount = int(ctx["amount"])
         s.event_log.append(DecisionResolved(

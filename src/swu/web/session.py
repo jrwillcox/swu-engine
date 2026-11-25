@@ -315,7 +315,14 @@ class GameSession:
             else:
                 base = "Choose a unit in your discard pile to put on the bottom of your deck (its power = the damage dealt)."
         elif top.kind == "opponent_chooses_target":
-            if top.context.get("stage") == "confirm":
+            if (top.context.get("disposition") == "defeat_for_beast"
+                    and top.context.get("stage") == "confirm"):
+                base = ("You may defeat the chosen unit — if you do, its controller "
+                        "creates a Beast token. Confirm or decline.")
+            elif top.context.get("disposition") == "defeat_for_beast":
+                base = ("Choose a non-leader unit you control — it may be defeated, "
+                        "and you would then create a Beast token.")
+            elif top.context.get("stage") == "confirm":
                 base = "You may deal damage to the unit or base the opponent chose, or decline."
             elif top.context.get("disposition") == "defeat":
                 base = "Choose one of your units — the opponent will defeat it."
@@ -559,6 +566,25 @@ class GameSession:
                 if disposition == "bottom":
                     return f"Put {name} on the bottom"
                 return f"Discard {name}"
+        from swu.engine.actions import (
+            ConfirmOpponentDamage, DeclineOpponentDamage, SelectModalOption,
+        )
+        if isinstance(action, SelectModalOption) and self.state.pending_decisions:
+            ctx = self.state.pending_decisions[-1].context
+            labels = ctx.get("option_labels") or []
+            indices = ctx.get("option_indices") or []
+            if action.option_idx in indices and len(labels) == len(indices):
+                return labels[indices.index(action.option_idx)]
+        if (isinstance(action, (ConfirmOpponentDamage, DeclineOpponentDamage))
+                and self.state.pending_decisions
+                and self.state.pending_decisions[-1].context.get("disposition")
+                == "defeat_for_beast"):
+            # Mysterious Disappearance HMW_58: the confirm stage defeats, not damages.
+            chosen = self._card_name(
+                self.state.pending_decisions[-1].context.get("chosen_id") or "") or "the unit"
+            if isinstance(action, ConfirmOpponentDamage):
+                return f"Defeat {chosen} (its controller creates a Beast)"
+            return f"Don't defeat {chosen}"
         # Any other action: swap the instance ids in describe() for card names.
         return _ID_TOKEN.sub(
             lambda m: self._visible_card_name(m.group()) or m.group(),
@@ -623,7 +649,12 @@ class GameSession:
           when the controller has *no* unit able to attack — leaving only a
           no-op decline.
 
-        In both cases the sole legal action is forced, so we auto-apply it in
+        * ``resolve_effects`` → ``AutoResolveEffects``.  An ability whose effect
+          pushed a choice parks its remaining effects in this decision; once the
+          choice is made and only automatic effects are left, it is offered
+          alone (it is never offered beside a real choice).
+
+        In each case the sole legal action is forced, so we auto-apply it in
         place.  We deliberately do **not** auto-resolve a ``granted_attack`` that
         still offers a real attack (those carry >1 action — the player keeps the
         choice) nor any other single-option decision.  Auto-applied actions are
@@ -631,7 +662,8 @@ class GameSession:
         ``event_log`` so the frontend still animates them.  Bot seats resolve
         their own bookmarks in ``advance_bot``'s loop, so this is human-only.
         """
-        from swu.engine.actions import ContinueAttack, DeclineGrantedAttack
+        from swu.engine.actions import (
+            AutoResolveEffects, ContinueAttack, DeclineGrantedAttack)
         s = self.state
         while (
             not s.is_terminal()
@@ -640,7 +672,7 @@ class GameSession:
         ):
             legal = legal_actions(s)
             if len(legal) != 1 or not isinstance(
-                legal[0], (ContinueAttack, DeclineGrantedAttack)
+                legal[0], (ContinueAttack, DeclineGrantedAttack, AutoResolveEffects)
             ):
                 break
             s = apply(s, legal[0])
@@ -674,6 +706,13 @@ class GameSession:
             events.extend(notices)
             events.extend(self.state.event_log[before:])
             iters += 1
+            # The bot's answer can leave the human a forced no-op (the rest of the
+            # human's ability, parked behind the bot's choice) — collapse it here
+            # too, which may hand the seat straight back to the bot.
+            if self.actor_id() == self.human_id:
+                before = len(self.state.event_log)
+                self._auto_resolve_forced_noops()
+                events.extend(self.state.event_log[before:])
         self._action_cache = {}
         return events
 

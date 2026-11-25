@@ -44,12 +44,12 @@ from swu.abilities.registry import (
     TriggerAbility, ActivatedAbility, ConstantAbility, GrantedAbility, EventAbility,
     WhenPlayed, WhenUnitDefeated, WhenYouPlayCard, WhenYouPlayOrCreateUnit,
     PhaseStartTrigger, OnAttack, WhenDefeated, WhenDamageDealt, WhenYouDraw,
-    WhenUnitAttacks, WhenDeployed,
+    WhenUnitAttacks, WhenDeployed, WhenYouTakeInitiative,
     WhenOpponentPlaysCard, WhenAttackEnds, WhenYouDeployLeader, WhenUnitEntersPlay,
     RevokeKeyword, DamagePrevention, AmbushCanAttackBases, CopyLeaderTraits,
     DealDamage, Heal, DrawCards, ExhaustCard, ReadyCard, ModifyStats, CustomEffect,
     DefeatUnit, ReturnToHand,
-    DiscardFromHand, GiveToken, GrantKeyword,
+    DiscardFromHand, GiveToken, GrantKeyword, CreateTokenUnit,
     KeywordGrant, StatBonus,
     IgnoreAspectPenaltyForPlays, BaseDamageShieldUpgrade, BasesCannotHeal,
     NextPlayDiscount, CostRoute, AbilityDamageBonus, BaseUpgradeDefeatReplacement,
@@ -626,7 +626,8 @@ def _third_sister():
 
 def _seismic_choose(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import push_choose_modal
-    push_choose_modal(state, source_ci, option_indices=[1, 2], pick=1)
+    push_choose_modal(state, source_ci, option_indices=[1, 2], pick=1,
+                      option_labels=["Ground arena", "Space arena"])
     return state
 
 
@@ -1051,8 +1052,8 @@ def _separatist_harbinger():
 # Base-planet cards ("If you control a Naboo/Endor base") — from hmw-set:04, 05,
 # 06, 10, 13 and 14.  The planet comes from the hand-maintained
 # ``swu.cards.base_planets`` table via ``CONTROLLER_HAS_PLANET_BASE`` /
-# ``OPPONENT_HAS_PLANET_BASE``.  Torrent HMW_100 (Naboo, hmw-set:26) waits for the
-# Weakness token.
+# ``OPPONENT_HAS_PLANET_BASE``.  Torrent HMW_100 (Naboo) is with the Weakness cards
+# (hmw-set:26).
 # ══════════════════════════════════════════════════════════════════════════════
 
 _NABOO_BASE = ConditionCheck(Condition.CONTROLLER_HAS_PLANET_BASE, "Naboo")
@@ -1744,11 +1745,11 @@ def _boga():
 
 def _local_support_reveal(state, source_ci, target_id, event_ctx):
     from swu.engine.actions import _draw_cards
-    from swu.engine.traits import has_trait
+    from swu.engine.traits import get_traits, has_trait
     ps = state.player_by_id(actor_of(state, source_ci))
     if not ps.deck:
         return state
-    traits = set(getattr(ps.deck[0].card_def, "traits", None) or ())
+    traits = set(get_traits(state, ps.deck[0]))  # Malakili LAW_212 counts in the deck
     if any(has_trait(state, u, t) for u in ps.ground_arena + ps.space_arena
            for t in traits):
         _draw_cards(state, ps, 1)
@@ -3676,3 +3677,773 @@ def _clone_of_the_zillo_beast():
         TriggerAbility(trigger=OnAttack(), optional=True,
                        effects=[_weakness_to(_ANY_UNIT)]),
     ]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:26 — Weakness-token cards
+# ══════════════════════════════════════════════════════════════════════════════
+
+_IN_ARENA = ("GROUND_ARENA", "SPACE_ARENA")
+
+
+def _attach_weakness(state, target_id, count):
+    """Give ``count`` Weakness tokens to ``target_id``, stopping if it leaves play
+    (a unit at 0 HP is defeated as the tokens land)."""
+    from swu.engine.tokens import attach_token
+    given = 0
+    for _ in range(count):
+        res = state.find_instance(target_id) if target_id else None
+        if res is None or res[1].zone.name not in _IN_ARENA:
+            break
+        attach_token(state, res[0], res[1], "Weakness")
+        given += 1
+    return given
+
+
+def _progenitor_breed(state, source_ci, target_id, event_ctx):
+    """Give this unit a Weakness, then create a Beast per Weakness token on it."""
+    from swu.engine.actions import _create_token_units
+    if not _attach_weakness(state, source_ci.instance_id, 1):
+        return state
+    res = state.find_instance(source_ci.instance_id)
+    me = res[1] if res is not None else source_ci
+    n = sum(1 for u in me.attached_upgrades or ()
+            if getattr(u.card_def, "name", None) == "Weakness")
+    if n:
+        _create_token_units(state, state.player_by_id(actor_of(state, source_ci)),
+                            "Beast", n)
+    return state
+
+
+@card_ability("HMW", "67")
+def _the_great_progenitor():
+    """HMW_67 — The Great Progenitor (Unit, Creature, 4/7): "When Attack Ends: You
+    may give a Weakness token to this unit.  If you do, create a Beast token for
+    each Weakness token on this unit."  ``WhenAttackEnds`` fires only for a
+    survivor, and the count includes the token just given."""
+    return TriggerAbility(trigger=WhenAttackEnds(), optional=True,
+                          effects=[CustomEffect(fn=_progenitor_breed)])
+
+
+def _ravage_distribute(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import push_select_token
+    push_select_token(state, source_ci, token_type="Weakness", max_targets=3,
+                      controller="any", allow_repeats=True)
+    return state
+
+
+@card_ability("HMW", "71")
+def _ravage():
+    """HMW_71 — Ravage (Event, Disaster/Tactic, 4): "Distribute up to 3 Weakness
+    tokens among any number of units."  ``push_select_token(allow_repeats=True)``,
+    the Elzar Mann ASH_224 pool."""
+    return EventAbility(effects=[CustomEffect(fn=_ravage_distribute)])
+
+
+@card_ability("HMW", "87")
+def _venomous_wyyyshokk():
+    """HMW_87 — Venomous Wyyyshokk (Unit, Creature, 3/4): "When Defeated: You may
+    give a Weakness token to a damaged unit." """
+    return TriggerAbility(trigger=WhenDefeated(), optional=True,
+                          effects=[_weakness_to(TargetSpec(controller="any", kind="unit",
+                                                           predicates=("damaged",)))])
+
+
+@card_ability("HMW", "97")
+def _dire_prowess():
+    """HMW_97 — Dire Prowess (Upgrade, Learned, 2): "When Played: You may give a
+    Weakness token to a unit." """
+    return TriggerAbility(trigger=WhenPlayed(), optional=True,
+                          effects=[_weakness_to(_ANY_UNIT)])
+
+
+def _torrent(state, source_ci, target_id, event_ctx):
+    _attach_weakness(state, target_id, 2 if _NABOO_BASE.evaluate(state, source_ci) else 1)
+    return state
+
+
+@card_ability("HMW", "100")
+def _torrent_hmw():
+    """HMW_100 — Torrent (Event, Disaster, 2): "Give a Weakness token to a unit.  If
+    you control a Naboo base, give 2 Weakness tokens to that unit instead." """
+    return EventAbility(effects=[CustomEffect(fn=_torrent, target=_ANY_UNIT)])
+
+
+def _magnaguard_grant_replay(state, source_ci, target_id, event_ctx):
+    """The Second Chance SHD_53 free-replay permission, plus the 2 Weakness tokens
+    the replay attaches (``discard_replay_tokens_this_phase``) — only if it had 5
+    or more power when defeated."""
+    if int((event_ctx or {}).get("defeated_power", 0) or 0) < 5:
+        return state
+    iid = source_ci.instance_id
+    state.game_memory.free_discard_play_this_phase.add(iid)
+    state.game_memory.discard_replay_tokens_this_phase[iid] = ["Weakness", "Weakness"]
+    return state
+
+
+@card_ability("HMW", "109")
+def _tireless_magnaguard():
+    """HMW_109 — Tireless Magnaguard (Unit, Droid/Separatist, 5/3): "When Defeated: If
+    this unit had 5 or more power, for this phase you may play this unit from your
+    discard pile for free and give 2 Weakness tokens to it."  The power is the
+    last-known ``defeated_power``; the "may" is the free ``PlayFromDiscard`` itself."""
+    return TriggerAbility(
+        trigger=WhenDefeated(),
+        effects=[CustomEffect(fn=_magnaguard_grant_replay)],
+    )
+
+
+def _palpatine_steal(state, source_ci, target_id, event_ctx):
+    """Take control of the unit; if you do, give it 2 Weakness tokens."""
+    from swu.engine.actions import change_control
+    res = state.find_instance(target_id) if target_id else None
+    if res is None:
+        return state
+    me = actor_of(state, source_ci)
+    change_control(state, res[1], me)
+    after = state.find_instance(target_id)
+    if after is not None and after[0].player_id == me:
+        _attach_weakness(state, target_id, 2)
+    return state
+
+
+@card_ability("HMW", "110")
+def _emperor_palpatine_hmw():
+    """HMW_110 — Emperor Palpatine (Unit, Force/Imperial/Official/Sith, 3/2): "When
+    Played: You may take control of an enemy non-leader unit that costs 3 or less.
+    If you do, give 2 Weakness tokens to it."  The Commandeer JTL_235 shape."""
+    return TriggerAbility(
+        trigger=WhenPlayed(), optional=True,
+        effects=[CustomEffect(fn=_palpatine_steal, target=TargetSpec(
+            controller="enemy", kind="unit", cost_max=3, predicates=("non_leader",)))],
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:27 — Weakness-token cards
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _qimir_mill(state, source_ci, target_id, event_ctx):
+    """Discard the top card of your deck; if it's not Villainy, give a Weakness
+    token to an enemy unit (the Rickety Quadjumper LAW_115 shape, chosen after the
+    card is seen)."""
+    from swu.engine.actions import discard_from_deck, push_select_token
+    milled = discard_from_deck(state, state.player_by_id(actor_of(state, source_ci)), 1)
+    if not milled:
+        return state
+    aspects = {a.name for a in (getattr(milled[0].card_def, "aspects", None) or ())}
+    if "Villainy" not in aspects:
+        push_select_token(state, source_ci, token_type="Weakness", max_targets=1,
+                          controller="enemy", mandatory=True)
+    return state
+
+
+@card_ability("HMW", "196")
+def _qimir():
+    """HMW_196 — Qimir (Unit, Force, 3/1): "When Defeated: You may discard the top
+    card of your deck.  If it's not Villainy, give a Weakness token to an enemy
+    unit." """
+    return TriggerAbility(trigger=WhenDefeated(), optional=True,
+                          effects=[CustomEffect(fn=_qimir_mill)])
+
+
+def _cid_opponent_weakens(state, source_ci, target_id, event_ctx):
+    """"An opponent chooses a unit they control" — the Sabine Wren ASH_6 shape:
+    ``controller`` reads from the source's side, so "theirs" is "enemy"."""
+    from swu.engine.actions import push_select_token
+    me_idx = state.player_index(actor_of(state, source_ci))
+    push_select_token(state, source_ci, token_type="Weakness", max_targets=1,
+                      controller="enemy", decider_id=state.players[1 - me_idx].player_id,
+                      after_resolve_idx=1 - me_idx, mandatory=True)
+    return state
+
+
+@card_ability("HMW", "197")
+def _cid_scaleback():
+    """HMW_197 — Cid Scaleback (Unit, Underworld, 2/2): "When Played: An opponent
+    chooses a unit they control.  Give a Weakness token to it." """
+    return TriggerAbility(trigger=WhenPlayed(),
+                          effects=[CustomEffect(fn=_cid_opponent_weakens)])
+
+
+def _picador_breed(state, source_ci, target_id, event_ctx):
+    """Create the Beast first, so it is one of the friendly units the Weakness can
+    go to."""
+    from swu.engine.actions import _create_token_units, push_select_token
+    _create_token_units(state, state.player_by_id(actor_of(state, source_ci)), "Beast", 1)
+    push_select_token(state, source_ci, token_type="Weakness", max_targets=1,
+                      controller="friendly", mandatory=True)
+    return state
+
+
+@card_ability("HMW", "199")
+def _geonosian_picador():
+    """HMW_199 — Geonosian Picador (Unit, Separatist, 2/2): "When Played: Create a
+    Beast token.  Then, give a Weakness token to a friendly unit." """
+    return TriggerAbility(trigger=WhenPlayed(), effects=[CustomEffect(fn=_picador_breed)])
+
+
+def _rish_loo_steal(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import change_control
+    res = state.find_instance(target_id) if target_id else None
+    if res is None:
+        return state
+    change_control(state, res[1], actor_of(state, source_ci))
+    res[1].return_control_to_owner_at_regroup = True
+    return state
+
+
+@card_ability("HMW", "200")
+def _rish_loo():
+    """HMW_200 — Rish Loo (Unit, Gungan/Official/Separatist, 3/2; Hidden): "When
+    Played: Take control of an enemy non-leader unit with a Weakness token on it.
+    At the start of the next regroup phase, its owner takes control of it."  Change
+    of Heart SOR_224's take-and-revert; ``had_token:`` reads a live unit's tokens."""
+    return TriggerAbility(trigger=WhenPlayed(), effects=[CustomEffect(
+        fn=_rish_loo_steal,
+        target=TargetSpec(controller="enemy", kind="unit",
+                          predicates=("non_leader", "had_token:Weakness")))])
+
+
+def _inferno_strike(state, source_ci, target_id, event_ctx):
+    """Deal 1 damage to the unit and give it a Weakness token (one target)."""
+    from swu.abilities.resolver import _apply_deal_damage
+    if target_id is None:
+        return state
+    _apply_deal_damage(state, target_id, 1, source_ci.card_def.display_name,
+                       dealer_id=actor_of(state, source_ci), source_id=source_ci.instance_id)
+    _attach_weakness(state, target_id, 1)
+    return state
+
+
+@card_ability("HMW", "202")
+def _inferno_squad_hmw():
+    """HMW_202 — Inferno Squad (Unit, Imperial/Trooper, 3/6): "When Played/When
+    Defeated: You may deal 1 damage to a unit and give a Weakness token to it." """
+    strike = CustomEffect(fn=_inferno_strike, target=_ANY_UNIT)
+    return [TriggerAbility(trigger=WhenPlayed(), optional=True, effects=[strike]),
+            TriggerAbility(trigger=WhenDefeated(), optional=True, effects=[strike])]
+
+
+def _dragonboat_weaken(state, source_ci, target_id, event_ctx):
+    """Give a Weakness token; if the unit is unique, exhaust it."""
+    if not _attach_weakness(state, target_id, 1):
+        return state
+    res = state.find_instance(target_id)
+    if res is not None and res[1].zone.name in _IN_ARENA and getattr(
+            res[1].card_def, "is_unique", False):
+        res[1].exhausted = True
+    return state
+
+
+@card_ability("HMW", "231")
+def _dragonboat_freighter():
+    """HMW_231 — Dragonboat Freighter (Unit, Transport/Underworld/Vehicle, 5/5):
+    "When Played: You may give a Weakness token to a unit.  If it's a unique unit,
+    exhaust it." """
+    return TriggerAbility(trigger=WhenPlayed(), optional=True,
+                          effects=[CustomEffect(fn=_dragonboat_weaken, target=_ANY_UNIT)])
+
+
+def _easy_prey(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import _create_token_units
+    me = state.player_by_id(actor_of(state, source_ci))
+    opp = state.players[1 - state.player_index(me.player_id)]
+    _create_token_units(state, me, "Beast", 1)
+    theirs = _create_token_units(state, opp, "Beast", 1)
+    if theirs:
+        _attach_weakness(state, theirs[0].instance_id, 1)
+    return state
+
+
+@card_ability("HMW", "237")
+def _easy_prey_hmw():
+    """HMW_237 — Easy Prey (Event, Innate, 1): "Create a Beast token.  An opponent
+    creates a Beast token.  Give a Weakness token to it." """
+    return EventAbility(effects=[CustomEffect(fn=_easy_prey)])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:28 — Weakness-token cards
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _sandstorm_choose(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import push_choose_modal
+    push_choose_modal(state, source_ci, option_indices=[2, 3], pick=1,
+                      option_labels=["Ground arena", "Space arena"])
+    return state
+
+
+def _sandstorm_arena(arena):
+    def _fn(state, source_ci, target_id, event_ctx):
+        me = actor_of(state, source_ci)
+        for ps in state.players:
+            if ps.player_id == me:
+                continue
+            units = ps.ground_arena if arena == "ground" else ps.space_arena
+            for iid in [u.instance_id for u in units if u.exhausted]:
+                _attach_weakness(state, iid, 1)
+        return state
+    return _fn
+
+
+@card_ability("HMW", "240")
+def _sandstorm():
+    """HMW_240 — Sandstorm (Event, Disaster, 3): "While you control a Tatooine base,
+    this event costs 1 resource less to play.  Choose an arena.  Give a Weakness
+    token to each exhausted enemy unit in that arena."  The Seismic Detonation
+    HMW_54 arena selector (indices 2 = ground, 3 = space; 0 is the discount)."""
+    return [
+        CostReduction(1, condition=_TATOOINE_BASE),
+        EventAbility(effects=[CustomEffect(fn=_sandstorm_choose)]),
+        TriggerAbility(trigger=WhenPlayed(),
+                       effects=[CustomEffect(fn=_sandstorm_arena("ground"))]),
+        TriggerAbility(trigger=WhenPlayed(),
+                       effects=[CustomEffect(fn=_sandstorm_arena("space"))]),
+    ]
+
+
+@card_ability("HMW", "242")
+def _occupation_officer():
+    """HMW_242 — Occupation Officer (Unit, Imperial, 3/2): "When Played: If you
+    control 6 or more resources, you may give a Weakness token to a unit." """
+    return TriggerAbility(
+        trigger=WhenPlayed(), optional=True,
+        effects=[_weakness_to(_ANY_UNIT)],
+        condition=ConditionCheck(Condition.CONTROLLER_N_PLUS_RESOURCES, 6),
+    )
+
+
+def _defoliator_victim(state, source_ci, event_ctx):
+    """The defending unit, if it isn't a Droid or Vehicle and you can pay 2."""
+    from swu.engine.traits import has_trait
+    did = (event_ctx or {}).get("defender_id")
+    res = state.find_instance(did) if did else None
+    if res is None or res[1].zone.name not in _IN_ARENA:
+        return None
+    if has_trait(state, res[1], "Droid") or has_trait(state, res[1], "Vehicle"):
+        return None
+    ps = state.player_by_id(actor_of(state, source_ci))
+    if sum(1 for r in ps.resources if not r.exhausted) < 2:
+        return None
+    return res[1]
+
+
+def _defoliator_can(state, source_ci, event_ctx):
+    return _defoliator_victim(state, source_ci, event_ctx) is not None
+
+
+def _defoliator_pay_and_weaken(state, source_ci, target_id, event_ctx):
+    """Pay 2 and give 2 Weakness tokens — one effect, so the tokens only come with
+    the payment."""
+    from swu.engine.actions.costs import _exhaust_resources
+    victim = _defoliator_victim(state, source_ci, event_ctx)
+    if victim is None:
+        return state
+    _exhaust_resources(state.player_by_id(actor_of(state, source_ci)), 2)
+    _attach_weakness(state, victim.instance_id, 2)
+    return state
+
+
+@card_ability("HMW", "248")
+def _defoliator_tank():
+    """HMW_248 — Defoliator Tank (Unit, Separatist/Tank/Vehicle, 4/6; Overwhelm):
+    "On Attack: If the defending unit isn't a Droid or Vehicle, you may pay 2
+    resources.  If you do, give 2 Weakness tokens to it."  A base defender, a Droid
+    or Vehicle, or fewer than 2 ready resources: no prompt."""
+    return TriggerAbility(
+        trigger=OnAttack(), optional=True,
+        effects=[CustomEffect(fn=_defoliator_pay_and_weaken,
+                              available_fn=_defoliator_can)],
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:29 — Beast-token cards
+#
+# The Beast token is a vanilla 3/3 ground Creature TokenUnit row, so
+# ``CreateTokenUnit("Beast")`` / ``_create_token_units`` need no machinery.
+# Mysterious Disappearance HMW_58 uses the ``opponent_chooses_target``
+# ``"defeat_for_beast"`` disposition, with ``chooser_id`` naming the player.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _has_non_leader_unit(ps) -> bool:
+    from swu.cards.models import Leader
+    return any(not isinstance(u.card_def, Leader)
+               for u in ps.ground_arena + ps.space_arena)
+
+
+def _mysterious_push(state, source_ci, chooser_id):
+    from swu.engine.actions import push_opponent_chooses_target
+    push_opponent_chooses_target(state, source_ci, units_only=True,
+                                 non_leader_only=True, disposition="defeat_for_beast",
+                                 chooser_id=chooser_id)
+
+
+def _mysterious_pick(chooser):
+    def _fn(state, source_ci, target_id, event_ctx):
+        me = actor_of(state, source_ci)
+        chooser_id = me if chooser == "me" else next(
+            p.player_id for p in state.players if p.player_id != me)
+        _mysterious_push(state, source_ci, chooser_id)
+        return state
+    return _fn
+
+
+def _mysterious_choose(state, source_ci, target_id, event_ctx):
+    """Choose the player — only among players with a non-leader unit; with one
+    such player there is nothing to choose."""
+    from swu.engine.actions import push_choose_modal
+    me = actor_of(state, source_ci)
+    options = [(1, "You choose one of your units", me)]
+    options += [(2, "Your opponent chooses one of their units", p.player_id)
+                for p in state.players if p.player_id != me]
+    live = [o for o in options if _has_non_leader_unit(state.player_by_id(o[2]))]
+    if len(live) == 1:
+        _mysterious_push(state, source_ci, live[0][2])
+    elif live:
+        push_choose_modal(state, source_ci, option_indices=[o[0] for o in live],
+                          pick=1, option_labels=[o[1] for o in live])
+    return state
+
+
+@card_ability("HMW", "58")
+def _mysterious_disappearance():
+    """HMW_58 — Mysterious Disappearance (Event, Trick, 2): "A player chooses a
+    non-leader unit they control.  You may defeat that unit.  If you do, that
+    player creates a Beast token."
+
+    Index 0 picks the player (the Seismic HMW_54 option shape); options 1 (you)
+    and 2 (your opponent) push the two-stage choose → confirm decision."""
+    return [
+        EventAbility(effects=[CustomEffect(fn=_mysterious_choose)]),
+        TriggerAbility(trigger=WhenPlayed(),
+                       effects=[CustomEffect(fn=_mysterious_pick("me"))]),
+        TriggerAbility(trigger=WhenPlayed(),
+                       effects=[CustomEffect(fn=_mysterious_pick("opponent"))]),
+    ]
+
+
+def _ready_resources(state, source_ci):
+    ps = state.player_by_id(actor_of(state, source_ci))
+    return sum(1 for r in ps.resources if not r.exhausted)
+
+
+def _tarfful_can_pay(state, source_ci, event_ctx):
+    return _ready_resources(state, source_ci) >= 1
+
+
+def _tarfful_pay_for_beast(state, source_ci, target_id, event_ctx):
+    """"You may pay 1 resource.  If you do, create a Beast token." """
+    from swu.engine.actions import _create_token_units
+    from swu.engine.actions.costs import _exhaust_resources
+    if _ready_resources(state, source_ci) < 1:
+        return state
+    ps = state.player_by_id(actor_of(state, source_ci))
+    _exhaust_resources(ps, 1)
+    _create_token_units(state, ps, "Beast", 1)
+    return state
+
+
+@card_ability("HMW", "10")
+def _tarfful():
+    """HMW_10 — Tarfful (Leader, Rebel/Wookiee, 3/7).
+
+    Undeployed: "Action [2 resources, Exhaust, discard a card from your hand]:
+    Create a Beast token."  Deployed: "Sentinel.  On Attack: You may pay 1
+    resource.  If you do, create a Beast token."  Sentinel and the Epic Action
+    deploy are generic."""
+    return [
+        ActivatedAbility(costs=[PayResources(2), ExhaustSelf(), DiscardCardCost()],
+                         effects=[CreateTokenUnit("Beast")],
+                         title="Create a Beast token", undeployed_only=True),
+        TriggerAbility(trigger=OnAttack(), optional=True, deployed_only=True,
+                       effects=[CustomEffect(fn=_tarfful_pay_for_beast,
+                                             available_fn=_tarfful_can_pay)]),
+    ]
+
+
+def _poggle_rouse(state, source_ci, target_id, event_ctx):
+    """Ready the friendly Creature and deal 1 damage to it."""
+    from swu.abilities.resolver import _apply_deal_damage
+    res = state.find_instance(target_id) if target_id else None
+    if res is None or res[1].zone.name not in _IN_ARENA:
+        return state
+    res[1].exhausted = False
+    _apply_deal_damage(state, target_id, 1, source_ci.card_def.display_name,
+                       dealer_id=actor_of(state, source_ci), source_id=source_ci.instance_id)
+    return state
+
+
+_FRIENDLY_CREATURE = TargetSpec(controller="friendly", kind="unit", traits=("Creature",))
+
+
+@card_ability("HMW", "12")
+def _poggle_the_lesser():
+    """HMW_12 — Poggle the Lesser (Leader, Official/Separatist, 1/6).
+
+    Undeployed: "Action [1 resource, Exhaust]: Ready a friendly Creature unit and
+    deal 1 damage to it."  Deployed: "When Deployed: Create a Beast token.  On
+    Attack: You may ready a friendly Creature unit and deal 1 damage to it."  The
+    Action is gated on a friendly Creature existing (no no-op Action)."""
+    rouse = CustomEffect(fn=_poggle_rouse, target=_FRIENDLY_CREATURE)
+    return [
+        ActivatedAbility(costs=[PayResources(1), ExhaustSelf()], effects=[rouse],
+                         title="Ready a friendly Creature; deal 1 damage to it",
+                         undeployed_only=True,
+                         condition=ConditionCheck(Condition.CONTROLLER_HAS_TRAIT_UNIT,
+                                                  "Creature")),
+        TriggerAbility(trigger=WhenDeployed(), effects=[CreateTokenUnit("Beast")]),
+        TriggerAbility(trigger=OnAttack(), optional=True, deployed_only=True,
+                       effects=[rouse]),
+    ]
+
+
+@card_ability("HMW", "38")
+def _bestial_bond():
+    """HMW_38 — Bestial Bond (Upgrade, Innate, 3): "When Played: If attached unit is
+    a Creature or a Force unit, create a Beast token." """
+    return TriggerAbility(
+        trigger=WhenPlayed(), effects=[CreateTokenUnit("Beast")],
+        condition=ConditionCheck(Condition.ANY_OF, (
+            ConditionCheck(Condition.ATTACHED_HOST_HAS_TRAIT, "Creature"),
+            ConditionCheck(Condition.ATTACHED_HOST_HAS_TRAIT, "Force"),
+        )),
+    )
+
+
+@card_ability("HMW", "47")
+def _eravana():
+    """HMW_47 — Eravana (Unit, Transport/Underworld/Vehicle, 1/7): "On Attack: Create
+    a Beast token and ready it." """
+    return TriggerAbility(trigger=OnAttack(),
+                          effects=[CreateTokenUnit("Beast", enters_ready=True)])
+
+
+def _boss_nass_swap(state, source_ci, target_id, event_ctx):
+    """Defeat a Shield on the chosen friendly Gungan; if one came off, create a Beast
+    and give it a Shield (the Rose Tico SHD_45 "if you do" binding)."""
+    from swu.engine import tokens
+    from swu.engine.actions import _create_token_units
+    res = state.find_instance(target_id) if target_id else None
+    if res is None or not tokens.defeat_shield(state, res[1]):
+        return state
+    ps = state.player_by_id(actor_of(state, source_ci))
+    for beast in _create_token_units(state, ps, "Beast", 1):
+        tokens.attach_token(state, ps, beast, "Shield")
+    return state
+
+
+@card_ability("HMW", "77")
+def _boss_nass():
+    """HMW_77 — Boss Nass (Unit, Gungan/Official, 4/6): "When Played/On Attack: You
+    may defeat a Shield token on a friendly Gungan unit.  If you do, create a Beast
+    token and give a Shield token to it." """
+    swap = CustomEffect(fn=_boss_nass_swap, target=TargetSpec(
+        controller="friendly", kind="unit", traits=("Gungan",),
+        predicates=("has_shield_token",)))
+    return [TriggerAbility(trigger=WhenPlayed(), optional=True, effects=[swap]),
+            TriggerAbility(trigger=OnAttack(), optional=True, effects=[swap])]
+
+
+@card_ability("HMW", "144")
+def _howler_pack():
+    """HMW_144 — Howler Pack (Unit, Creature, 3/3): "When Played/When Defeated:
+    Create a Beast token." """
+    return [TriggerAbility(trigger=WhenPlayed(), effects=[CreateTokenUnit("Beast")]),
+            TriggerAbility(trigger=WhenDefeated(), effects=[CreateTokenUnit("Beast")])]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:30 — Beast-token cards
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _then_resolve_option(state, source_ci, ability_idx):
+    """Push ``ability_idx`` of this card as a fresh ``resolve_effects`` (the
+    ``_resolve_choose_two_modal`` shape), so its targets are gathered only now —
+    after a token this ability just created exists ("Create a Beast token.  Deal 1
+    damage to a friendly ground unit …" may hit that Beast)."""
+    from swu.engine.decisions import PendingDecision
+    from swu.engine.events import DecisionPushed
+    me = actor_of(state, source_ci)
+    after = 1 - state.player_index(me)
+    state.pending_decisions.append(PendingDecision(
+        deciding_player_id=me, kind="resolve_effects",
+        context={"set_code": source_ci.card_def.set_code,
+                 "card_number": source_ci.card_def.card_number,
+                 "ability_idx": int(ability_idx), "source_id": source_ci.instance_id,
+                 "effect_idx": 0, "resolved_targets": {}, "event_ctx": {},
+                 "after_all_player_idx": after},
+        after_resolve_player_index=after))
+    state.event_log.append(DecisionPushed(deciding_player_id=me, kind="resolve_effects"))
+    state.active_player_index = state.player_index(me)
+    return state
+
+
+def _beast_then(ability_idx):
+    def _fn(state, source_ci, target_id, event_ctx):
+        from swu.engine.actions import _create_token_units
+        _create_token_units(state, state.player_by_id(actor_of(state, source_ci)),
+                            "Beast", 1)
+        return _then_resolve_option(state, source_ci, ability_idx)
+    return _fn
+
+
+def _migrate(state, source_ci, target_id, event_ctx):
+    from swu.engine.actions import _create_token_units
+    ps = state.player_by_id(actor_of(state, source_ci))
+    n = len(ps.resources) // 3
+    if n:
+        _create_token_units(state, ps, "Beast", n)
+    return state
+
+
+@card_ability("HMW", "150")
+def _migrate_hmw():
+    """HMW_150 — Migrate (Event, Innate, 3): "For every 3 resources you control,
+    create a Beast token." """
+    return EventAbility(effects=[CustomEffect(fn=_migrate)])
+
+
+@card_ability("HMW", "152")
+def _babwa_venomor():
+    """HMW_152 — Babwa Venomor (Unit, Imperial, 4/4; Overwhelm): "When Played: An
+    opponent creates a Beast token." """
+    return TriggerAbility(trigger=WhenPlayed(),
+                          effects=[CreateTokenUnit("Beast", player="opponent")])
+
+
+def _poacher_swap(state, source_ci, target_id, event_ctx):
+    """Defeat this unit; if you do, create a Beast and deal 1 damage to it."""
+    from swu.abilities.resolver import _apply_defeat_unit, _apply_deal_damage
+    from swu.engine.actions import _create_token_units
+    res = state.find_instance(source_ci.instance_id)
+    if res is None or res[1].zone.name not in _IN_ARENA:
+        return state
+    ps = state.player_by_id(actor_of(state, source_ci))
+    _apply_defeat_unit(state, source_ci.instance_id)
+    after = state.find_instance(source_ci.instance_id)
+    if after is not None and after[1].zone.name in _IN_ARENA:
+        return state                      # not defeated (prevented): no "if you do"
+    for beast in _create_token_units(state, ps, "Beast", 1):
+        _apply_deal_damage(state, beast.instance_id, 1, source_ci.card_def.display_name,
+                           dealer_id=ps.player_id, source_id=source_ci.instance_id)
+    return state
+
+
+@card_ability("HMW", "153")
+def _poachers_starfighter():
+    """HMW_153 — Poacher's Starfighter (Unit, Fighter/Underworld/Vehicle, 3/1):
+    "When Played: You may defeat this unit.  If you do, create a Beast token and
+    deal 1 damage to it." """
+    return TriggerAbility(trigger=WhenPlayed(), optional=True,
+                          effects=[CustomEffect(fn=_poacher_swap)])
+
+
+def _ezra_feed_the_beast(state, source_ci, target_id, event_ctx):
+    """Deal 3 damage to your base; if you do, create a Beast token."""
+    from swu.abilities.resolver import _apply_deal_damage
+    from swu.engine.actions import _create_token_units
+    ps = state.player_by_id(actor_of(state, source_ci))
+    base = ps.base_instance
+    if base is None:
+        return state
+    _apply_deal_damage(state, base.instance_id, 3, source_ci.card_def.display_name,
+                       dealer_id=ps.player_id, source_id=source_ci.instance_id)
+    if not state.is_terminal():
+        _create_token_units(state, ps, "Beast", 1)
+    return state
+
+
+@card_ability("HMW", "168")
+def _ezra_bridger_hmw():
+    """HMW_168 — Ezra Bridger (Unit, Force/Rebel/Spectre, 5/4): "When you take the
+    initiative: You may deal 3 damage to your base.  If you do, create a Beast
+    token." """
+    return TriggerAbility(trigger=WhenYouTakeInitiative(), optional=True,
+                          effects=[CustomEffect(fn=_ezra_feed_the_beast)])
+
+
+_FRIENDLY_GROUND = TargetSpec(controller="friendly", kind="unit", arena="ground")
+_ENEMY_GROUND = TargetSpec(controller="enemy", kind="unit", arena="ground")
+
+
+@card_ability("HMW", "194")
+def _run_amok():
+    """HMW_194 — Run Amok (Event, Disaster, 3): "Create a Beast token.  Deal 1 damage
+    to a friendly ground unit and 1 damage to an enemy ground unit."  The Beast is
+    created first and the damage resolves as option 1 (``_then_resolve_option``), so
+    the new Beast is a legal friendly target."""
+    return [
+        EventAbility(effects=[CustomEffect(fn=_beast_then(1))]),
+        TriggerAbility(trigger=WhenPlayed(), effects=[
+            DealDamage(1, _FRIENDLY_GROUND), DealDamage(1, _ENEMY_GROUND)]),
+    ]
+
+
+def _catch_the_scent(state, source_ci, target_id, event_ctx):
+    """Create 2 Beasts and ready 1 (identical tokens: no choice to make)."""
+    from swu.engine.actions import _create_token_units
+    beasts = _create_token_units(state, state.player_by_id(actor_of(state, source_ci)),
+                                 "Beast", 2)
+    if beasts:
+        beasts[0].exhausted = False
+    return state
+
+
+@card_ability("HMW", "195")
+def _catch_the_scent_hmw():
+    """HMW_195 — Catch the Scent (Event, Innate, 5): "Create 2 Beast tokens and
+    ready 1 of them." """
+    return EventAbility(effects=[CustomEffect(fn=_catch_the_scent)])
+
+
+@card_ability("HMW", "241")
+def _howl():
+    """HMW_241 — Howl (Event, Innate, 6): "Create a Beast token.  You may return a
+    non-leader unit to its owner's hand."  As Run Amok HMW_194: the Beast first, then
+    the bounce as option 1, so the new Beast could be returned too (it ceases to
+    exist)."""
+    return [
+        EventAbility(effects=[CustomEffect(fn=_beast_then(1))]),
+        TriggerAbility(trigger=WhenPlayed(), effects=[ReturnToHand(
+            TargetSpec(controller="any", kind="unit", predicates=("non_leader",),
+                       optional=True))]),
+    ]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# hmw-set:31 — Beast-token cards
+# ══════════════════════════════════════════════════════════════════════════════
+
+_YOUR_BASE = TargetSpec(controller="friendly", kind="base", fixed=EACH_FRIENDLY)
+
+
+@card_ability("HMW", "250")
+def _imperial_cavalry():
+    """HMW_250 — Imperial Cavalry (Unit, Imperial/Trooper, 4/4): "When Played: Create
+    a Beast token and deal 1 damage to an enemy unit."  The Beast is friendly, so
+    gathering the enemy targets before it exists loses nothing."""
+    return TriggerAbility(trigger=WhenPlayed(), effects=[
+        CreateTokenUnit("Beast"),
+        DealDamage(1, TargetSpec(controller="enemy", kind="unit"))])
+
+
+@card_ability("HMW", "262")
+def _mylaya_rider():
+    """HMW_262 — Mylaya Rider (Unit, Creature/Wookiee, 4/4): "When Played: Create a
+    Beast token and heal 2 damage from your base." """
+    return TriggerAbility(trigger=WhenPlayed(),
+                          effects=[CreateTokenUnit("Beast"), Heal(2, _YOUR_BASE)])
+
+
+@card_ability("HMW", "272")
+def _growth():
+    """HMW_272 — Growth (Event, Innate, 5): "Create a Beast token.  Heal 3 damage
+    from your base.  Draw a card." """
+    return EventAbility(effects=[CreateTokenUnit("Beast"), Heal(3, _YOUR_BASE),
+                                 DrawCards(1)])

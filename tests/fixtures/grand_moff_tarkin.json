@@ -1,0 +1,32 @@
+{
+  "leader": {"id": "HMW_4"},
+  "base": {"id": "SEC_22"},
+  "deck": [
+    {"id": "HMW_37", "count": 1},
+    {"id": "HMW_66", "count": 1},
+    {"id": "LAW_103", "count": 1},
+    {"id": "LOF_91", "count": 1},
+    {"id": "JTL_43", "count": 1},
+    {"id": "HMW_95", "count": 2},
+    {"id": "HMW_205", "count": 1},
+    {"id": "HMW_206", "count": 3},
+    {"id": "HMW_59", "count": 2},
+    {"id": "ASH_72", "count": 2},
+    {"id": "SEC_80", "count": 2},
+    {"id": "JTL_33", "count": 2},
+    {"id": "HMW_85", "count": 2},
+    {"id": "HMW_60", "count": 3},
+    {"id": "HMW_113", "count": 3},
+    {"id": "ASH_103", "count": 2},
+    {"id": "HMW_81", "count": 2},
+    {"id": "SEC_30", "count": 2},
+    {"id": "HMW_61", "count": 3},
+    {"id": "ASH_97", "count": 2},
+    {"id": "HMW_63", "count": 2},
+    {"id": "ASH_98", "count": 2},
+    {"id": "ASH_48", "count": 2},
+    {"id": "ASH_50", "count": 2},
+    {"id": "LAW_171", "count": 2},
+    {"id": "ASH_133", "count": 2}
+  ]
+}

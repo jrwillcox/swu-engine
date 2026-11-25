@@ -237,6 +237,10 @@ REPRINT_ALIASES: dict[tuple[str, str], tuple[str, str]] = {
     ("P26", "272"): ("HMW", "225"),   # Boba Fett
     # hmw-set:25 mirrors (2026-11-23)
     ("P26", "265"): ("HMW", "62"),    # Nuvo Vindi
+    # hmw-set:26–31 mirrors (2026-11-25)
+    ("P26", "28"): ("HMW", "110"),    # Emperor Palpatine
+    ("HMWP", "1"): ("HMW", "47"),     # Eravana
+    ("HMWP", "15"): ("HMW", "202"),   # Inferno Squad
     # Victor Leader  ->  JTL_85
     ("P25", "154"): ("JTL", "85"),
     ("P25", "164"): ("JTL", "85"),

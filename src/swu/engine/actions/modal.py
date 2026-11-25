@@ -1010,7 +1010,7 @@ def _choose_two_modal_actions(state: GameState, top) -> list["Action"]:
 def push_choose_modal(
     s: GameState, source_ci: CardInstance, *,
     option_indices: list[int], pick: int = 2, decider_id: str | None = None,
-    allow_repeat: bool = False,
+    allow_repeat: bool = False, option_labels: list[str] | None = None,
 ) -> None:
     """Push a 'choose_two_modal' decision: "Choose ``pick`` of the given options,
     in any order" (the SOR aspect events).
@@ -1033,7 +1033,11 @@ def push_choose_modal(
 
     ``allow_repeat`` — "Choose two.  You may choose the same option more than once"
     (Hunter HMW_35): a chosen option stays offered, and ``pick`` is not capped by
-    the number of options."""
+    the number of options.
+
+    ``option_labels`` (parallel to ``option_indices``) names each option for the
+    web buttons (Seismic Detonation HMW_54's arenas, Mysterious Disappearance
+    HMW_58's players); without it a button reads "Choose modal option N"."""
     controller_id = actor_of(s, source_ci)
     owner_idx = s.player_index(controller_id)
     pick = int(pick) if allow_repeat else min(int(pick), len(option_indices))
@@ -1055,6 +1059,7 @@ def push_choose_modal(
             "pick": pick,
             "chosen": [],
             "allow_repeat": bool(allow_repeat),
+            "option_labels": list(option_labels or []),
         },
         after_resolve_player_index=1 - owner_idx,
     )

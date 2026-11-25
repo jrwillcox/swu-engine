@@ -1,6 +1,6 @@
 # Encoding manifest — `hmw-set`
 
-Deck readiness: **238/272** cards playable. Encoding groups: **25/31** complete.
+Deck readiness: **272/272** cards playable. Encoding groups: **31/31** complete.
 
 Encode one group per session: paste its **group id** into `docs/dev/encode_group_prompt.md`, review, then run `python scripts/verify_encoding.py hmw-set --group NN`.
 
@@ -33,12 +33,12 @@ Encode one group per session: paste its **group id** into `docs/dev/encode_group
 | 23 | `hmw-set:23` | ability | Miscellaneous abilities | 7 | 7/7 ✅ | — | — |
 | 24 | `hmw-set:24` | ability | Miscellaneous abilities | 7 | 7/7 ✅ | — | — |
 | 25 | `hmw-set:25` | ability | New primitive: weakness-token | 7 | 7/7 ✅ | — | — |
-| 26 | `hmw-set:26` | ability | New primitive: weakness-token | 7 | 0/7 | — | — |
-| 27 | `hmw-set:27` | ability | New primitive: weakness-token | 7 | 0/7 | — | — |
-| 28 | `hmw-set:28` | ability | New primitive: weakness-token | 3 | 0/3 | — | — |
-| 29 | `hmw-set:29` | ability | New primitive: beast-token | 7 | 0/7 | — | — |
-| 30 | `hmw-set:30` | ability | New primitive: beast-token | 7 | 0/7 | — | — |
-| 31 | `hmw-set:31` | ability | New primitive: beast-token | 3 | 0/3 | — | — |
+| 26 | `hmw-set:26` | ability | New primitive: weakness-token | 7 | 7/7 ✅ | — | — |
+| 27 | `hmw-set:27` | ability | New primitive: weakness-token | 7 | 7/7 ✅ | — | — |
+| 28 | `hmw-set:28` | ability | New primitive: weakness-token | 3 | 3/3 ✅ | — | — |
+| 29 | `hmw-set:29` | ability | New primitive: beast-token | 7 | 7/7 ✅ | — | — |
+| 30 | `hmw-set:30` | ability | New primitive: beast-token | 7 | 7/7 ✅ | — | — |
+| 31 | `hmw-set:31` | ability | New primitive: beast-token | 3 | 3/3 ✅ | — | — |
 
 ## Copy-paste entries
 
@@ -194,37 +194,37 @@ hmw-set:25
 # Maz Kanata (HMW_2), Doctor Hemlock (HMW_3), Bossk (HMW_15), Talzin's Shuttle (HMW_40), Clone X Assassin (HMW_59), Nuvo Vindi (HMW_62), Clone of the Zillo Beast (HMW_65)
 ```
 
-### `hmw-set:26` — New primitive: weakness-token (0/7)
+### `hmw-set:26` — New primitive: weakness-token (✅ done)
 ```
 hmw-set:26
 # The Great Progenitor (HMW_67), Ravage (HMW_71), Venomous Wyyyshokk (HMW_87), Dire Prowess (HMW_97), Torrent (HMW_100), Tireless Magnaguard (HMW_109), Emperor Palpatine (HMW_110)
 ```
 
-### `hmw-set:27` — New primitive: weakness-token (0/7)
+### `hmw-set:27` — New primitive: weakness-token (✅ done)
 ```
 hmw-set:27
 # Qimir (HMW_196), Cid Scaleback (HMW_197), Geonosian Picador (HMW_199), Rish Loo (HMW_200), Inferno Squad (HMW_202), Dragonboat Freighter (HMW_231), Easy Prey (HMW_237)
 ```
 
-### `hmw-set:28` — New primitive: weakness-token (0/3)
+### `hmw-set:28` — New primitive: weakness-token (✅ done)
 ```
 hmw-set:28
 # Sandstorm (HMW_240), Occupation Officer (HMW_242), Defoliator Tank (HMW_248)
 ```
 
-### `hmw-set:29` — New primitive: beast-token (0/7)
+### `hmw-set:29` — New primitive: beast-token (✅ done)
 ```
 hmw-set:29
 # Tarfful (HMW_10), Poggle the Lesser (HMW_12), Bestial Bond (HMW_38), Eravana (HMW_47), Mysterious Disappearance (HMW_58), Boss Nass (HMW_77), Howler Pack (HMW_144)
 ```
 
-### `hmw-set:30` — New primitive: beast-token (0/7)
+### `hmw-set:30` — New primitive: beast-token (✅ done)
 ```
 hmw-set:30
 # Migrate (HMW_150), Babwa Venomor (HMW_152), Poacher's Starfighter (HMW_153), Ezra Bridger (HMW_168), Run Amok (HMW_194), Catch the Scent (HMW_195), Howl (HMW_241)
 ```
 
-### `hmw-set:31` — New primitive: beast-token (0/3)
+### `hmw-set:31` — New primitive: beast-token (✅ done)
 ```
 hmw-set:31
 # Imperial Cavalry (HMW_250), Mylaya Rider (HMW_262), Growth (HMW_272)

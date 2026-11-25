@@ -188,6 +188,26 @@ def get_traits(state: "GameState", ci: "CardInstance") -> tuple[str, ...]:
     return tuple(out)
 
 
+def trait_view(state: "GameState", ci: "CardInstance"):
+    """``ci.card_def`` with its ``traits`` replaced by the card's EFFECTIVE traits.
+
+    Search and pick filters (``push_deck_search``'s ``eligible``, the discard and
+    hand pickers) take a card_def and read ``.traits``, i.e. printed traits.  Hand
+    them this instead and a granted trait counts — Malakili LAW_212 makes a
+    Creature in the deck Underworld for an Underworld search.  Same card class (a
+    ``dataclasses.replace`` copy), so ``isinstance`` filters still work; the
+    original object is returned untouched when nothing changes (the usual case)."""
+    cd = ci.card_def
+    printed = tuple(getattr(cd, "traits", None) or ())
+    effective = get_traits(state, ci)
+    if effective == printed:
+        return cd
+    from dataclasses import is_dataclass, replace
+    if not is_dataclass(cd):
+        return cd
+    return replace(cd, traits=effective)
+
+
 def has_trait(state: "GameState", ci: "CardInstance", trait: str) -> bool:
     """True if ``ci`` has ``trait`` from any source (printed or granted) and it is
     not currently revoked."""

@@ -5,7 +5,7 @@
     "set_code": "IC27"
   },
   "total_deck_cards": 194,
-  "playable_deck_cards": 91,
+  "playable_deck_cards": 104,
   "groups": [
     {
       "gid": "ic27-set:01",
@@ -25,7 +25,7 @@
         "IC27_66",
         "IC27_102"
       ],
-      "done": 0,
+      "done": 6,
       "total": 7
     },
     {
@@ -46,7 +46,7 @@
         "IC27_124",
         "IC27_127"
       ],
-      "done": 0,
+      "done": 7,
       "total": 7
     },
     {

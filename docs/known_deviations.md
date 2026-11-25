@@ -12,17 +12,18 @@ and sorted, and updated on 2026-11-25. If you fix one, remove it from this page 
 
 These can produce a different result from a real game.
 
-### Timing and triggers
+None are known. The last two were fixed on 2026-11-25 (see below).
 
-| What happens | Cards |
-|---|---|
-| A decision pushed in the middle of an ability resolves after that ability's remaining automatic effects. Cards whose order matters use a rider instead (Furtive Handmaiden SEC_197's draw follows its discard choice; "discard a card. If you do, …" cards use a discard payoff; a deck search's `then_discard`). Fixing it generally changes core resolution and needs its own design session. | Any two-part ability where the second part reads the first |
+One limit remains in the engine but no card reaches it: inside a conditional
+branch ("if …, do A, then B"), a choice pushed by A doesn't hold back B. No
+registered card has a choice-pushing effect before another effect in a branch.
 
-### Board state
-
-| What happens | Cards |
-|---|---|
-| A Creature in your deck isn't Underworld to a deck search, because search filters read printed traits. In hand, discard and resources it is. | Malakili LAW_212 |
+A second limit hasn't been audited yet. When an ability creates a token unit and
+a later effect of the same ability chooses a unit ("Create a Beast token. Deal 1
+damage to a friendly ground unit"), the choice is offered before the token
+exists, so the new token can't be picked. Run Amok HMW_194, Howl HMW_241 and
+Geonosian Picador HMW_199 work around it. Older cards written as a plain "create
+token, then targeted effect" list have not been checked.
 
 ## Shortcuts that don't change a sensible game
 
@@ -45,6 +46,18 @@ is shown. They are documented at each card. The main patterns:
 
 ## Fixed on 2026-11-25
 
+- A defeated unit no longer keeps its damage in the discard pile. A unit played
+  again from the discard pile (Second Chance SHD_53 and other free replays) came
+  back with its old damage and was defeated again at once.
+- An ability's effects resolve in printed order even when one of them asks for a
+  choice. The effects after the choice now wait for it; before, they resolved
+  first. For example, No Bargain SHD_244's draw now comes after the opponent's
+  discard. This applies to triggered abilities, events and activated abilities.
+- A target chosen for an effect that has automatic effects printed before it is no
+  longer lost; the player used to be asked twice.
+- Malakili LAW_212: a Creature in your deck counts as Underworld for deck searches,
+  and so does one in your hand or discard for the "choose a card" filters there.
+  Local Support HMW_148 sees it on the top card of the deck.
 - Smuggle costs take every discount, tax and halving a hand play takes (pending and
   standing discounts, the card's own reductions, aspect-penalty waivers, Del Meeko,
   The Starhawk), and the discount is used up. Smuggle can also be paid with Credit

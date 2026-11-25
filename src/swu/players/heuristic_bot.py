@@ -1574,9 +1574,12 @@ class HeuristicBot:
             card to expose: the one with the most remaining HP (the base, almost
             always), never letting a unit die when a safer dump exists."""
         kinds = {type(a).__name__ for a in legal}
+        idx = _card_index(view)
+        ctx = view.pending_decisions[-1].context if view.pending_decisions else {}
+        if ctx.get("disposition") == "defeat_for_beast":
+            return self._choose_defeat_for_beast(ctx, idx, legal, kinds)
         if "ConfirmOpponentDamage" in kinds:
             return self._first(legal, "ConfirmOpponentDamage")
-        idx = _card_index(view)
         choices = [a for a in legal if type(a).__name__ == "ChooseOwnTarget"]
         if choices:
             def safety(a: "Action") -> float:
@@ -1587,6 +1590,25 @@ class HeuristicBot:
                 # wins, and a unit 2 damage would kill scores low.
                 return float(_remaining_hp(cv))
             return max(choices, key=safety)
+        return _safe_default(legal)
+
+    def _choose_defeat_for_beast(
+        self, ctx: dict, idx: dict, legal: list["Action"], kinds: set
+    ) -> "Action":
+        """Mysterious Disappearance HMW_58: the chosen unit may be defeated, and
+        its controller then gets a 3/3 Beast.  The chooser offers its least
+        valuable unit; the confirm stage defeats an enemy unit worth more than a
+        Beast, or one of ours worth less."""
+        beast = V_POWER * 3 + V_HP * 3
+        if "ConfirmOpponentDamage" in kinds:
+            cv, side = idx.get(ctx.get("chosen_id"), (None, None))
+            value = _card_value(cv)
+            good = value > beast if side == "opp" else value < beast
+            return self._first(legal, "ConfirmOpponentDamage" if good
+                               else "DeclineOpponentDamage")
+        choices = [a for a in legal if type(a).__name__ == "ChooseOwnTarget"]
+        if choices:
+            return min(choices, key=lambda a: _card_value(idx.get(a.target_id, (None,))[0]))
         return _safe_default(legal)
 
     def _choose_opponent_split_bounce(

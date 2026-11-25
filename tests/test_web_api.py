@@ -374,6 +374,47 @@ def test_pointless_decline_granted_attack_is_auto_resolved():
     assert sess.action_history[-1]["kind"] == "DeclineGrantedAttack"
 
 
+def test_rest_of_ability_after_bot_choice_is_auto_resolved():
+    """No Bargain SHD_244 ("Each opponent discards a card from their hand. Draw a
+    card."): the human's draw waits for the bot's discard choice, then resumes on
+    its own — no lone 'Auto-resolve effects' button is left for the human."""
+    from swu.web.session import GameSession
+    from swu.engine.actions import PlayCard, AutoResolveEffects
+    from swu.engine.state import CardInstance, Zone
+    from swu.cards.repository import CardRepository
+    from tests.test_sor_cards import _make_state, _get_card, _give_resources
+    from tests.test_shd_cards import _put_in_hand, _put_on_deck
+    from tests.dbpath import skip_on_fixture
+    skip_on_fixture("needs SHD_244 and SOR_46")
+
+    repo = CardRepository(require_db())
+    unit = _get_card(repo, "SOR", "46")
+    state = _make_state()
+    _put_in_hand(state, "P1", unit)
+    _put_in_hand(state, "P1", unit)
+    _put_on_deck(state, "P0", [unit, unit])
+    evt = CardInstance("P0_nobargain", _get_card(repo, "SHD", "244"), "P0", Zone.HAND)
+    state.player_by_id("P0").hand.append(evt)
+    _give_resources(state, "P0", 10)
+    hand_before = len(state.player_by_id("P0").hand)
+
+    sess = GameSession(game_id="t", state=state, bot=_NoopBot(),
+                       human_id="P0", bot_id="P1")
+    play_id = next(aid for aid, a in sess.human_actions()
+                   if isinstance(a, PlayCard) and a.instance_id == evt.instance_id)
+    sess.apply_human(play_id)
+    assert sess.actor_id() == "P1"            # the bot owes the discard choice
+    assert len(sess.state.player_by_id("P0").hand) == hand_before - 1  # no draw yet
+    sess.advance_bot()
+    assert len(sess.state.player_by_id("P1").hand) == 1
+    assert len(sess.state.player_by_id("P0").hand) == hand_before   # −event +draw
+    assert not sess.state.pending_decisions
+    assert not any(isinstance(a, AutoResolveEffects) for _, a in sess.human_actions())
+    # Recorded so replay stays faithful; the seat then passed back to the bot,
+    # which carried on with its own turn.
+    assert any(h["kind"] == "AutoResolveEffects" for h in sess.action_history)
+
+
 def test_smuggle_play_label_uses_card_name():
     """A SmugglePlay button must read the smuggled card's name ('Smuggle Cassian
     Andor'), not the raw resource instance id from describe()."""

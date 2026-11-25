@@ -120,6 +120,13 @@ class GameMemory:
     # ``actions._enumerate_discard_play_actions`` and consumed when the card is
     # played.  Phase-scoped, cleared at the phase rollover.
     discard_play_discount_this_phase: dict = field(default_factory=dict)  # iid -> int
+    # Tokens a FREE discard replay attaches to the unit as it enters play ("for this
+    # phase you may play this unit from your discard pile for free and give 2
+    # Weakness tokens to it" — Tireless Magnaguard HMW_109).  Recorded beside the
+    # ``free_discard_play_this_phase`` permission, consumed by ``PlayFromDiscard``.
+    # Phase-scoped, cleared at the phase rollover.
+    discard_replay_tokens_this_phase: dict = field(
+        default_factory=dict)  # iid -> [token names]
     # Instance_ids of UNITS that actually had damage removed this phase ("each
     # friendly unit that was healed this phase gets +1/+0" — Barriss Offee TWI_42).
     # Fed by ``actions.note_unit_healed`` from the heal chokepoints, and only when
@@ -660,6 +667,7 @@ class GameMemory:
         self.foreign_free_discard_play_this_phase.clear()
         self.foreign_discard_play_this_phase.clear()
         self.discard_play_discount_this_phase.clear()
+        self.discard_replay_tokens_this_phase.clear()
         self.units_healed_this_phase.clear()
         self.units_damaged_this_phase.clear()
         self.tokens_created_this_phase.clear()
@@ -726,6 +734,8 @@ class GameMemory:
                 for k, v in self.foreign_discard_play_this_phase.items()},
             "discard_play_discount_this_phase": {
                 k: int(v) for k, v in self.discard_play_discount_this_phase.items()},
+            "discard_replay_tokens_this_phase": {
+                k: list(v) for k, v in self.discard_replay_tokens_this_phase.items()},
             "units_healed_this_phase": sorted(self.units_healed_this_phase),
             "units_damaged_this_phase": sorted(self.units_damaged_this_phase),
             "tokens_created_this_phase": sorted(self.tokens_created_this_phase),
@@ -828,6 +838,9 @@ class GameMemory:
             discard_play_discount_this_phase={
                 k: int(v) for k, v in
                 d.get("discard_play_discount_this_phase", {}).items()},
+            discard_replay_tokens_this_phase={
+                k: list(v) for k, v in
+                d.get("discard_replay_tokens_this_phase", {}).items()},
             units_healed_this_phase=set(d.get("units_healed_this_phase", [])),
             units_damaged_this_phase=set(d.get("units_damaged_this_phase", [])),
             tokens_created_this_phase=set(d.get("tokens_created_this_phase", [])),
