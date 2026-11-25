@@ -107,12 +107,18 @@ class TestDeckValidatorCopyLimits:
         errs = validate_decklist(self._decklist([u, u, u, u]))
         assert any("Too many copies" in e for e in errs), errs
 
-    def test_printed_override_raises_the_cap(self, repo):  # noqa: F811
+    def test_printed_override_raises_the_cap(self):
         """Swarming Vulture Droid prints "A deck can have up to 15 copies of this
         card." — an imported decklist with 15 of them is legal (player report:
-        it was capped at 3), and the reprint JTLP_20 shares that cap of 15."""
+        it was capped at 3), and a reprint shares that cap of 15. Built from
+        synthetic cards so it runs on the CI fixture DB too."""
+        from dataclasses import replace
         from swu.cards.decklist import validate_decklist
-        jtl, jtlp = repo.by_id(20751), repo.by_id(24672)
+        text = "A deck can have up to 15 copies of this card."
+        jtl = replace(_unit(name="Swarming Vulture Droid", subtitle=None,
+                            unique=False, set_code="JTL", number="256"), text=text)
+        jtlp = replace(_unit(name="Swarming Vulture Droid", subtitle=None,
+                             unique=False, set_code="JTLP", number="20"), text=text)
         errs = validate_decklist(self._decklist([jtl] * 10 + [jtlp] * 5))
         assert errs == [], errs
         errs = validate_decklist(self._decklist([jtl] * 10 + [jtlp] * 6))
