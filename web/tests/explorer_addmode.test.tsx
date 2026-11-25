@@ -102,6 +102,30 @@ const CATALOG: ExplorerResponse = {
       image_url: null,
       back_image_url: null,
     },
+    // A card the engine can't play yet: it must not be addable to a deck.
+    {
+      id: 302,
+      set_code: "HMW",
+      card_number: "99",
+      name: "Future Unit",
+      subtitle: null,
+      type: "Unit",
+      rarity: "Common",
+      cost: 3,
+      power: 3,
+      hp: 3,
+      unique: false,
+      aspects: ["Command"],
+      keywords: [],
+      traits: [],
+      arenas: ["Ground"],
+      status: "text-bearing",
+      playable: false,
+      deckbuild_max_copies: 3,
+      decks: [],
+      image_url: null,
+      back_image_url: null,
+    },
     // Two DIFFERENT printings of the SAME card (same name+subtitle, different id)
     // — a reprint/promo. The copy cap is by title+subtitle, so 3 total across BOTH.
     {
@@ -308,6 +332,16 @@ describe("CardExplorer add-to-deck mode", () => {
     expect(within(tile).getByLabelText("Add copy").getAttribute("title")).toBe(
       "Max 1 copies (incl. other printings)",
     );
+  });
+
+  it("disables + for a card that isn't available to play yet", async () => {
+    // Reported 2026-11-22: unplayable cards could be added to a custom deck.
+    await renderAndSelectDeck();
+    const add = within(tileFor("Future Unit")).getByLabelText("Add copy");
+    expect(add).toBeDisabled();
+    expect(add.getAttribute("title")).toBe("Not available to play yet");
+    fireEvent.click(add);
+    expect(cardsFn).not.toHaveBeenCalled();
   });
 
   it("caps copies by title+subtitle across printings (reprints share one cap)", async () => {

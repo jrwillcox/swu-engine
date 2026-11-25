@@ -102,9 +102,44 @@ def _deck_membership() -> dict[int, list[str]]:
 
 
 @lru_cache(maxsize=1)
+def card_statuses() -> dict[int, str]:
+    """DB card id -> classifier status for every non-token card. Cached.
+
+    The deck builder uses this (via ``is_card_playable``) to refuse cards the
+    engine can't play yet, so it agrees with the explorer's "Playable" badge.
+    """
+    registered, escape_hatch = _load_registry()
+    con = connect_ro()
+    con.row_factory = sqlite3.Row
+    try:
+        rows = con.execute(
+            "SELECT id, set_code, card_number, type, text, deploy_box, epic_action "
+            "FROM cards"
+        ).fetchall()
+        keywords = _group(con, "SELECT card_id, name FROM card_keywords")
+    finally:
+        con.close()
+    out: dict[int, str] = {}
+    for r in rows:
+        if r["type"] in TOKEN_TYPES:
+            continue
+        crow = _ClassRow(r["set_code"], r["card_number"], r["text"],
+                         r["deploy_box"], r["epic_action"],
+                         set(keywords.get(r["id"], [])))
+        out[r["id"]] = classify(crow, registered, escape_hatch)
+    return out
+
+
+def is_card_playable(card_id: int) -> bool:
+    """Whether the engine can play this card yet ("Available to play")."""
+    status = card_statuses().get(card_id)
+    return status is not None and is_playable(status)
+
+
+@lru_cache(maxsize=1)
 def build_catalog() -> dict:
     """Assemble the full explorer payload (cards + filter facets). Cached."""
-    registered, escape_hatch = _load_registry()
+    statuses = card_statuses()
     deck_members = _deck_membership()
 
     con = connect_ro()
@@ -131,7 +166,7 @@ def build_catalog() -> dict:
         kws = keywords.get(cid, [])
         crow = _ClassRow(r["set_code"], r["card_number"], r["text"],
                          r["deploy_box"], r["epic_action"], set(kws))
-        status = classify(crow, registered, escape_hatch)
+        status = statuses[cid]
         has_front = image_file_for_card(cid, "front") is not None
         cards.append({
             "id": cid,
