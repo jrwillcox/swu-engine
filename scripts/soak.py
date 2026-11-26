@@ -495,8 +495,8 @@ def _analyse_ability_coverage(agg_abilities: dict[str, int], reachable_keys: set
         get_all_registered, ConstantAbility, GrantedAbility, EntersPlayReady,
         AttackRestriction, ConditionalFirstStrike, IndirectDamageBonus,
         AdditionalPilotSlots, IndirectDamageSelfAssign, StandingPlayDiscount,
-        ReadyRestriction, ExtraRegroupPhase, PreventDamage, MultiDefenderAttack,
-        InteractiveDamagePrevention, AmbushDefenderDebuff, AmbushAttackerBonus,
+        ReadyRestriction, ExtraRegroupPhase, ExtraRegroupDraw, PreventDamage,
+        MultiDefenderAttack, InteractiveDamagePrevention, AmbushDefenderDebuff, AmbushAttackerBonus,
         DamagePrevention,
         IgnoreAspectPenaltyForUpgrades, StartingHandModifier, HalvePaidCosts,
         WhenDefeatedRedo, OnAttackRedo,
@@ -504,6 +504,7 @@ def _analyse_ability_coverage(agg_abilities: dict[str, int], reachable_keys: set
         CostRoute, AbilityDamageBonus, BaseUpgradeDefeatReplacement,
         UnitsEnterPlayReady, NthUnitPlayDiscount,
         AmbushCanAttackBases, CopyLeaderTraits,
+        DealsCombatDamageLast, UnitsLoseWhenDefeated, OpponentPlayTax,
     )
 
     registry = get_all_registered()
@@ -528,7 +529,8 @@ def _analyse_ability_coverage(agg_abilities: dict[str, int], reachable_keys: set
                            AttackRestriction, ConditionalFirstStrike,
                            IndirectDamageBonus, AdditionalPilotSlots,
                            IndirectDamageSelfAssign, StandingPlayDiscount,
-                           ReadyRestriction, ExtraRegroupPhase, PreventDamage,
+                           ReadyRestriction, ExtraRegroupPhase, ExtraRegroupDraw,
+                           PreventDamage,
                            MultiDefenderAttack, InteractiveDamagePrevention,
                            AmbushDefenderDebuff, AmbushAttackerBonus,
                            DamagePrevention,
@@ -556,7 +558,12 @@ def _analyse_ability_coverage(agg_abilities: dict[str, int], reachable_keys: set
                            UnitsEnterPlayReady, NthUnitPlayDiscount,
                            # Read at the Ambush decision / the trait layer
                            # (Fett's Firespray HMW_53, Zam Wesell HMW_134).
-                           AmbushCanAttackBases, CopyLeaderTraits))
+                           AmbushCanAttackBases, CopyLeaderTraits,
+                           # Read at the combat-order step / trigger collection /
+                           # play-cost seam (Greedo IC27_142, Razor Crest IC27_172,
+                           # Raddus IC27_43).
+                           DealsCombatDamageLast, UnitsLoseWhenDefeated,
+                           OpponentPlayTax))
             for s in specs)
         if count > 0:
             fired[key] = count

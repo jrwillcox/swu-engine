@@ -38,6 +38,9 @@ from swu.engine.actions.damage import (
 from swu.engine.actions.zones import (
     _sweep_defeated_units,
 )
+from swu.engine.actions.combat import (
+    _board_has_base_heal_observer, _fire_one_base_heal,
+)
 
 
 # ── Delayed action-phase-start scheduler + per-enemy pay-or-exhaust ────────────
@@ -263,6 +266,83 @@ def _fire_base_damage_observers(s: GameState) -> GameState:
         s = fire_triggered_abilities(
             s, None, after_all_player_idx=after_idx,
             event_ctx={"base_damaged_player_id": owner_id})
+        _sweep_defeated_units(s)
+    return s
+
+
+def _fire_base_heal_observers(s: GameState) -> GameState:
+    """Settle-point drain of the base-heal ledger, firing ``WhenYouHealYourBase``
+    once per heal (Darth Sidious IC27_26).  The ``_fire_damage_observers`` shape: a
+    clear stack only, and with no observer on the board the queue is just cleared.
+    A heal during an attack never reaches here — the attack pipeline drains it
+    itself, before combat damage (``combat.fire_base_heals_mid_attack``)."""
+    queue = s.game_memory.base_heal_events
+    if not queue:
+        return s
+    if not _board_has_base_heal_observer(s):
+        queue.clear()
+        return s
+    while queue and not s.pending_decisions and not s.is_terminal():
+        s = _fire_one_base_heal(s, queue.pop(0))
+    return s
+
+
+_RESOURCE_OBSERVER_KEYS: list = []
+
+
+def _resource_observer_keys() -> frozenset:
+    """Cached (set_code, card_number) index of the cards carrying a
+    ``WhenYouResourceCard`` trigger (the ``_unit_entry_observer_keys`` trick)."""
+    if not _RESOURCE_OBSERVER_KEYS:
+        from swu.abilities.registry import _REGISTRY, TriggerAbility, WhenYouResourceCard
+        keys = {key for key, specs in _REGISTRY.items()
+                if any(isinstance(spec, TriggerAbility)
+                       and isinstance(spec.trigger, WhenYouResourceCard)
+                       for spec in specs)}
+        _RESOURCE_OBSERVER_KEYS.append(frozenset(keys))
+    return _RESOURCE_OBSERVER_KEYS[0]
+
+
+def _board_has_resource_observer(s: GameState) -> bool:
+    keys = _resource_observer_keys()
+    if not keys:
+        return False
+    for ps in s.players:
+        for ci in ps.ground_arena + ps.space_arena:
+            cd = ci.card_def
+            if (getattr(cd, "set_code", None), getattr(cd, "card_number", None)) in keys:
+                return True
+    return False
+
+
+def note_resource_events(s: GameState, log_before: int) -> None:
+    """Lift the ``CardResourced``/``RegroupResourced`` events one action added to
+    ``s.event_log`` (from index ``log_before``) onto ``game_memory.resource_events``
+    — the WhenYouResourceCard feed (Maz Kanata IC27_89).  Every resource site
+    already logs that event, so reading the log covers them all with no per-site
+    hook.  Only queued while such a card is in an arena (checked only when a
+    resource event actually occurred), so every other board pays a short scan."""
+    from swu.engine.events import CardResourced, RegroupResourced
+    new = [e for e in s.event_log[log_before:]
+           if isinstance(e, (CardResourced, RegroupResourced))]
+    if not new or not _board_has_resource_observer(s):
+        return
+    for e in new:
+        s.game_memory.resource_events.append([e.player_id, e.instance_id])
+
+
+def _fire_resource_observers(s: GameState) -> GameState:
+    """Settle-point drain of ``game_memory.resource_events``, firing
+    WhenYouResourceCard once per card resourced.  The ``_fire_base_heal_observers``
+    shape: a clear stack only; the rest waits for the next apply()."""
+    from swu.abilities.resolver import fire_triggered_abilities
+    queue = s.game_memory.resource_events
+    while queue and not s.pending_decisions and not s.is_terminal():
+        player_id, instance_id = queue.pop(0)
+        s = fire_triggered_abilities(
+            s, None, after_all_player_idx=s.active_player_index,
+            event_ctx={"resourced_player_id": player_id,
+                       "resourced_instance_id": instance_id})
         _sweep_defeated_units(s)
     return s
 

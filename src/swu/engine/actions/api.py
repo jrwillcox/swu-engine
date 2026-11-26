@@ -78,7 +78,8 @@ from swu.engine.actions.combat import (
     _enumerate_attacks, _enumerate_two_unit_attacks, _filter_granted_attacks, _forced_attack_actions,
 )
 from swu.engine.actions.observers import (
-    _fire_base_damage_observers, _fire_damage_observers, _fire_bounty_observers, _fire_deck_discard_observers, _fire_draw_observers, _fire_force_observers, _fire_hand_discard_observers, _fire_heal_observers, _fire_noncombat_damage_observers, _fire_ready_observers, _fire_reveal_discard_observers, _fire_self_discard_observers, _fire_token_creation_observers, _fire_unit_entry_observers, _fire_upgrade_attach_observers, _fire_upgrade_defeat_observers,
+    _fire_base_damage_observers, _fire_base_heal_observers, _fire_damage_observers, _fire_bounty_observers, _fire_deck_discard_observers, _fire_draw_observers, _fire_force_observers, _fire_hand_discard_observers, _fire_heal_observers, _fire_noncombat_damage_observers, _fire_ready_observers, _fire_reveal_discard_observers, _fire_self_discard_observers, _fire_token_creation_observers, _fire_unit_entry_observers, _fire_upgrade_attach_observers, _fire_upgrade_defeat_observers,
+    _fire_resource_observers, note_resource_events,
 )
 from swu.engine.actions.sacrifice import (
     _cost_route_affordable, _cost_route_of, _has_aspect, push_cost_route,
@@ -90,7 +91,7 @@ from swu.engine.actions.hand import (
     _smuggle_play, _smuggle_play_targets,
 )
 from swu.engine.actions.turn import (
-    _advance_mulligan, _advance_setup_resources, _check_regroup_complete, _enter_regroup, _starting_hand_modifier, _starting_hand_size,
+    _advance_mulligan, _advance_setup_resources, _check_regroup_complete, _enter_regroup, _starting_hand_modifiers, _starting_hand_size,
 )
 
 
@@ -99,8 +100,7 @@ from swu.engine.actions.turn import (
 def _mulligan_forbidden(ps: "PlayerState") -> bool:
     """True if ``ps``'s base says "You can't take a mulligan" (Nabat Village
     JTL_28)."""
-    spec = _starting_hand_modifier(ps)
-    return bool(spec is not None and spec.no_mulligan)
+    return any(spec.no_mulligan for spec in _starting_hand_modifiers(ps))
 
 
 @dataclass
@@ -1547,7 +1547,11 @@ def apply(state: GameState, action: Action) -> GameState:
     counting_actor = (state.active_player.player_id
                       if not state.pending_decisions and state.phase == Phase.ACTION
                       else None)
+    log_before = len(state.event_log)
     new_state = action.apply(state)
+    # WhenYouResourceCard (Maz Kanata IC27_89) reads this action's resource events
+    # straight off the log; drained below with the other observers.
+    note_resource_events(new_state, log_before)
     if counting_actor is not None:
         gm = new_state.game_memory
         gm.actions_taken_this_phase[counting_actor] = (
@@ -1564,6 +1568,7 @@ def apply(state: GameState, action: Action) -> GameState:
     new_state = _fire_self_discard_observers(new_state)
     new_state = _fire_deck_discard_observers(new_state)
     new_state = _fire_heal_observers(new_state)
+    new_state = _fire_base_heal_observers(new_state)
     new_state = _fire_base_damage_observers(new_state)
     new_state = _fire_ready_observers(new_state)
     new_state = _fire_upgrade_defeat_observers(new_state)
@@ -1571,6 +1576,7 @@ def apply(state: GameState, action: Action) -> GameState:
     new_state = _fire_unit_entry_observers(new_state)
     new_state = _fire_token_creation_observers(new_state)
     new_state = _fire_bounty_observers(new_state)
+    new_state = _fire_resource_observers(new_state)
     _revert_orphaned_resource_control(new_state)
     _resolve_unique_duplicates(new_state)
     # Decision-stack invariant: while any decision is pending, the active player

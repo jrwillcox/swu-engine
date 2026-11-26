@@ -187,6 +187,11 @@ class GameMemory:
     # deck this phase, play it from your discard pile" (Kylo's TIE Silencer SHD_135).
     cards_discarded_this_phase: set = field(default_factory=set)  # instance_ids
     units_attacked_this_round: set = field(default_factory=set)  # instance_ids
+    # instance_id -> attacks declared this round (== this phase), written beside
+    # ``units_attacked_this_round`` at the three declare steps
+    # (``combat.note_token_unit_attacked``).  "If this is the first time this unit
+    # has attacked this phase" (Kylo Ren IC27_106) reads it as == 1.
+    unit_attack_counts: dict = field(default_factory=dict)
     # instance_ids of units that dealt damage to a base this round, in combat
     # (including Overwhelm) or by an ability ("this round" == "this phase", cleared
     # at the round rollover).  Recorded by ``combat.record_base_damage``.  Gates
@@ -356,6 +361,19 @@ class GameMemory:
     # noncombat_damage_dealers shape: always empty between actions, so no phase or
     # round clear is needed.
     base_damage_events: list = field(default_factory=list)
+    # Queue of ``[base_owner_id, amount]`` for every heal that actually took damage
+    # off a BASE, written beside ``bases_healed_this_phase`` by
+    # ``actions.note_base_healed`` and drained for the WhenYouHealYourBase observer
+    # (Darth Sidious IC27_26) — mid-attack by the attack pipeline's step 2, otherwise
+    # at the action settle-point (``_fire_base_heal_observers``).  The
+    # ``base_damage_events`` shape: always empty between actions, so no phase clear.
+    base_heal_events: list = field(default_factory=list)
+    # Queue of ``[player_id, instance_id]`` per card resourced, lifted from each
+    # action's new ``CardResourced``/``RegroupResourced`` log events by
+    # ``observers.note_resource_events`` (only while a WhenYouResourceCard card is in
+    # an arena) and drained for that observer (Maz Kanata IC27_89).  Waits across a
+    # pending decision; otherwise empty between actions.
+    resource_events: list = field(default_factory=list)
     # Armed "the next time you take the initiative this phase, <effect>" charges
     # (Premonition of Doom LOF_203).  Each entry: {"player_id", "effect"}, the only
     # effect today being "exhaust_all_units"; consumed by the matching player's
@@ -651,6 +669,10 @@ class GameMemory:
     # ``_bases_cannot_heal`` is read at); a heal that removes nothing records nothing.
     # Gates "If a base was healed this phase" (Dooku's Solar Sailer TS26_38).
     bases_healed_this_phase: set = field(default_factory=set)
+    # "<instance_id>:<option>" for each "choose one that hasn't been chosen this
+    # phase" option already taken (General Grievous IC27_21) — the modal offers only
+    # the options not yet in here for that unit.
+    modal_options_chosen_this_phase: set = field(default_factory=set)
     # Queue of damage instances that actually LANDED (after prevention), one dict
     # each: {"target_id", "target_player", "is_base", "amount", "dealer_player",
     # "combat"}.  Fed by ``actions.note_damage_dealt`` at the unit chokepoint
@@ -704,12 +726,14 @@ class GameMemory:
         self.leader_left_play_controllers_this_phase.clear()
         self.non_units_played_this_phase.clear()
         self.bases_healed_this_phase.clear()
+        self.modal_options_chosen_this_phase.clear()
 
     def clear_round(self) -> None:
         self.defeated_aspects_this_round.clear()
         self.defeated_traits_this_round.clear()
         self.units_defeated_this_round.clear()
         self.units_attacked_this_round.clear()
+        self.unit_attack_counts.clear()
         self.token_unit_attackers_this_round.clear()
         self.units_dealt_base_damage_this_round.clear()
         self.skip_next_ready.clear()
@@ -748,6 +772,7 @@ class GameMemory:
             "units_defeated_this_round": sorted(self.units_defeated_this_round),
             "cards_discarded_this_phase": sorted(self.cards_discarded_this_phase),
             "units_attacked_this_round": sorted(self.units_attacked_this_round),
+            "unit_attack_counts": {k: int(v) for k, v in self.unit_attack_counts.items()},
             "units_dealt_base_damage_this_round": sorted(self.units_dealt_base_damage_this_round),
             "skip_next_ready": sorted(self.skip_next_ready),
             "token_unit_attackers_this_round": sorted(self.token_unit_attackers_this_round),
@@ -778,6 +803,8 @@ class GameMemory:
             "pending_keyword_grants": [dict(e) for e in self.pending_keyword_grants],
             "pending_enters_ready": [dict(e) for e in self.pending_enters_ready],
             "base_damage_events": list(self.base_damage_events),
+            "base_heal_events": [list(e) for e in self.base_heal_events],
+            "resource_events": [list(e) for e in self.resource_events],
             "pending_initiative_effects": [
                 dict(e) for e in self.pending_initiative_effects],
             "when_played_redo_charges": {k: int(v) for k, v in self.when_played_redo_charges.items()},
@@ -821,6 +848,8 @@ class GameMemory:
             "non_units_played_this_phase": dict(self.non_units_played_this_phase),
             "unit_entries": list(self.unit_entries),
             "bases_healed_this_phase": sorted(self.bases_healed_this_phase),
+            "modal_options_chosen_this_phase": sorted(
+                self.modal_options_chosen_this_phase),
             "damage_events": [dict(e) for e in self.damage_events],
         }
 
@@ -855,6 +884,7 @@ class GameMemory:
             units_defeated_this_round=set(d.get("units_defeated_this_round", [])),
             cards_discarded_this_phase=set(d.get("cards_discarded_this_phase", [])),
             units_attacked_this_round=set(d.get("units_attacked_this_round", [])),
+            unit_attack_counts={k: int(v) for k, v in d.get("unit_attack_counts", {}).items()},
             units_dealt_base_damage_this_round=set(d.get("units_dealt_base_damage_this_round", [])),
             skip_next_ready=set(d.get("skip_next_ready", [])),
             token_unit_attackers_this_round=set(
@@ -888,6 +918,8 @@ class GameMemory:
             pending_keyword_grants=[dict(e) for e in d.get("pending_keyword_grants", [])],
             pending_enters_ready=[dict(e) for e in d.get("pending_enters_ready", [])],
             base_damage_events=list(d.get("base_damage_events", [])),
+            base_heal_events=[list(e) for e in d.get("base_heal_events", [])],
+            resource_events=[list(e) for e in d.get("resource_events", [])],
             pending_initiative_effects=[
                 dict(e) for e in d.get("pending_initiative_effects", [])],
             when_played_redo_charges={k: int(v) for k, v in d.get("when_played_redo_charges", {}).items()},
@@ -935,6 +967,8 @@ class GameMemory:
                 d.get("non_units_played_this_phase", {}).items()},
             unit_entries=list(d.get("unit_entries", [])),
             bases_healed_this_phase=set(d.get("bases_healed_this_phase", [])),
+            modal_options_chosen_this_phase=set(
+                d.get("modal_options_chosen_this_phase", [])),
             damage_events=[dict(e) for e in d.get("damage_events", [])],
         )
 

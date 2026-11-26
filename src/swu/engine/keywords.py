@@ -74,6 +74,7 @@ def attack_snapshot(state: "GameState", attacker_ci: "CardInstance",
         "bounty": any(_unit_has_bounty(state, d) for d in defenders),
         "arenas": sorted({"space" if d.zone.name == "SPACE_ARENA" else "ground"
                           for d in defenders}),
+        "costs": [getattr(d.card_def, "cost", None) or 0 for d in defenders],
     }
 
 
@@ -84,7 +85,8 @@ def _while_attacking_gate_ok(spec, unit_ci: "CardInstance") -> bool:
     wb = getattr(spec, "while_attacking_bounty_unit", False)
     wd = getattr(spec, "while_attacking_damaged_unit", False)
     arena = getattr(spec, "while_attacking_unit_arena", None)
-    if not (wau or wb or wd or arena):
+    cmax = getattr(spec, "while_attacking_unit_cost_max", None)
+    if not (wau or wb or wd or arena or cmax is not None):
         return True
     if not _ATTACK_STACK:
         return False
@@ -96,6 +98,8 @@ def _while_attacking_gate_ok(spec, unit_ci: "CardInstance") -> bool:
     if wd and not ctx["damaged"]:
         return False
     if arena and arena not in ctx["arenas"]:
+        return False
+    if cmax is not None and not any(c <= cmax for c in ctx.get("costs", ())):
         return False
     return True
 

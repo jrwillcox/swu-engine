@@ -211,6 +211,51 @@ The golden files in `tests/fixtures/` (`actions_decision_kinds.json`,
   (`kind="base"` for bases). Every base hit, of any kind, goes through
   `combat.record_base_damage`, which also writes the "damaged a base this phase"
   ledgers; pass `dealer=` (the dealing card) so the unit ledger can see it.
+- **Base-heal observer.** "When you heal damage from your base" is
+  `WhenYouHealYourBase`, fed by `damage.note_base_healed`, so call that at any new
+  site that takes damage off a base. A heal during an attack resolves inside the
+  attack, before combat damage (`combat._pause_for_base_heal_triggers`). Any other
+  heal resolves at the settle point.
+- **Resource observer.** "When you resource a card (including during the regroup
+  phase)" is `WhenYouResourceCard` (Maz Kanata IC27_89). It needs no per-site hook:
+  `apply()` lifts each action's new `CardResourced`/`RegroupResourced` log events onto
+  `game_memory.resource_events` (`observers.note_resource_events`, only while such a
+  card is in an arena) and drains them at the settle point. So any new site that puts
+  a card into a resource zone just has to log `CardResourced`.
+- **Losing When Defeated abilities.** `UnitsLoseWhenDefeated` (Razor Crest IC27_172)
+  filters every collected `WhenDefeated` trigger at the end of
+  `resolver._collect_triggers` and empties `_when_defeated_ability_indices`; Bounties
+  are kept. A new site that collects When Defeated triggers outside
+  `_collect_triggers` must check `_when_defeated_abilities_lost` too.
+- **Combat damage order.** `combat._combat_order` decides who strikes first in a
+  single-defender unit attack: First Strike, then The Stranger's choice, then the
+  `DealsCombatDamageLast` marker (Greedo IC27_142: as defender the attacker goes first,
+  as attacker the defender does).
+- **Per-unit attack count.** `game_memory.unit_attack_counts` (written in
+  `combat.note_token_unit_attacked`, cleared with `units_attacked_this_round`) answers
+  "if this is the first time this unit has attacked this phase" (Kylo Ren IC27_106).
+- **Combined-cost decision options.** `push_exhaust_combined_cost` also takes
+  `ready=True` (pick exhausted units and ready them; Jyn Erso IC27_123),
+  `then_grant_keyword` (each pick gains it for the phase) and `same_arena` (the first
+  pick fixes the arena; Princess Leia IC27_159).
+- **Regroup ready cap.** `OpponentRegroupReadyCap` (Count Dooku IC27_148), read in
+  `turn._ready_all_cards`; it auto-picks which unit readies (a known deviation).
+- **Opponent play tax.** `OpponentPlayTax` takes `card_type="any"` and
+  `while_exhausted` (Raddus IC27_43).
+- **Attacker swap from hand.** "If a friendly … unit would deal combat damage while
+  attacking a base, you may reveal this unit from your hand and pay N … put this unit
+  into play as the attacker" is `TriggerAbility(FromHandAttackerSwap(cost=N))`. The
+  base-attack step 2 checks the attacking player's hand just before combat damage
+  (`combat._pause_for_attacker_swap`). It parks a `pre_attack` flagged
+  `swap_checked` and offers a plain `trigger_option`. The card's effect rewrites that
+  `pre_attack`'s `attacker_id` to itself (Asajj Ventress IC27_147).
+- **Defeat snapshot across a choice.** `event_ctx["defeated_upgrades"]` holds
+  CardInstances and is lost when an optional trigger waits on a decision. Read
+  `defeated_upgrade_names` (plain strings) instead, e.g. "for each Experience token
+  that was on this unit" (Qi'ra IC27_45).
+- **"While attacking a unit that costs N or less"** is
+  `ConstantAbility(while_attacking_unit_cost_max=N)`, checking the defender's printed
+  cost on both the stat and the keyword layer (Enfys Nest IC27_86).
 - **"While attacking a … unit" keyword grants** count only inside
   `keywords.attack_context`, which the combat pipeline opens around its Overwhelm
   check with a pre-damage `attack_snapshot`. Out of combat, and in the view, the

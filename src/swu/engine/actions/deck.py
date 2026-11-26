@@ -66,7 +66,7 @@ from swu.engine.actions.shared import (
     _candidate_card_views, _fire_card_played, _resource_top_of_deck, spend_force_token,
 )
 from swu.engine.actions.combat import (
-    note_hand_or_deck_discard, push_granted_attack, push_select_token,
+    note_hand_or_deck_discard, push_granted_attack, push_select_token, record_hand_discard,
 )
 from swu.engine.actions.hand import (
     _divert_to_exploit, _exploit_best_case, push_play_from_hand,
@@ -552,9 +552,30 @@ def _finish_deck_search(s: GameState) -> GameState:
         push_discard_of_choice(s, top.deciding_player_id, int(ctx["then_discard"]),
                                source_id=ctx.get("source_id"),
                                after_idx=top.after_resolve_player_index)
+    # "…and draw it, then discard a random card from your hand" (Han Solo IC27_155).
+    if ctx.get("then_discard_random") and not s.is_terminal():
+        discard_random_from_hand(s, top.deciding_player_id)
     if not s.is_terminal() and not s.pending_decisions:
         s.active_player_index = top.after_resolve_player_index
     return s
+
+
+def discard_random_from_hand(s: GameState, player_id: str) -> Optional[CardInstance]:
+    """Discard one random card (seeded RNG) from ``player_id``'s hand, recording the
+    discard for the hand-discard observers.  Returns the card, or None if the hand
+    was empty."""
+    ps = s.player_by_id(player_id)
+    if not ps.hand:
+        return None
+    rng = s.make_rng()
+    card = ps.hand.pop(rng.randrange(len(ps.hand)))
+    s.rng_state = rng.getstate()
+    card.zone = Zone.DISCARD
+    card.face_down = False
+    ps.discard.append(card)
+    note_hand_or_deck_discard(s, card)
+    record_hand_discard(s, player_id)
+    return card
 
 
 # ── Peek at the top card of the deck (peek_top / choose_number decisions) ─────
@@ -918,6 +939,7 @@ def push_deck_search(
     then_top_from_hand: bool = False,
     then_discard: int = 0,
     then_play_upgrade: bool = False,
+    then_discard_random: bool = False,
 ) -> None:
     """Push a 'deck_search' decision: "Search the top ``window`` cards of your deck
     for <eligible> cards, reveal and draw up to ``count`` of them, then put the
@@ -1002,6 +1024,8 @@ def push_deck_search(
                 s, searcher_id, int(then_discard), source_id=source_ci.instance_id,
                 after_idx=(1 - s.player_index(searcher_id)) if decider_id is None
                 else s.active_player_index)
+        if then_discard_random:
+            discard_random_from_hand(s, searcher_id)
         return
     candidate_ids = [ci.instance_id for ci in searched if eligible(trait_view(s, ci))]
     owner_idx = s.player_index(searcher_id)
@@ -1050,6 +1074,7 @@ def push_deck_search(
             # Both settled at the draw branch, after the drawn cards are in hand.
             "then_discard": int(then_discard),
             "then_play_upgrade": bool(then_play_upgrade),
+            "then_discard_random": bool(then_discard_random),
             **({"disposition": str(disposition)} if disposition else {}),
         },
         after_resolve_player_index=after_idx,

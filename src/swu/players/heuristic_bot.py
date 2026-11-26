@@ -1140,14 +1140,17 @@ class HeuristicBot:
         controller) with combined cost ≤ 6.  Only ENEMY units are worth exhausting
         (it denies them an attack/block); exhausting our own units is self-harm, so
         we never do it.  Spend the budget on the most expensive enemy units first,
-        then finish."""
+        then finish.  In the READY disposition (Jyn Erso IC27_123) the polarity
+        flips: ready our own units, most expensive first, never the opponent's."""
         idx = _card_index(view)
         selects = [a for a in legal
                    if type(a).__name__ == "SelectUnitToExhaustCombined"]
+        ctx = view.pending_decisions[-1].context if view.pending_decisions else {}
+        want = "my" if ctx.get("ready") else "opp"
         enemy = []
         for a in selects:
             cv, side = idx.get(a.target_id, (None, None))
-            if cv is not None and side == "opp":
+            if cv is not None and side == want:
                 enemy.append((a, getattr(cv, "cost", 0) or 0))
         if enemy:
             enemy.sort(key=lambda t: t[1], reverse=True)

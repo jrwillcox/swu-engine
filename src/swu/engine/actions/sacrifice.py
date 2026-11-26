@@ -304,7 +304,16 @@ class SelectUnitToExhaustCombined(Action):
             _, unit = result
             if ctx.get("remaining_budget") is not None:
                 ctx["remaining_budget"] -= _exhaust_combined_weight(s, unit, ctx)
-            unit.exhausted = True
+            if ctx.get("ready"):
+                # Jyn Erso IC27_123: the ready disposition, via the ReadyCard arm.
+                from swu.abilities.registry import ReadyCard, TargetSpec
+                from swu.abilities.resolver import execute_effect
+                src = s.find_instance(ctx["source_id"])
+                s = execute_effect(s, ReadyCard(TargetSpec()),
+                                   src[1] if src is not None else unit,
+                                   self.target_id, {})
+            else:
+                unit.exhausted = True
         ctx["chosen"].append(self.target_id)
         # Stop automatically once no further eligible unit remains.
         if not _exhaust_combined_targets(s, ctx):
@@ -1548,8 +1557,15 @@ def _exhaust_combined_targets(state: GameState, ctx: dict) -> list[str]:
     max_units = ctx.get("max_units")
     if max_units is not None and len(chosen) >= int(max_units):
         return []
+    arena = ctx.get("arena")
+    if ctx.get("same_arena") and chosen and arena is None:
+        first = state.find_instance(chosen[0])
+        if first is not None:
+            from swu.engine.state import Zone
+            arena = "ground" if first[1].zone == Zone.GROUND_ARENA else "space"
     spec = TargetSpec(controller=ctx.get("controller", "any"), kind="unit",
-                      arena=ctx.get("arena"), predicates=("ready",))
+                      arena=arena,
+                      predicates=("exhausted",) if ctx.get("ready") else ("ready",))
     chosen_set = set(chosen)
     budget = ctx.get("remaining_budget")
     out: list[str] = []
@@ -1573,6 +1589,8 @@ def push_exhaust_combined_cost(
     arena: Optional[str] = None, controller: str = "any",
     budget_source: str = "cost", then_suppress_if_trait: Optional[str] = None,
     then_create_token_per_unit: Optional[str] = None,
+    ready: bool = False, then_grant_keyword: Optional[str] = None,
+    same_arena: bool = False,
 ) -> None:
     """Push an 'exhaust_combined_cost' decision: "You may exhaust any number of
     units [with combined ``budget`` or less]".
@@ -1596,6 +1614,13 @@ def push_exhaust_combined_cost(
     ``then_create_token_per_unit`` (All Wings Report In JTL_122): on resolve, create
     one token unit of that name — under the DECIDER's control — for each unit
     actually exhausted ("For each unit exhausted this way, create an X-Wing token").
+    ``ready=True`` flips the disposition: the eligible units are EXHAUSTED ones and
+    each pick READIES it (through the ``ReadyCard`` effect, so ready restrictions and
+    the readied ledger apply) — "Ready up to 3 units with combined cost 7 or less"
+    (Jyn Erso IC27_123, ``max_units=3``).  ``then_grant_keyword`` gives each chosen
+    unit still in play that keyword for this phase ("They each gain Saboteur").
+    ``same_arena=True``: the first pick fixes the arena for the rest ("Exhaust up to
+    2 units in the same arena" — Princess Leia IC27_159).
     Pushed only when ≥1 eligible unit exists; "any number" includes 0, so a
     FinishExhaustCombined is always offered while the decision is up."""
     controller_id = actor_of(s, source_ci)
@@ -1609,6 +1634,9 @@ def push_exhaust_combined_cost(
         "budget_source": budget_source,
         "then_suppress_if_trait": then_suppress_if_trait,
         "then_create_token_per_unit": then_create_token_per_unit,
+        "ready": bool(ready),
+        "then_grant_keyword": then_grant_keyword,
+        "same_arena": bool(same_arena),
         "chosen": [],
     }
     if not _exhaust_combined_targets(s, ctx):
@@ -1652,6 +1680,17 @@ def _resolve_exhaust_combined(s: GameState, top) -> GameState:
     # JTL_122) — settled here, where the final count of chosen units is known.  The
     # tokens go to the DECISION's controller, whatever side the exhausted units were
     # on.  Popped first so an entering token's own triggers land on a clean stack.
+    kw = ctx.get("then_grant_keyword")
+    if kw:
+        # "They each gain Saboteur for this phase" (Jyn Erso IC27_123).
+        from swu.abilities.registry import Duration, GrantKeyword, TargetSpec
+        from swu.abilities.resolver import execute_effect
+        src = s.find_instance(ctx["source_id"])
+        for tid in ctx.get("chosen", []):
+            res = s.find_instance(tid)
+            if res is not None:
+                s = execute_effect(s, GrantKeyword(kw, 0, TargetSpec(), Duration.THIS_PHASE),
+                                   src[1] if src is not None else res[1], tid, {})
     token_name = ctx.get("then_create_token_per_unit")
     n_chosen = len(ctx.get("chosen", []))
     s.pending_decisions.pop()
