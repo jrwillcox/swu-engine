@@ -46,32 +46,39 @@ from swu.engine.actions.observers import (
 STARTING_HAND_SIZE = 6
 
 
-def _starting_hand_modifier(ps: "PlayerState"):
-    """The ``StartingHandModifier`` marker on ``ps``'s base, or None.
-
-    Scans the player's ``base_zone`` (which also holds the undeployed leader — a
-    leader carrying the marker would count too, but none prints it).  A no-op read
-    for every base without the marker (the ``_extra_regroup_active`` shape)."""
+def _starting_hand_modifiers(ps: "PlayerState") -> list:
+    """Every ``StartingHandModifier`` marker in ``ps``'s ``base_zone`` — the base
+    (Colossus JTL_21, Nabat Village JTL_28) and the undeployed leader (Luke
+    Skywalker IC27_6: "Draw 2 more cards in your starting hand").  A no-op read for
+    every board without the marker (the ``_extra_regroup_active`` shape)."""
     from swu.abilities.registry import get_abilities, StartingHandModifier
+    found = []
     for ci in ps.base_zone:
         sc = getattr(ci.card_def, "set_code", None) or ""
         cn = getattr(ci.card_def, "card_number", None) or ""
         if not sc or not cn:
             continue
-        for spec in get_abilities(sc, cn):
-            if isinstance(spec, StartingHandModifier):
-                return spec
-    return None
+        found.extend(spec for spec in get_abilities(sc, cn)
+                     if isinstance(spec, StartingHandModifier))
+    return found
+
+
+def _starting_hand_modifier(ps: "PlayerState"):
+    """The first ``StartingHandModifier`` in ``ps``'s base zone, or None (kept for
+    callers that only ask "is there one"; sizes use ``_starting_hand_size``)."""
+    found = _starting_hand_modifiers(ps)
+    return found[0] if found else None
 
 
 def _starting_hand_size(ps: "PlayerState") -> int:
     """How many cards ``ps`` draws for an opening hand (and redraws on a mulligan).
 
-    The standard 6, shifted by their base's ``StartingHandModifier`` — "Draw 1 less
-    card in your starting hand" (Colossus JTL_21) / "Draw 3 more" (Nabat Village
-    JTL_28).  Floored at 0."""
-    spec = _starting_hand_modifier(ps)
-    return max(0, STARTING_HAND_SIZE + (int(spec.amount) if spec is not None else 0))
+    The standard 6, shifted by EVERY ``StartingHandModifier`` in their base zone,
+    summed — "Draw 1 less card in your starting hand" (Colossus JTL_21) / "Draw 3
+    more" (Nabat Village JTL_28) / a leader's "Draw 2 more" (Luke IC27_6) stack.
+    Floored at 0."""
+    return max(0, STARTING_HAND_SIZE + sum(
+        int(spec.amount) for spec in _starting_hand_modifiers(ps)))
 
 
 # ── Game creation ─────────────────────────────────────────────────────────────
@@ -323,7 +330,7 @@ def _enter_regroup(s: GameState) -> None:
     # _sweep_defeated_units in apply().
     _expire_modifiers(s, "this_phase")
     for ps in s.players:
-        drawn = _draw_cards(s, ps, 2)
+        drawn = _draw_cards(s, ps, _regroup_draw_count(s, ps))
         s.event_log.append(RegroupDrawn(player_id=ps.player_id, count=drawn))
         get_bus().fire(s, s.event_log[-1])
     for ps in s.players:
@@ -458,6 +465,61 @@ def _extra_regroup_active(s: GameState) -> bool:
     return False
 
 
+def _regroup_draw_count(s: GameState, ps: PlayerState) -> int:
+    """How many cards ``ps`` draws in the regroup draw step: the standard 2, plus
+    each ``ExtraRegroupDraw`` marker on a unit they control (Admiral Holdo IC27_38:
+    "Draw 1 more card during the regroup phase").  Additive; a unit whose abilities
+    are suppressed adds nothing.  A no-op read on every board without the marker."""
+    from swu.abilities.registry import get_abilities, ExtraRegroupDraw
+    from swu.engine.state import ability_suppressed
+    n = 2
+    for ci in ps.ground_arena + ps.space_arena:
+        sc = getattr(ci.card_def, "set_code", None) or ""
+        cn = getattr(ci.card_def, "card_number", None) or ""
+        if not sc or not cn:
+            continue
+        for spec in get_abilities(sc, cn):
+            if isinstance(spec, ExtraRegroupDraw) and not ability_suppressed(s, ci):
+                n += int(spec.amount)
+    return n
+
+
+def _regroup_ready_capped_ids(s: GameState, ps: PlayerState) -> set:
+    """Ids of ``ps``'s exhausted arena units the regroup ready step must SKIP under
+    an opponent's ``OpponentRegroupReadyCap`` (Count Dooku IC27_148).  Empty — and
+    cheap — on every board without the marker.  Per arena, the units that would
+    ready are ranked by printed cost, then printed power, and all but the top
+    ``per_arena`` are capped (the auto-pick deviation, see the marker)."""
+    from swu.abilities.registry import get_abilities, OpponentRegroupReadyCap
+    from swu.engine.state import ability_suppressed
+    cap = None
+    for opp in s.players:
+        if opp.player_id == ps.player_id:
+            continue
+        for ci in opp.ground_arena + opp.space_arena:
+            sc = getattr(ci.card_def, "set_code", None) or ""
+            cn = getattr(ci.card_def, "card_number", None) or ""
+            if not sc or not cn:
+                continue
+            for spec in get_abilities(sc, cn):
+                if (isinstance(spec, OpponentRegroupReadyCap)
+                        and not ability_suppressed(s, ci)):
+                    n = int(spec.per_arena)
+                    cap = n if cap is None else min(cap, n)
+    if cap is None:
+        return set()
+    out: set = set()
+    skip_once = s.game_memory.skip_next_ready
+    for arena in (ps.ground_arena, ps.space_arena):
+        would = [ci for ci in arena
+                 if ci.exhausted and ci.instance_id not in skip_once
+                 and not ci.cannot_ready_this_round and not _ready_forbidden(s, ci)]
+        would.sort(key=lambda c: (getattr(c.card_def, "cost", 0) or 0,
+                                  getattr(c.card_def, "power", 0) or 0), reverse=True)
+        out.update(ci.instance_id for ci in would[cap:])
+    return out
+
+
 def _ready_all_cards(s: GameState) -> None:
     """The regroup ready step: ready every card (and attached upgrade) that is not
     kept exhausted by a restriction.  Runs once per regroup phase — so with Max
@@ -471,10 +533,14 @@ def _ready_all_cards(s: GameState) -> None:
     Max Rebo's second regroup readies it."""
     skip_once = s.game_memory.skip_next_ready
     for ps in s.players:
+        capped = _regroup_ready_capped_ids(s, ps)
         for zone_list in (ps.resources, ps.ground_arena, ps.space_arena, ps.base_zone):
             for ci in zone_list:
                 if ci.instance_id in skip_once:
                     skip_once.discard(ci.instance_id)
+                    continue
+                # Count Dooku IC27_148: beyond the per-arena cap, a unit stays put.
+                if ci.instance_id in capped:
                     continue
                 # No Good to Me Dead SOR_186: a unit that "can't ready this round
                 # (including during the regroup phase)" stays exhausted through every

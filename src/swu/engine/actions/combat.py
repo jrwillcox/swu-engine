@@ -62,7 +62,7 @@ from swu.engine.actions.damage import (
     note_damage_dealt, _dealer_player,
 )
 from swu.engine.actions.zones import (
-    _defeat_unit, _draw_cards, _find_in_arenas,
+    _defeat_unit, _draw_cards, _find_in_arenas, _sweep_defeated_units,
 )
 from swu.engine.actions.flow import (
     _assert_phase, _check_game_over, _switch_active_player,
@@ -536,6 +536,16 @@ def _apply_granted_riders(s: GameState, gctx: dict, deciding_player_id: str,
         if _find_in_arenas(s.player_by_id(active_ps.player_id), attacker_id) is not None:
             _apply_defeat_unit(s, attacker_id)
 
+    # Asajj Ventress IC27_7: "After completing this attack, if the attacker
+    # survived, you may ready a resource" — readying is never a drawback, so the
+    # "may" is taken automatically (resources are fungible: the K-2SO convention).
+    if gctx.get("then_ready_resource_if_survived"):
+        me = s.player_by_id(active_ps.player_id)
+        if _find_in_arenas(me, attacker_id) is not None:
+            spent = next((r for r in me.resources if r.exhausted), None)
+            if spent is not None:
+                spent.exhausted = False
+
 
 # ── apply convenience wrapper ─────────────────────────────────────────────────
 
@@ -605,7 +615,13 @@ def note_token_unit_attacked(s: GameState, attacker: "CardInstance") -> None:
     silently lose it.  Gates Asajj Ventress TS26_7's "While you've attacked with a
     token unit this phase, this unit gets +2/+0"."""
     from swu.cards.models import TokenUnit
-    if attacker is None or not isinstance(attacker.card_def, TokenUnit):
+    if attacker is None:
+        return
+    # Per-unit attack count (Kylo Ren IC27_106's "first time this unit has attacked
+    # this phase") — every attacker, not only tokens.
+    counts = s.game_memory.unit_attack_counts
+    counts[attacker.instance_id] = counts.get(attacker.instance_id, 0) + 1
+    if not isinstance(attacker.card_def, TokenUnit):
         return
     holder = s.find_instance(attacker.instance_id)
     pid = holder[0].player_id if holder is not None else attacker.owner_id
@@ -613,7 +629,8 @@ def note_token_unit_attacked(s: GameState, attacker: "CardInstance") -> None:
 
 
 def record_base_damage(s: GameState, base_owner_id: str, amount: int, *,
-                       combat: bool = False, dealer: str | None = None) -> None:
+                       combat: bool = False, dealer: str | None = None,
+                       source_card: str | None = None) -> None:
     """Record that ``base_owner_id``'s base was dealt ``amount`` damage, for the
     settle-point WhenDamageDealtToYourBase observer (The Daughter LOF_252).
 
@@ -635,8 +652,11 @@ def record_base_damage(s: GameState, base_owner_id: str, amount: int, *,
     if amount > 0:
         base_ci = s.player_by_id(base_owner_id).base_instance
         if base_ci is not None:
+            # The dealing CARD: named explicitly for ability damage, and the
+            # attacker (``dealer``) for combat (The Ghost IC27_122).
             note_damage_dealt(s, base_ci, base_owner_id, amount,
-                              combat=combat, dealer=dealer)
+                              combat=combat, dealer=dealer,
+                              dealer_card=source_card or (dealer if combat else None))
         dealer_player = _dealer_player(s, base_owner_id, combat, dealer)
         gm = s.game_memory
         if dealer_player is not None and dealer_player != base_owner_id:
@@ -672,6 +692,183 @@ def _apply_restore(
         s.event_log.append(RestoreHealing(
             player_id=active_ps.player_id, amount=healed, source_name=source_name,
         ))
+
+
+# ── WhenYouHealYourBase (Darth Sidious IC27_26) ───────────────────────────────
+
+_BASE_HEAL_OBSERVER_KEYS: list = []
+
+
+def _base_heal_observer_keys() -> frozenset:
+    """Cached (set_code, card_number) index of the cards carrying a
+    ``WhenYouHealYourBase`` trigger — the ``_damage_observer_keys`` trick.  Restore
+    heals a base on many attacks, so a board with none of these cards must never
+    reach ``fire_triggered_abilities`` from the base-heal drains."""
+    if not _BASE_HEAL_OBSERVER_KEYS:
+        from swu.abilities.registry import _REGISTRY, TriggerAbility, WhenYouHealYourBase
+        keys = {key for key, specs in _REGISTRY.items()
+                if any(isinstance(spec, TriggerAbility)
+                       and isinstance(spec.trigger, WhenYouHealYourBase)
+                       for spec in specs)}
+        _BASE_HEAL_OBSERVER_KEYS.append(frozenset(keys))
+    return _BASE_HEAL_OBSERVER_KEYS[0]
+
+
+def _board_has_base_heal_observer(s: GameState) -> bool:
+    """True when a ``WhenYouHealYourBase`` card is in an arena or a base zone."""
+    keys = _base_heal_observer_keys()
+    if not keys:
+        return False
+    for ps in s.players:
+        for ci in ps.ground_arena + ps.space_arena + ps.base_zone:
+            cd = ci.card_def
+            if (getattr(cd, "set_code", None) or "",
+                    getattr(cd, "card_number", None)) in keys:
+                return True
+    return False
+
+
+def _fire_one_base_heal(s: GameState, entry: list) -> GameState:
+    """Fire ``WhenYouHealYourBase`` for one ``[owner_id, amount]`` ledger entry."""
+    from swu.abilities.resolver import fire_triggered_abilities
+    s = fire_triggered_abilities(
+        s, None, after_all_player_idx=s.active_player_index,
+        event_ctx={"base_healed_player_id": entry[0],
+                   "healed_amount": int(entry[1])})
+    _sweep_defeated_units(s)
+    return s
+
+
+def _pause_for_base_heal_triggers(
+    s: GameState, active_ps: PlayerState, attacker: CardInstance,
+    defender_id: Optional[str], defender_ids: Optional[list] = None,
+) -> bool:
+    """Drain the base-heal ledger INSIDE an attack — called from each step 2 right
+    after Restore, so a ``WhenYouHealYourBase`` trigger resolves in the On Attack
+    window, before combat damage (Sidious IC27_26's own Restore 3 can deal 3 to the
+    defender before it strikes back).  Catches an earlier On Attack heal too
+    (still queued: the settle drain waits for a clear stack).
+
+    Unlike the settle drain this does not wait for a clear stack — the attack may
+    itself sit on decisions (a granted attack, an outer event).  If a trigger
+    pushed a choice, a ``pre_attack`` continuation flagged ``restore_done`` is parked
+    beneath it (so ``ContinueAttack`` does not heal again) and True is returned: the
+    caller must stop and let the attack resume from there."""
+    queue = s.game_memory.base_heal_events
+    if not queue:
+        return False
+    if not _board_has_base_heal_observer(s):
+        queue.clear()
+        return False
+    depth0 = len(s.pending_decisions)
+    while queue and not s.is_terminal():
+        s = _fire_one_base_heal(s, queue.pop(0))
+    if len(s.pending_decisions) <= depth0 or s.is_terminal():
+        return False
+    ctx: dict = {
+        "attacker_id": attacker.instance_id,
+        "defender_id": defender_id,
+        "active_player_id": active_ps.player_id,
+        "restore_done": True,
+    }
+    if defender_ids is not None:
+        ctx["defender_ids"] = list(defender_ids)
+    s.pending_decisions.insert(depth0, PendingDecision(
+        deciding_player_id=active_ps.player_id,
+        kind="pre_attack",
+        context=ctx,
+        after_resolve_player_index=1 - s.player_index(active_ps.player_id),
+    ))
+    return True
+
+
+# ── FromHandAttackerSwap (Asajj Ventress IC27_147) ────────────────────────────
+
+_ATTACKER_SWAP_KEYS: list = []
+
+
+def _attacker_swap_keys() -> frozenset:
+    """Cached (set_code, card_number) index of cards carrying a
+    ``FromHandAttackerSwap`` trigger, so an ordinary base attack never walks the hand
+    through ``get_abilities``."""
+    if not _ATTACKER_SWAP_KEYS:
+        from swu.abilities.registry import _REGISTRY, TriggerAbility, FromHandAttackerSwap
+        keys = {key for key, specs in _REGISTRY.items()
+                if any(isinstance(spec, TriggerAbility)
+                       and isinstance(spec.trigger, FromHandAttackerSwap)
+                       for spec in specs)}
+        _ATTACKER_SWAP_KEYS.append(frozenset(keys))
+    return _ATTACKER_SWAP_KEYS[0]
+
+
+def attacker_swap_cost(s: GameState, ps: PlayerState, card: CardInstance,
+                       base_cost: int) -> int:
+    """The printed swap cost plus the card's aspect penalty ("pay 5 resources
+    [Cunning][Villainy]" — the icons price like a play cost's)."""
+    from swu.engine.actions.costs import _aspect_penalty
+    names = tuple(a.name for a in (getattr(card.card_def, "aspects", None) or ()))
+    return base_cost + _aspect_penalty(names, ps, s)
+
+
+def _pause_for_attacker_swap(s: GameState, active_ps: PlayerState,
+                             attacker: CardInstance, power: int) -> bool:
+    """The replacement window of "If a friendly non-leader ground unit would deal
+    combat damage while attacking a base, you may reveal this unit from your hand
+    and pay N …" (Asajj Ventress IC27_147) — checked in the base-attack step 2 right
+    before combat damage.
+
+    When a ``FromHandAttackerSwap`` card sits in the attacking player's hand, the
+    attacker is a non-leader GROUND unit, the attack would deal damage and the cost
+    is payable, a ``pre_attack`` continuation flagged ``restore_done`` +
+    ``swap_checked`` is parked and the ability is offered above it as a
+    ``trigger_option`` (Accept = reveal and pay).  Returns True when it paused.
+    The first eligible card only: one swap per attack (the new attacker is the
+    card itself, so a second copy would have nothing left to replace)."""
+    if power <= 0 or s.is_terminal() or not active_ps.hand:
+        return False
+    keys = _attacker_swap_keys()
+    if not keys or not any(c.instance_id == attacker.instance_id
+                           for c in active_ps.ground_arena):
+        return False
+    from swu.abilities.resolver import _is_leader_unit
+    if _is_leader_unit(attacker):
+        return False
+    from swu.abilities.registry import get_abilities, TriggerAbility, FromHandAttackerSwap
+    ready = sum(1 for r in active_ps.resources if not r.exhausted)
+    for card in active_ps.hand:
+        cd = card.card_def
+        sc = getattr(cd, "set_code", None) or ""
+        cn = getattr(cd, "card_number", None) or ""
+        if (sc, cn) not in keys:
+            continue
+        for idx, spec in enumerate(get_abilities(sc, cn)):
+            if not (isinstance(spec, TriggerAbility)
+                    and isinstance(spec.trigger, FromHandAttackerSwap)):
+                continue
+            if ready < attacker_swap_cost(s, active_ps, card, spec.trigger.cost):
+                continue
+            opp_idx = 1 - s.player_index(active_ps.player_id)
+            s.pending_decisions.append(PendingDecision(
+                deciding_player_id=active_ps.player_id,
+                kind="pre_attack",
+                context={"attacker_id": attacker.instance_id, "defender_id": None,
+                         "active_player_id": active_ps.player_id,
+                         "restore_done": True, "swap_checked": True},
+                after_resolve_player_index=opp_idx,
+            ))
+            event_ctx = {"swap_attacker_id": attacker.instance_id}
+            s.pending_decisions.append(PendingDecision(
+                deciding_player_id=active_ps.player_id,
+                kind="trigger_option",
+                context={"set_code": sc, "card_number": cn, "ability_idx": idx,
+                         "source_id": card.instance_id, "event_ctx": event_ctx,
+                         "after_all_player_idx": s.player_index(active_ps.player_id)},
+                after_resolve_player_index=s.player_index(active_ps.player_id),
+            ))
+            s.event_log.append(DecisionPushed(
+                deciding_player_id=active_ps.player_id, kind="trigger_option"))
+            return True
+    return False
 
 
 def _combat_redirect_unit(
@@ -908,6 +1105,38 @@ def _can_attack_other_arena(state: GameState, attacker: CardInstance) -> bool:
         if isinstance(spec, CrossArenaAttack):
             return True
     return False
+
+
+def _deals_combat_damage_last(state: GameState, ci: CardInstance) -> bool:
+    """True if ``ci`` carries the ``DealsCombatDamageLast`` marker (Greedo
+    IC27_142) and its abilities are not suppressed."""
+    from swu.abilities.registry import get_abilities, DealsCombatDamageLast
+    from swu.engine.state import ability_suppressed
+    sc = getattr(ci.card_def, "set_code", None) or ""
+    cn = getattr(ci.card_def, "card_number", None) or ""
+    if not sc or not cn:
+        return False
+    return (any(isinstance(spec, DealsCombatDamageLast) for spec in get_abilities(sc, cn))
+            and not ability_suppressed(state, ci))
+
+
+def _combat_order(state: GameState, attacker: CardInstance,
+                  defender: CardInstance) -> str:
+    """Who deals combat damage first in a single-defender unit attack:
+    ``"attacker_first"`` (First Strike, or a defender that deals damage last —
+    Greedo IC27_142), ``"defender_first"`` (The Stranger LAW_86's choice, or an
+    attacker that deals damage last) or ``"simultaneous"``."""
+    if _attacker_has_first_strike(state, attacker, defender):
+        return "attacker_first"
+    if _defender_deals_first(attacker):
+        return "defender_first"
+    atk_last = _deals_combat_damage_last(state, attacker)
+    def_last = _deals_combat_damage_last(state, defender)
+    if def_last and not atk_last:
+        return "attacker_first"
+    if atk_last and not def_last:
+        return "defender_first"
+    return "simultaneous"
 
 
 def _attacker_has_first_strike(
@@ -1751,8 +1980,7 @@ def _resolve_base_attack(
         s.pending_decisions.insert(decisions_before, pre_attack)
         return True
 
-    _resolve_base_attack_step2(s, active_ps, inactive_ps, attacker)
-    return False
+    return _resolve_base_attack_step2(s, active_ps, inactive_ps, attacker)
 
 
 def _resolve_base_attack_step2(
@@ -1760,22 +1988,35 @@ def _resolve_base_attack_step2(
     active_ps: PlayerState,
     inactive_ps: PlayerState,
     attacker: CardInstance,
-) -> None:
-    """Steps 2–5 of the base attack pipeline (Restore, power, damage, win check)."""
+    restore_done: bool = False,
+    swap_checked: bool = False,
+) -> bool:
+    """Steps 2–5 of the base attack pipeline (Restore, power, damage, win check).
+
+    Returns True if it paused on a base-heal trigger's choice
+    (``_pause_for_base_heal_triggers``) or an attacker-swap offer
+    (``_pause_for_attacker_swap``); ``restore_done`` / ``swap_checked`` are the
+    resumes."""
     base_ci = inactive_ps.base_instance
     if base_ci is None:
-        return
+        return False
 
     # Step 2: On-attack triggers
-    if has_keyword(s, attacker, Keyword.RESTORE):
+    if not restore_done and has_keyword(s, attacker, Keyword.RESTORE):
         n = keyword_value(s, attacker, Keyword.RESTORE)
         if n > 0:
             _apply_restore(s, active_ps, n, attacker.card_def.display_name)
+    if _pause_for_base_heal_triggers(s, active_ps, attacker, None):
+        return True
 
     # Step 3: Effective power.  ``attacking_base=True`` enables a "while attacking a
     # base" debuff (Sly Moore SEC_33) to contribute here and only here.
     power = compute_power(s, attacker, is_attacking=True, attacking_base=True)
     power = _combat_power_after_block(s, attacker, power)   # LAW_130
+    # "If a friendly … unit would deal combat damage while attacking a base, you may
+    # reveal this unit from your hand …" (Asajj Ventress IC27_147).
+    if not swap_checked and _pause_for_attacker_swap(s, active_ps, attacker, power):
+        return True
 
     # Step 4: Damage to base
     power = base_damage_after_prevention(s, base_ci, power)
@@ -1857,6 +2098,7 @@ def _resolve_base_attack_step2(
     # clear so it doesn't leak into a later attack).
     _clear_this_attack_combat_flags(attacker)
     _expire_modifiers(s, "this_attack")
+    return False
 
 
 def _push_granted_attack_on_attack(s: GameState, attacker: CardInstance,
@@ -1971,8 +2213,7 @@ def _resolve_unit_combat(
             s.active_player_index = s.player_index(top.deciding_player_id)
         return True
 
-    _resolve_unit_combat_step2(s, active_ps, inactive_ps, attacker, defender)
-    return False
+    return _resolve_unit_combat_step2(s, active_ps, inactive_ps, attacker, defender)
 
 
 def _resolve_unit_combat_step2(
@@ -1981,13 +2222,19 @@ def _resolve_unit_combat_step2(
     inactive_ps: PlayerState,
     attacker: CardInstance,
     defender: CardInstance,
-) -> None:
-    """Steps 2–6 of unit-vs-unit combat (on-attack keywords through defeat)."""
+    restore_done: bool = False,
+) -> bool:
+    """Steps 2–6 of unit-vs-unit combat (on-attack keywords through defeat).
+
+    Returns True if it paused on a base-heal trigger's choice
+    (``_pause_for_base_heal_triggers``); ``restore_done`` is the resume."""
     # Step 2: On-attack keyword triggers
-    if has_keyword(s, attacker, Keyword.RESTORE):
+    if not restore_done and has_keyword(s, attacker, Keyword.RESTORE):
         n = keyword_value(s, attacker, Keyword.RESTORE)
         if n > 0:
             _apply_restore(s, active_ps, n, attacker.card_def.display_name)
+    if _pause_for_base_heal_triggers(s, active_ps, attacker, defender.instance_id):
+        return True
 
     if has_keyword(s, attacker, Keyword.SABOTEUR):
         while shields_on(defender) > 0:
@@ -2003,7 +2250,7 @@ def _resolve_unit_combat_step2(
             or _find_in_arenas(inactive_ps, defender.instance_id) is None):
         _clear_this_attack_combat_flags(attacker, defender)
         _expire_modifiers(s, "this_attack")
-        return
+        return False
 
     # Step 3: Effective power (computed AFTER on-attack trigger resolution).
     # ``attacking_unit=True`` enables "while attacking an enemy unit" buffs
@@ -2034,7 +2281,8 @@ def _resolve_unit_combat_step2(
     combat_arena = "ground" if defender.zone == Zone.GROUND_ARENA else "space"
     redirect = _combat_redirect_unit(s, active_ps, attacker)
 
-    if _attacker_has_first_strike(s, attacker, defender):
+    order = _combat_order(s, attacker, defender)
+    if order == "attacker_first":
         # First Strike: the attacker deals its damage first; if that defeats the
         # defender, the defender deals no combat damage back.
         dealt_to_defender = _deal_damage_with_shield(s, inactive_ps, defender, atk_power,
@@ -2045,7 +2293,7 @@ def _resolve_unit_combat_step2(
         else:
             dealt_to_attacker = _apply_attacker_combat_damage(
                 s, active_ps, attacker, def_power, redirect, defender.instance_id)
-    elif _defender_deals_first(attacker):
+    elif order == "defender_first":
         # The Stranger LAW_86: the attacker chose to let the defender strike first —
         # the mirror of First Strike.  The defender deals its combat damage to the
         # attacker first (a redirect still applies via _apply_attacker_combat_damage);
@@ -2238,6 +2486,7 @@ def _resolve_unit_combat_step2(
     # attack.
     _clear_this_attack_combat_flags(attacker, defender)
     _expire_modifiers(s, "this_attack")
+    return False
 
 
 def _push_excess_damage_to_unit(s: GameState, attacker: CardInstance,
@@ -2367,12 +2616,15 @@ class ContinueAttack(Action):
                 _switch_active_player(s)
             return s
 
+        # Resuming after a base-heal trigger's choice (Sidious IC27_26): Restore has
+        # already healed, so step2 must not heal again.
+        restore_done = bool(top.context.get("restore_done"))
+        paused = False
         # A two-unit attack (Darth Maul C24_6) resumes into the multi-defender step2.
         defender_ids = top.context.get("defender_ids")
         if defender_ids is not None:
             defenders = [d for d in (
-                _find_in_arenas(inactive_ps, defender_ids[0]),
-                _find_in_arenas(inactive_ps, defender_ids[1]),
+                _find_in_arenas(inactive_ps, did) for did in defender_ids
             ) if d is not None]
             if not defenders:
                 # Both co-defenders left play during pre-attack triggers — cleanup.
@@ -2382,9 +2634,12 @@ class ContinueAttack(Action):
                 if not s.is_terminal() and not s.pending_decisions:
                     _switch_active_player(s)
                 return s
-            _resolve_two_unit_combat_step2(s, active_ps, inactive_ps, attacker, defenders)
+            paused = _resolve_two_unit_combat_step2(
+                s, active_ps, inactive_ps, attacker, defenders, restore_done)
         elif self.defender_id is None:
-            _resolve_base_attack_step2(s, active_ps, inactive_ps, attacker)
+            paused = _resolve_base_attack_step2(
+                s, active_ps, inactive_ps, attacker, restore_done,
+                swap_checked=bool(top.context.get("swap_checked")))
         else:
             defender = _find_in_arenas(inactive_ps, self.defender_id)
             if defender is None:
@@ -2395,8 +2650,19 @@ class ContinueAttack(Action):
                 if not s.is_terminal() and not s.pending_decisions:
                     _switch_active_player(s)
                 return s
-            _resolve_unit_combat_step2(s, active_ps, inactive_ps, attacker, defender)
+            paused = _resolve_unit_combat_step2(
+                s, active_ps, inactive_ps, attacker, defender, restore_done)
 
+        if paused:
+            # Step 2 parked a fresh pre_attack under a base-heal trigger's choice;
+            # the riders move onto it and run when THAT continuation settles.
+            if stashed:
+                for d in s.pending_decisions[depth0:]:
+                    if (d.kind == "pre_attack"
+                            and d.context.get("attacker_id") == self.attacker_id):
+                        d.context["granted"] = stashed
+                        break
+            return s
         _riders()
         if not s.is_terminal() and not s.pending_decisions:
             _switch_active_player(s)
@@ -2607,6 +2873,7 @@ def push_granted_attack(
     no_base: bool = False,
     exclude_source: bool = False,
     then_defeat_attacker: bool = False,
+    then_ready_resource_if_survived: bool = False,
     defender_power_bonus: int = 0,
     defender_hp_bonus: int = 0,
     repeat_max: Optional[int] = None,
@@ -2834,6 +3101,7 @@ def push_granted_attack(
             "no_base": no_base,
             "exclude_source": exclude_source,
             "then_defeat_attacker": then_defeat_attacker,
+            "then_ready_resource_if_survived": then_ready_resource_if_survived,
             "defender_power_bonus": defender_power_bonus,
             "defender_hp_bonus": defender_hp_bonus,
             "repeat_max": repeat_max,
@@ -2960,8 +3228,7 @@ def _resolve_two_unit_combat(
         s.pending_decisions.insert(decisions_before, pre_attack)
         return True
 
-    _resolve_two_unit_combat_step2(s, active_ps, inactive_ps, attacker, [def1, def2])
-    return False
+    return _resolve_two_unit_combat_step2(s, active_ps, inactive_ps, attacker, [def1, def2])
 
 
 def _resolve_two_unit_combat_step2(
@@ -2970,19 +3237,27 @@ def _resolve_two_unit_combat_step2(
     inactive_ps: PlayerState,
     attacker: CardInstance,
     defenders: list[CardInstance],
-) -> None:
+    restore_done: bool = False,
+) -> bool:
     """Steps 2–6 of a two-unit attack (Darth Maul C24_6).  Both co-defenders are hit
     for the attacker's power; the attacker takes the SUM of both defenders' power;
     Overwhelm spills the COMBINED excess to the defending base.  First Strike (per
     defender), defender-deals-first (The Stranger LAW_86), a combat-damage redirect
     (Maul SHD_90) and the per-defender power debuffs (Lando LAW_108, Strafing Gunship
     SOR_212) apply as in the single-defender pipeline.
+
+    Returns True if it paused on a base-heal trigger's choice
+    (``_pause_for_base_heal_triggers``); ``restore_done`` is the resume.
     """
     # Step 2: On-attack keyword triggers.
-    if has_keyword(s, attacker, Keyword.RESTORE):
+    if not restore_done and has_keyword(s, attacker, Keyword.RESTORE):
         n = keyword_value(s, attacker, Keyword.RESTORE)
         if n > 0:
             _apply_restore(s, active_ps, n, attacker.card_def.display_name)
+    if _pause_for_base_heal_triggers(
+            s, active_ps, attacker, defenders[0].instance_id,
+            [d.instance_id for d in defenders]):
+        return True
     if has_keyword(s, attacker, Keyword.SABOTEUR):
         for defn in defenders:
             while shields_on(defn) > 0:
@@ -2994,13 +3269,13 @@ def _resolve_two_unit_combat_step2(
     if _find_in_arenas(active_ps, attacker.instance_id) is None:
         _clear_this_attack_combat_flags(attacker)
         _expire_modifiers(s, "this_attack")
-        return
+        return False
     live_defs = [d for d in defenders
                  if _find_in_arenas(inactive_ps, d.instance_id) is not None]
     if not live_defs:
         _clear_this_attack_combat_flags(attacker)
         _expire_modifiers(s, "this_attack")
-        return
+        return False
 
     # Step 3: Effective powers (snapshot before any damage lands).  Per defender, as
     # in the single-defender pipeline: a defender's "while defending, the attacker
@@ -3171,6 +3446,7 @@ def _resolve_two_unit_combat_step2(
                                           only_ids=adv_snapshot)   # ASH_2
     _clear_this_attack_combat_flags(attacker)
     _expire_modifiers(s, "this_attack")
+    return False
 
 
 # ── Decision-resolving actions ────────────────────────────────────────────────

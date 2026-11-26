@@ -685,6 +685,10 @@ class Condition(Enum):
                                       # ``param`` or fewer cards in hand — the mirror
                                       # of the MIN atom.  param=0 is "If you have no
                                       # cards in your hand" (Mister Bones TWI_154)
+    OPPONENT_HAND_SIZE_MIN = "opponent_hand_size_min"  # an opponent holds
+                                      # ``param`` or more cards in hand — "Each player
+                                      # with 4 or more cards in their hand discards"
+                                      # (The Inquisitor's TIE IC27_104)
     ANY_UNIT_DEFEATED_THIS_PHASE = "any_unit_defeated_this_phase"  # ANY unit, either
                                       # controller's, was defeated this phase
                                       # (game_memory.defeated_controllers_this_round is
@@ -1137,6 +1141,9 @@ class ConditionCheck:
             return len(ps.hand) >= (self.param or 0)
         if c == Condition.CONTROLLER_HAND_SIZE_MAX:
             return len(ps.hand) <= (self.param or 0)
+        if c == Condition.OPPONENT_HAND_SIZE_MIN:
+            return any(len(o.hand) >= (self.param or 0)
+                       for o in state.players if o.player_id != _me)
         if c == Condition.CONTROLLER_ASPECT_UNIT_DEFEATED_THIS_PHASE:
             gm = getattr(state, "game_memory", None)
             by_controller = getattr(gm, "defeated_aspects_this_round", None) or {}
@@ -1719,10 +1726,16 @@ class ConditionCheck:
             # Lazy import avoids an actions <-> registry import cycle.
             from swu.engine.actions.costs import _play_cost
             from swu.cards.models import Unit
-            discount = self.param or 0
+            # ``param`` may be a ``(discount, cost_min)`` pair: "Play a unit that
+            # costs 7 or more from your hand.  It costs 2 resources less" (Director
+            # Krennic IC27_57).
+            discount, cost_min = (self.param if isinstance(self.param, tuple)
+                                  else (self.param or 0, None))
             for ci in ps.hand:
                 cd = ci.card_def
                 if not isinstance(cd, Unit):
+                    continue
+                if cost_min is not None and (getattr(cd, "cost", 0) or 0) < cost_min:
                     continue
                 if _play_cost(state, ci, ps, extra_reduction=discount) <= ps.available_resources:
                     return True
@@ -2939,6 +2952,42 @@ class WhenDamageDealtToYourBase:
 
 
 @dataclass(frozen=True)
+class WhenYouHealYourBase:
+    """Fires (as an observer) when damage is healed from the source's controller's
+    base, once per heal that removed at least 1 damage (Darth Sidious IC27_26:
+    "When you heal damage from your base: Deal that much damage to an enemy unit").
+
+    "You heal … from YOUR base" is read as "damage is healed from your base": every
+    card that heals a base heals its own controller's ("heal N damage from your
+    base"), so the base's owner is the healer in practice.
+
+    Fed by ``actions.note_base_healed`` (every base-heal site) into
+    ``game_memory.base_heal_events``.  ``event_ctx`` carries
+    ``base_healed_player_id`` and ``healed_amount`` (so the stock
+    ``event_healed_amount`` count reads "that much").
+
+    TIMING: a heal during an attack (Restore, or an On Attack heal) is drained in
+    the attack pipeline's step 2, right after Restore and BEFORE combat damage — the
+    trigger resolves in the On Attack window, as printed, so Sidious's own Restore 3
+    can deal 3 to the defender before it strikes back.  Any other heal is drained at
+    the action settle-point (``actions._fire_base_heal_observers``)."""
+
+
+@dataclass(frozen=True)
+class WhenYouResourceCard:
+    """Fires (as an observer) once per card the source's controller puts into their
+    resource zone — the regroup-phase resource step included (Maz Kanata IC27_89:
+    "When you resource a card (including during the regroup phase): Give an
+    Experience token to this unit").
+
+    Needs no per-site hook: every resource site already logs a ``CardResourced``
+    event, and ``actions.apply`` lifts the ones each action added into
+    ``game_memory.resource_events`` (``observers.note_resource_events``), drained at
+    the settle-point (``observers._fire_resource_observers``).  ``event_ctx``
+    carries ``resourced_player_id`` and ``resourced_instance_id``."""
+
+
+@dataclass(frozen=True)
 class WhenDamageDealt:
     """The general "when damage is dealt" observer — fires once per damage
     instance that actually LANDED on a unit or base (after every prevention), from
@@ -2952,7 +3001,11 @@ class WhenDamageDealt:
     Filters (all must hold):
 
     * ``dealer="you"`` — the source's controller dealt it ("When you deal 4 or more
-      damage to a unit or base", Darth Sidious HMW_11).
+      damage to a unit or base", Darth Sidious HMW_11).  ``dealer="friendly_unit"``
+      — and the dealing CARD was a unit (``entry["dealer_card"]``: the attacker, or a
+      unit's ability), not an event or an undeployed leader ("When a friendly unit
+      deals damage to an enemy base", The Ghost IC27_122).  The card is recorded for
+      base damage only today.
     * ``target`` — ``"self"`` (this card), ``"friendly"``, ``"other_friendly"``
       (a friendly unit other than this one), ``"enemy"``, or ``None`` (any).
     * ``kind`` — ``"unit_or_base"``, ``"unit"`` or ``"base"`` ("When you deal damage
@@ -3480,6 +3533,23 @@ class WhenUnitAttacks:
     filter: TargetSpec = field(default_factory=lambda: TargetSpec())
 
 @dataclass(frozen=True)
+class FromHandAttackerSwap:
+    """A REPLACEMENT window offered from HAND: "If a friendly non-leader ground unit
+    would deal combat damage while attacking a base, you may reveal this unit from
+    your hand and pay N resources.  If you do, return the attacker to its owner's
+    hand and put this unit into play as the attacker" (Asajj Ventress IC27_147).
+
+    Not matched by ``fire_triggered_abilities``: the base-attack pipeline
+    (``combat._pause_for_attacker_swap``) checks the attacking player's hand right
+    before combat damage, and — when the attack would deal damage and ``cost`` (plus
+    the card's aspect penalty) is payable — parks the attack and offers the ability
+    as an ordinary ``trigger_option`` (Accept = reveal and pay).  The ability's
+    effect reads ``event_ctx["swap_attacker_id"]`` and rewrites the parked
+    ``pre_attack`` so the attack resumes with the new unit as the attacker."""
+    cost: int = 0
+
+
+@dataclass(frozen=True)
 class WhenDealsCombatDamageToBase:
     """Fires when this unit deals combat damage to a base (a direct base attack).
 
@@ -3728,6 +3798,12 @@ class ConstantAbility:
                                     # ``while_attacking_bounty_unit``: compute_power
                                     # reads the threaded ``defender_id`` and checks
                                     # ``damage > 0``; compute_hp skips it (combat-only).
+    while_attacking_unit_cost_max: Optional[int] = None  # the
+                                    # ``while_attacking_damaged_unit`` sibling keyed on
+                                    # the defender's PRINTED cost — "While attacking a
+                                    # unit that costs 3 or less, this unit gets +2/+0 and
+                                    # gains Overwhelm" (Enfys Nest IC27_86).  Combat-only
+                                    # on both the stat and keyword layers.
     while_attacking_unit_arena: Optional[str] = None  # narrows
                                     # ``while_attacking_unit`` to a defender in this
                                     # arena ("ground"/"space") — "While attacking a
@@ -4314,6 +4390,14 @@ class IgnoreAspectPenaltyForPlays:
     keyword: Optional[str] = None     # the played card must have this keyword
                                       # ("upgrades WITH FORTIFY you play" — Grand Moff
                                       # Tarkin HMW_4)
+    names: tuple = ()                 # the played card's printed NAME must be one of
+                                      # these ("cards you play named Darth Vader" —
+                                      # Anakin Skywalker IC27_78).  Empty = any.
+    in_discard: bool = False          # the marker works from its source's OWNER'S
+                                      # DISCARD PILE instead of from play ("While this
+                                      # unit is in your discard pile, …" — IC27_78);
+                                      # the two readings are disjoint, so an in-play
+                                      # copy of that card waives nothing.
     leader_only: bool = False         # honour the marker only while its source is a
                                       # LEADER — a token-collision guard for a leader
                                       # whose (set, number) a token unit shares (HMW_4
@@ -4658,9 +4742,14 @@ class OpponentPlayTax:
     carrying this marker and the card matches ``card_type`` (``"event"`` today), the
     tax is ADDED to the cost (raising it; the affordability check and payment both
     see it).  Purely a read there — no trigger, no decision.  The dual of the
-    ``StandingPlayDiscount`` / ``NextPlayDiscount`` cost-reduction patterns."""
+    ``StandingPlayDiscount`` / ``NextPlayDiscount`` cost-reduction patterns.
+
+    ``card_type="any"`` taxes every card; ``while_exhausted`` makes the tax live only
+    while the marker's unit is exhausted (Raddus IC27_43: "While this unit is
+    exhausted, cards your opponents play cost 3 resources more")."""
     amount: int = 1
     card_type: str = "event"
+    while_exhausted: bool = False
 
 
 @dataclass(frozen=True)
@@ -4909,6 +4998,59 @@ class ExtraRegroupPhase:
     rollover — no trigger, no decision; with no such marker the turn structure is
     unchanged.  Mirrors the ``AttackRestriction`` / ``EntersPlayReady`` passive-marker
     pattern."""
+
+
+@dataclass(frozen=True)
+class ExtraRegroupDraw:
+    """Constant marker on a UNIT: while it is in play, its controller draws
+    ``amount`` more cards in the regroup draw step (Admiral Holdo IC27_38: "Draw 1
+    more card during the regroup phase" = ``ExtraRegroupDraw(1)``).
+
+    Additive — two copies draw 2 more.  Read only at the regroup draw
+    (``turn._regroup_draw_count``); a suppressed unit (lost its abilities) adds
+    nothing.  The ``ExtraRegroupPhase`` passive-marker pattern: no trigger, no
+    decision, a no-op for every board without one."""
+    amount: int = 1
+
+
+@dataclass(frozen=True)
+class UnitsLoseWhenDefeated:
+    """Constant marker on a UNIT: while it is in play, "Each unit (including
+    friendly units) loses all 'When Defeated' abilities" (Razor Crest IC27_172).
+
+    Read by ``resolver._when_defeated_abilities_lost``, which filters every
+    collected ``WhenDefeated`` trigger out of ``_collect_triggers`` for a
+    ``UnitDefeated`` event (own, upgrade-granted and aura-granted alike) and empties
+    ``_when_defeated_ability_indices`` (so "use its When Defeated abilities" finds
+    none).  A Bounty is its own keyword ability, not a "When Defeated" one, so it
+    still fires.  The marker's unit must still be in an arena when the defeat is
+    collected."""
+
+
+@dataclass(frozen=True)
+class DealsCombatDamageLast:
+    """Constant marker on a UNIT: "While attacking or defending, this unit deals
+    combat damage after the other attacking or defending unit" (Greedo IC27_142).
+
+    Read only at the single-defender unit-combat step
+    (``combat._combat_order``): as the defender, the attacker strikes first; as the
+    attacker, the defender strikes first (The Stranger LAW_86's ordering).  If BOTH
+    combatants carry it, or the attacker has First Strike, the usual rules stand."""
+
+
+@dataclass(frozen=True)
+class OpponentRegroupReadyCap:
+    """Constant marker on a UNIT: while it is in play, each OPPONENT of its
+    controller readies at most ``per_arena`` ground unit and ``per_arena`` space
+    unit in the regroup ready step (Count Dooku IC27_148: "Each opponent can't ready
+    more than 1 ground unit and 1 space unit during the regroup phase").
+
+    Read only at ``turn._ready_all_cards``; resources and the base zone ready as
+    usual, and an ability that readies a unit is unaffected.  DEVIATION: the
+    opponent should CHOOSE which unit readies; the engine auto-picks the highest
+    printed cost (then power) per arena, the unit the opponent would almost always
+    keep, rather than open a decision inside the regroup step."""
+    per_arena: int = 1
 
 
 @dataclass(frozen=True)

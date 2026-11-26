@@ -675,7 +675,10 @@ def _opponent_play_tax(state: GameState, ci: CardInstance, ps: PlayerState,
         named = getattr(src, "named_card", None)
         for spec in get_abilities(sc, cn):
             if isinstance(spec, OpponentPlayTax):
-                matches = (spec.card_type == "event" and isinstance(ci.card_def, Event))
+                if spec.while_exhausted and not src.exhausted:
+                    continue
+                matches = (spec.card_type == "any"
+                           or (spec.card_type == "event" and isinstance(ci.card_def, Event)))
                 if matches:
                     total += spec.amount
             elif isinstance(spec, NamedCardPlayTax):
@@ -799,15 +802,20 @@ def _controller_waives_aspect_penalty(state: GameState, ci: CardInstance,
     # The played card is in HAND, so no in-play scan could ever reach it; the
     # ``self_only`` flag keeps the two readings disjoint, so no existing marker
     # newly applies to its own card's play.
-    for src in [ci] + list(ps.base_zone) + list(ps.ground_arena) + list(ps.space_arena):
+    # The discard pile is scanned last, for ``in_discard`` markers only ("While this
+    # unit is in your discard pile, …" — Anakin Skywalker IC27_78).
+    in_play = [ci] + list(ps.base_zone) + list(ps.ground_arena) + list(ps.space_arena)
+    for i, src in enumerate(in_play + list(ps.discard)):
+        from_discard = i >= len(in_play)
         sc = getattr(src.card_def, "set_code", None) or ""
         cn = getattr(src.card_def, "card_number", None) or ""
         if not sc or not cn:
             continue
         specs = [s for s in get_abilities(sc, cn)
                  if isinstance(s, IgnoreAspectPenaltyForPlays)
-                 and bool(getattr(s, "self_only", False)) is (src is ci)]
-        if not specs or ability_suppressed(state, src):
+                 and bool(getattr(s, "self_only", False)) is (src is ci)
+                 and bool(getattr(s, "in_discard", False)) is from_discard]
+        if not specs or (not from_discard and ability_suppressed(state, src)):
             continue
         for spec in specs:
             if getattr(spec, "leader_only", False):
@@ -832,6 +840,9 @@ def _controller_waives_aspect_penalty(state: GameState, ci: CardInstance,
                     continue
             if spec.traits and not all(has_trait(state, ci, t) for t in spec.traits):
                 continue
+            if getattr(spec, "names", ()) and getattr(
+                    ci.card_def, "name", None) not in spec.names:
+                continue  # "cards you play named Darth Vader" (IC27_78)
             played_aspects = {a.name for a in
                               (getattr(ci.card_def, "aspects", None) or ())}
             if spec.exclude_aspects and (played_aspects & set(spec.exclude_aspects)):

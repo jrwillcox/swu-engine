@@ -74,7 +74,20 @@ TOKEN_TYPES = frozenset({
 # (set, number) key with a registered Leader and so inherit an "implemented"
 # verdict from ``index_by_set_number``, while GG_6 has no such twin and survives
 # to be classified on its own.
-ENGINE_NATIVE_TOKEN_NAMES = frozenset({"Shield"})
+#
+# Credit: "While paying resources, you may defeat this token. If you do, pay 1
+# resource less." — credits are spent at every play-cost and ability-cost payment
+# site (swu.engine.actions.costs._defeat_credit and the credit shortfall in the
+# affordability checks); tokens are created by swu.engine.tokens.create_credit_token.
+#
+# Advantage: "When attached unit's attack or defense ends: Defeat this upgrade." —
+# swept by name in every combat pipeline
+# (swu.engine.actions.combat._defeat_advantage_tokens_after_combat).
+#
+# Same trap as Shield: LAW_1 Credit and ASH_2 Advantage pass only because a
+# registered Leader shares their number; the P26 reprints (P26_124, P26_127) have
+# no such twin and audited as gaps until they were listed here.
+ENGINE_NATIVE_TOKEN_NAMES = frozenset({"Shield", "Credit", "Advantage"})
 
 # ── Text-bearing detection ────────────────────────────────────────────────────
 #

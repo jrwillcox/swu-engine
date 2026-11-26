@@ -34,7 +34,7 @@ from swu.abilities.registry import (
     WhenYouPlayCard, WhenOpponentPlaysNthCard, WhenOpponentPlaysCard, WhenUnitAttacks, WhenDealsCombatDamageToBase, WhenDealtCombatDamage,
     WhenDealsCombatDamageToUnit, WhenFriendlyUnitDealtCombatDamage,
     WhenFriendlyUnitDealsCombatDamageToEnemyUnit,
-    WhenDealNonCombatDamage, WhenYouDraw, WhenYouUseForce, WhenYouRevealOrDiscard, WhenPlayerDiscardsFromHand, WhenThisIsDiscarded, WhenYouDiscardFromDeck, WhenUnitHealed, WhenUnitReadies, WhenFriendlyUpgradeDefeated, WhenUpgradeAttached, WhenYouWouldCreateTokens, WhenBountyCollected, WhenAttackEnds, WhenFriendlyUnitAttackEnds, WhenYouPlayOrCreateUnit, WhenDamageDealtToYourBase, WhenDamageDealt, RoundStartTrigger, PhaseStartTrigger,
+    WhenDealNonCombatDamage, WhenYouDraw, WhenYouUseForce, WhenYouRevealOrDiscard, WhenPlayerDiscardsFromHand, WhenThisIsDiscarded, WhenYouDiscardFromDeck, WhenUnitHealed, WhenUnitReadies, WhenFriendlyUpgradeDefeated, WhenUpgradeAttached, WhenYouWouldCreateTokens, WhenBountyCollected, WhenAttackEnds, WhenFriendlyUnitAttackEnds, WhenYouPlayOrCreateUnit, WhenDamageDealtToYourBase, WhenYouHealYourBase, WhenYouResourceCard, WhenDamageDealt, RoundStartTrigger, PhaseStartTrigger,
     DealDamage, DealDamageEqualTo, Heal, DefeatUnit, DefeatAllUnits, GiveToken,
     CreateCreditToken, CreateForceToken, CreateTokenUnit, NextPlayDiscount,
     DrawCards, DiscardFromHand, ReturnToHand, ExhaustCard, ReadyCard,
@@ -181,6 +181,27 @@ def _damage_event_matches(trigger, state: "GameState", source_ci: "CardInstance"
     me = actor_of(state, source_ci)
     if trigger.dealer == "you" and entry.get("dealer_player") != me:
         return False
+    if trigger.dealer == "friendly_unit":
+        # "When a friendly UNIT deals damage …" (The Ghost IC27_122): your damage,
+        # dealt by a unit card (an attacker, or a unit's ability) — not an event.
+        # The card may have left play since (a defeated attacker still dealt it).
+        if entry.get("dealer_player") != me:
+            return False
+        card = entry.get("dealer_card")
+        res = state.find_instance(card) if card else None
+        from swu.cards.models import Leader, TokenUnit, Unit
+        from swu.engine.state import Zone
+        if res is None:
+            return False
+        cd = res[1].card_def
+        # A leader is a unit only while deployed: its combat damage, or an ability
+        # it uses from the arena (an undeployed leader's Action is not a unit's).
+        is_unit = isinstance(cd, (Unit, TokenUnit)) or (
+            isinstance(cd, Leader)
+            and (bool(entry.get("combat"))
+                 or res[1].zone in (Zone.GROUND_ARENA, Zone.SPACE_ARENA)))
+        if not is_unit:
+            return False
     tid = entry.get("target_id")
     friendly = entry.get("target_player") == me
     t = trigger.target
@@ -708,6 +729,18 @@ def _trigger_matches(
         # (event is None; The Daughter LOF_252).  "YOUR base" — the damaged base's
         # owner must be the source's controller.
         return event_ctx.get("base_damaged_player_id") == actor_of(state, source_ci)
+
+    if isinstance(trigger, WhenYouHealYourBase):
+        # Observer trigger fired from the base-heal ledger (event is None; Darth
+        # Sidious IC27_26).  "YOUR base" — the healed base's owner must be the
+        # source's controller.
+        return event_ctx.get("base_healed_player_id") == actor_of(state, source_ci)
+
+    if isinstance(trigger, WhenYouResourceCard):
+        # Observer trigger fired from the resource ledger (event is None; Maz Kanata
+        # IC27_89).  "When YOU resource" — the resourcing player must be the
+        # source's controller.
+        return event_ctx.get("resourced_player_id") == actor_of(state, source_ci)
 
     if isinstance(trigger, WhenDamageDealt):
         return _damage_event_matches(trigger, state, source_ci,
@@ -1366,7 +1399,33 @@ def _collect_triggers(
                     if _trigger_matches(spec.trigger, event, uci, state, event_ctx):
                         if spec.condition is None or spec.condition.evaluate(state, uci):
                             results.append((uci, uci, idx, spec))
+    # Razor Crest IC27_172: every unit loses its "When Defeated" abilities (a Bounty
+    # is not one, so it survives).
+    if (isinstance(event, UnitDefeated) and results
+            and _when_defeated_abilities_lost(state)):
+        results = [r for r in results
+                   if not (isinstance(r[3], TriggerAbility)
+                           and isinstance(r[3].trigger, WhenDefeated)
+                           and not getattr(r[3], "is_bounty", False))]
     return results
+
+
+def _when_defeated_abilities_lost(state: "GameState") -> bool:
+    """True while a ``UnitsLoseWhenDefeated`` unit (Razor Crest IC27_172) whose
+    abilities are not suppressed is in an arena."""
+    from swu.abilities.registry import UnitsLoseWhenDefeated
+    from swu.engine.state import ability_suppressed
+    for ps in state.players:
+        for ci in ps.ground_arena + ps.space_arena:
+            sc = getattr(ci.card_def, "set_code", None) or ""
+            cn = getattr(ci.card_def, "card_number", None) or ""
+            if not sc or not cn:
+                continue
+            if (any(isinstance(spec, UnitsLoseWhenDefeated)
+                    for spec in get_abilities(sc, cn))
+                    and not ability_suppressed(state, ci)):
+                return True
+    return False
 
 
 # ── Target spec evaluation ────────────────────────────────────────────────────
@@ -3448,7 +3507,8 @@ def _apply_deal_damage(
             source_name=source_name,
         ))
         from swu.engine.actions import _check_game_over, record_base_damage
-        record_base_damage(state, ps.player_id, amount, dealer=dealer_id or source_id)
+        record_base_damage(state, ps.player_id, amount, dealer=dealer_id or source_id,
+                           source_card=source_id)
         _check_game_over(state)
     else:
         from swu.engine.state import Zone
@@ -4081,8 +4141,8 @@ def _when_defeated_ability_indices(state: "GameState",
     two carve-outs ``_schedule_ability_redo`` makes.  A suppressed unit (Mind Trick
     LOF_202 / Imprisoned SHD_72 / …) has no abilities at all."""
     from swu.engine.state import ability_suppressed
-    if ability_suppressed(state, ci):
-        return []
+    if ability_suppressed(state, ci) or _when_defeated_abilities_lost(state):
+        return []   # (Razor Crest IC27_172: every unit has lost them)
     sc = getattr(ci.card_def, "set_code", None) or ""
     cn = getattr(ci.card_def, "card_number", None) or ""
     if not sc or not cn:

@@ -59,10 +59,15 @@ def note_base_healed(s: GameState, base_ci: "CardInstance", healed: int) -> None
     ``resolver._apply_heal``, Restore (``_apply_restore``), the heal flavour of the
     damage-distribution finish, Reinforcement Walker SOR_119's discard-heal, and a
     bounty's ``heal_base`` payoff.  ``healed <= 0`` records nothing: an undamaged base
-    "healed" for 3 had no damage removed, so it was not healed."""
+    "healed" for 3 had no damage removed, so it was not healed.
+
+    It also queues ``[owner_id, healed]`` on ``game_memory.base_heal_events`` for the
+    WhenYouHealYourBase observer (Darth Sidious IC27_26: "When you heal damage from
+    your base: Deal that much damage to an enemy unit")."""
     if healed <= 0 or base_ci is None:
         return
     s.game_memory.bases_healed_this_phase.add(base_ci.instance_id)
+    s.game_memory.base_heal_events.append([base_ci.owner_id, int(healed)])
 
 
 def _hp_defeat_prevented(s: GameState, ci: CardInstance) -> bool:
@@ -309,9 +314,15 @@ def note_damage_dealt(
     *,
     combat: bool = False,
     dealer: str | None = None,
+    dealer_card: str | None = None,
 ) -> None:
     """Queue one damage instance that actually LANDED on a unit or base, for the
     settle-point ``WhenDamageDealt`` observer drain (``_fire_damage_observers``).
+
+    ``dealer_card`` is the instance id of the CARD that dealt it when known (the
+    attacker for combat, the ability's source for ability damage to a base), so
+    ``WhenDamageDealt(dealer="friendly_unit")`` can tell a unit from an event (The
+    Ghost IC27_122).
 
     ``amount`` is what landed after every prevention, so a Shield or a fully
     prevented hit records nothing.  The DEALING PLAYER is resolved here:
@@ -337,6 +348,7 @@ def note_damage_dealt(
         "is_base": isinstance(target_ci.card_def, Base),
         "amount": int(amount),
         "dealer_player": dealer_player,
+        "dealer_card": dealer_card,
         "combat": bool(combat),
     })
 

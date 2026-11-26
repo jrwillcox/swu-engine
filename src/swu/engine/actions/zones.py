@@ -1090,6 +1090,13 @@ def _defeat_unit(s: GameState, owner_ps: PlayerState, ci: CardInstance,
                           "defeated_controller_id": owner_ps.player_id,
                           "defeated_power": defeated_power,
                           "defeated_upgrades": defeated_upgrades,
+                          # Plain names: unlike the CardInstance list above, these
+                          # survive an optional trigger's decision round-trip ("for
+                          # each Experience token that was on this unit" — Qi'ra
+                          # IC27_45).
+                          "defeated_upgrade_names": [
+                              getattr(u.card_def, "name", None) or ""
+                              for u in defeated_upgrades],
                           "defeated_while_attacking": bool(while_attacking),
                           "defeated_by_combat_damage": bool(by_combat_damage)}
     fire_triggered_abilities(s, evt_defeated, after_all_player_idx=after_idx, event_ctx=event_ctx_defeated)

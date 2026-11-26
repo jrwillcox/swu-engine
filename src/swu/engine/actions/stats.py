@@ -365,6 +365,15 @@ def _constant_ability_power_bonus(state: GameState, unit_ci: CardInstance,
                     dres = state.find_instance(defender_id)
                     if dres is None or dres[1].damage <= 0:
                         continue
+                cmax = getattr(spec, "while_attacking_unit_cost_max", None)
+                if cmax is not None:
+                    # "While attacking a unit that costs 3 or less" (Enfys Nest
+                    # IC27_86) — the defender's printed cost.
+                    if not attacking_unit or defender_id is None:
+                        continue
+                    dres = state.find_instance(defender_id)
+                    if dres is None or (getattr(dres[1].card_def, "cost", None) or 0) > cmax:
+                        continue
                 if getattr(spec, "while_attacking_bounty_unit", False):
                     # "While attacking a unit with a Bounty" (Jango Fett SHD_138): the
                     # target must be attacking a unit (defender_id threaded) that
@@ -571,6 +580,12 @@ def _stat_bonus_count(state: GameState, source_ci: CardInstance,
         # The controller's space arena less the source itself (which is always in it).
         ps = state.player_by_id(actor_of(state, source_ci))
         return sum(1 for u in ps.space_arena
+                   if u.instance_id != source_ci.instance_id)
+    if count_src == "other_friendly_units":
+        # Avar Kriss IC27_71: "This unit gains Raid 1 for each other friendly unit."
+        res = state.find_instance(source_ci.instance_id)
+        ps = res[0] if res is not None else state.player_by_id(actor_of(state, source_ci))
+        return sum(1 for u in ps.ground_arena + ps.space_arena
                    if u.instance_id != source_ci.instance_id)
     if count_src == "other_friendly_pilots":
         from swu.engine.traits import has_trait
@@ -790,6 +805,8 @@ def _constant_ability_hp_bonus(state: GameState, unit_ci: CardInstance) -> int:
                     continue  # combat-only (Jango SHD_138 is +3/+0 anyway)
                 if getattr(spec, "while_attacking_damaged_unit", False):
                     continue  # combat-only (Marrok's Fiend Fighter ASH_241 is +2/+0)
+                if getattr(spec, "while_attacking_unit_cost_max", None) is not None:
+                    continue  # combat-only (Enfys Nest IC27_86 is +2/+0)
                 if getattr(spec, "while_defending", False):
                     continue
                 if getattr(spec, "while_target_attacking", False):

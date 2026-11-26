@@ -498,6 +498,11 @@ class GameSession:
         if isinstance(action, (SelectUnitToExhaust, SelectUnitToExhaustCombined)):
             name = self._card_name(action.target_id)
             if name:
+                top = (self.state.pending_decisions[-1]
+                       if self.state.pending_decisions else None)
+                if (isinstance(action, SelectUnitToExhaustCombined) and top is not None
+                        and top.context.get("ready")):
+                    return f"Ready {name}"
                 return f"Exhaust {name}"
         from swu.engine.actions import DiscardChosenCard
         if isinstance(action, DiscardChosenCard):

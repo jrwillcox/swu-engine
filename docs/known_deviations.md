@@ -12,7 +12,25 @@ and sorted, and updated on 2026-11-25. If you fix one, remove it from this page 
 
 These can produce a different result from a real game.
 
-None are known. The last two were fixed on 2026-11-25 (see below).
+- **Kylo's TIE Silencer IC27_63 can also be replayed after a deck discard**
+  (added 2026-11-26). The card says "When this unit is discarded from your
+  **hand**", but it reuses SHD_135's "discarded from your hand or deck this phase"
+  ledger, so milling it from your own deck also lets you play it from your discard
+  pile this phase (still paying its cost). Fixing it needs a hand-only ledger.
+  About ten mill sites call `note_hand_or_deck_discard` without
+  `from_deck=True` (for example `reveal.py`'s reveal-and-discard and several card
+  modules), so the flag can't yet tell a hand discard from a deck one. Passing it
+  at those sites would also change what Sebulba's Podracer LAW_176 sees.
+
+- **Count Dooku IC27_148 picks which enemy unit readies** (added 2026-11-26).
+  "Each opponent can't ready more than 1 ground unit and 1 space unit during the
+  regroup phase" should let the opponent choose. The engine readies their
+  highest-cost unit in each arena (ties go to the higher printed power), which is
+  almost always the one they would keep, but they can't pick a cheaper one.
+  Fixing it needs a choice inside the regroup ready step
+  (`turn._regroup_ready_capped_ids`).
+
+The last two before that were fixed on 2026-11-25 (see below).
 
 One limit remains in the engine but no card reaches it: inside a conditional
 branch ("if …, do A, then B"), a choice pushed by A doesn't hold back B. No
