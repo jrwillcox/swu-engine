@@ -251,7 +251,7 @@ class DiscardForModal(Action):
         ps.hand.remove(card)
         card.zone = Zone.DISCARD
         ps.discard.append(card)
-        note_hand_or_deck_discard(s, card)
+        note_hand_or_deck_discard(s, card, from_hand=True)
         ctx["discarded"] += 1
         cap = min(int(ctx["max_discards"]), len(ctx["modes"]))
         if ctx["discarded"] >= cap or not ps.hand:

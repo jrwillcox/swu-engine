@@ -17,17 +17,22 @@ The starting hand size is a value, not a constant, because a base can change it 
 """
 from __future__ import annotations
 
+import copy
+from dataclasses import dataclass
 from typing import Optional
 
 from swu.cards.models import AnyCard, Base, Leader
+from swu.engine.decisions import PendingDecision
 from swu.engine.events import (
-    AllCardsReadied, GameStarted, HandDrawn, PhaseChanged, RegroupDrawn, RoundStarted, UpgradeDetached,
+    AllCardsReadied, DecisionPushed, GameStarted, HandDrawn, PhaseChanged, RegroupDrawn, RoundStarted, UpgradeDetached,
 )
 from swu.engine.state import (
     CardInstance, GameState, Phase, PlayerState, Zone,
 )
 from swu.engine.triggers import get_bus
 
+from swu.engine.actions.base import Action, IllegalActionError
+from swu.engine.actions.dispatch import register_decisions
 from swu.engine.actions.stats import (
     _expire_modifiers,
 )
@@ -438,6 +443,9 @@ def _enter_regroup(s: GameState) -> None:
 
 def _check_regroup_complete(s: GameState) -> None:
     if all(ps.regroup_done for ps in s.players):
+        # Count Dooku IC27_148: a capped player chooses what readies first.
+        if _push_regroup_ready_choice(s):
+            return
         _end_regroup(s)
     else:
         other = 1 - s.active_player_index
@@ -484,12 +492,10 @@ def _regroup_draw_count(s: GameState, ps: PlayerState) -> int:
     return n
 
 
-def _regroup_ready_capped_ids(s: GameState, ps: PlayerState) -> set:
-    """Ids of ``ps``'s exhausted arena units the regroup ready step must SKIP under
-    an opponent's ``OpponentRegroupReadyCap`` (Count Dooku IC27_148).  Empty — and
-    cheap — on every board without the marker.  Per arena, the units that would
-    ready are ranked by printed cost, then printed power, and all but the top
-    ``per_arena`` are capped (the auto-pick deviation, see the marker)."""
+def _regroup_ready_cap(s: GameState, ps: PlayerState) -> Optional[int]:
+    """How many units per arena ``ps`` may ready in the regroup ready step under an
+    opponent's ``OpponentRegroupReadyCap`` (Count Dooku IC27_148), or None with no
+    such marker in play (the cheap, usual answer)."""
     from swu.abilities.registry import get_abilities, OpponentRegroupReadyCap
     from swu.engine.state import ability_suppressed
     cap = None
@@ -506,18 +512,133 @@ def _regroup_ready_capped_ids(s: GameState, ps: PlayerState) -> set:
                         and not ability_suppressed(s, ci)):
                     n = int(spec.per_arena)
                     cap = n if cap is None else min(cap, n)
+    return cap
+
+
+def _regroup_would_ready(s: GameState, arena: list) -> list:
+    """The units in ``arena`` the ready step would ready, best first: printed cost,
+    then printed power.  That order is the bot's pick and the fallback when no
+    choice was recorded."""
+    skip_once = s.game_memory.skip_next_ready
+    would = [ci for ci in arena
+             if ci.exhausted and ci.instance_id not in skip_once
+             and not ci.cannot_ready_this_round and not _ready_forbidden(s, ci)]
+    would.sort(key=lambda c: (getattr(c.card_def, "cost", 0) or 0,
+                              getattr(c.card_def, "power", 0) or 0), reverse=True)
+    return would
+
+
+def _regroup_ready_choice_arenas(s: GameState, ps: PlayerState) -> dict:
+    """``{"ground"|"space": [ids]}`` for each of ``ps``'s arenas holding more units
+    that would ready than the cap allows: the arenas where ``ps`` must choose."""
+    cap = _regroup_ready_cap(s, ps)
+    if cap is None:
+        return {}
+    out: dict[str, list[str]] = {}
+    for name, arena in (("ground", ps.ground_arena), ("space", ps.space_arena)):
+        would = _regroup_would_ready(s, arena)
+        if len(would) > cap:
+            out[name] = [ci.instance_id for ci in would]
+    return out
+
+
+def _regroup_ready_capped_ids(s: GameState, ps: PlayerState) -> set:
+    """Ids of ``ps``'s exhausted arena units the regroup ready step must SKIP under
+    an opponent's ``OpponentRegroupReadyCap`` (Count Dooku IC27_148).  Empty — and
+    cheap — on every board without the marker.  In an arena over the cap, the units
+    ``ps`` chose in the ``regroup_ready_choice`` decision ready and the rest stay
+    exhausted; with no recorded choice the best-ranked ``cap`` units ready."""
+    cap = _regroup_ready_cap(s, ps)
     if cap is None:
         return set()
+    picks = s.game_memory.regroup_ready_picks.get(ps.player_id)
     out: set = set()
-    skip_once = s.game_memory.skip_next_ready
     for arena in (ps.ground_arena, ps.space_arena):
-        would = [ci for ci in arena
-                 if ci.exhausted and ci.instance_id not in skip_once
-                 and not ci.cannot_ready_this_round and not _ready_forbidden(s, ci)]
-        would.sort(key=lambda c: (getattr(c.card_def, "cost", 0) or 0,
-                                  getattr(c.card_def, "power", 0) or 0), reverse=True)
-        out.update(ci.instance_id for ci in would[cap:])
+        would = [ci.instance_id for ci in _regroup_would_ready(s, arena)]
+        if len(would) <= cap:
+            continue
+        keep = ([iid for iid in would if iid in picks][:cap] if picks is not None
+                else would[:cap])
+        out.update(iid for iid in would if iid not in keep)
     return out
+
+
+def _push_regroup_ready_choice(s: GameState) -> bool:
+    """Before the ready step, ask each player held by a regroup ready cap which
+    units to ready, when they have more candidates in an arena than the cap.  The
+    initiative holder chooses first.  Returns True if a decision was pushed (the
+    ready step then waits for ``ChooseRegroupReadyUnit``)."""
+    picks = s.game_memory.regroup_ready_picks
+    n = len(s.players)
+    for k in range(n):
+        ps = s.players[(s.initiative_holder + k) % n]
+        if ps.player_id in picks:
+            continue
+        arenas = _regroup_ready_choice_arenas(s, ps)
+        if not arenas:
+            continue
+        s.pending_decisions.append(PendingDecision(
+            deciding_player_id=ps.player_id,
+            kind="regroup_ready_choice",
+            context={"player_id": ps.player_id, "cap": _regroup_ready_cap(s, ps),
+                     "arenas": arenas, "chosen": []},
+            after_resolve_player_index=s.active_player_index,
+        ))
+        s.active_player_index = s.player_index(ps.player_id)
+        s.event_log.append(DecisionPushed(deciding_player_id=ps.player_id,
+                                          kind="regroup_ready_choice"))
+        return True
+    return False
+
+
+def _regroup_ready_choice_targets(ctx: dict) -> list:
+    """Units still choosable: those in an arena with fewer than ``cap`` picks."""
+    chosen = set(ctx["chosen"])
+    out: list[str] = []
+    for ids in ctx["arenas"].values():
+        if sum(1 for i in ids if i in chosen) < int(ctx["cap"]):
+            out.extend(i for i in ids if i not in chosen)
+    return out
+
+
+@dataclass
+class ChooseRegroupReadyUnit(Action):
+    """Under an opponent's regroup ready cap (Count Dooku IC27_148: "can't ready
+    more than 1 ground unit and 1 space unit during the regroup phase"), choose a
+    unit to ready.  Once every capped arena has its picks, the choice is recorded
+    and the regroup carries on to the ready step."""
+    target_id: str
+
+    def apply(self, state: GameState) -> GameState:
+        if (not state.pending_decisions
+                or state.pending_decisions[-1].kind != "regroup_ready_choice"):
+            raise IllegalActionError("No regroup_ready_choice decision pending")
+        if self.target_id not in _regroup_ready_choice_targets(
+                state.pending_decisions[-1].context):
+            raise IllegalActionError(f"{self.target_id} can't be chosen to ready")
+        s = copy.deepcopy(state)
+        top = s.pending_decisions[-1]
+        ctx = top.context
+        ctx["chosen"].append(self.target_id)
+        if _regroup_ready_choice_targets(ctx):
+            return s
+        s.pending_decisions.pop()
+        s.game_memory.regroup_ready_picks[ctx["player_id"]] = list(ctx["chosen"])
+        s.active_player_index = top.after_resolve_player_index
+        _check_regroup_complete(s)
+        return s
+
+    def describe(self) -> str:
+        return f"Ready {self.target_id} (regroup)"
+
+
+def _regroup_ready_choice_actions(state: GameState, top: PendingDecision) -> list[Action]:
+    return [ChooseRegroupReadyUnit(tid) for tid in _regroup_ready_choice_targets(top.context)]
+
+
+register_decisions({
+    "regroup_ready_choice": _regroup_ready_choice_actions,
+})
 
 
 def _ready_all_cards(s: GameState) -> None:
@@ -561,6 +682,7 @@ def _ready_all_cards(s: GameState) -> None:
         for ci in ps.ground_arena + ps.space_arena:
             for upg in ci.attached_upgrades:
                 upg.exhausted = False
+    s.game_memory.regroup_ready_picks.clear()   # Max Rebo's 2nd regroup asks again
     s.event_log.append(AllCardsReadied(round_number=s.round_number))
 
 

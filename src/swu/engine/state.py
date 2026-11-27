@@ -186,6 +186,10 @@ class GameMemory:
     # at the phase rollover.  Gates "If this unit was discarded from your hand or
     # deck this phase, play it from your discard pile" (Kylo's TIE Silencer SHD_135).
     cards_discarded_this_phase: set = field(default_factory=set)  # instance_ids
+    # The hand-only subset of the ledger above (``from_hand=True`` at the hand-discard
+    # sites).  Gates "When this unit is discarded from your hand" (Kylo's TIE
+    # Silencer IC27_63), which a mill must not open.  Cleared at the phase rollover.
+    cards_discarded_from_hand_this_phase: set = field(default_factory=set)  # instance_ids
     units_attacked_this_round: set = field(default_factory=set)  # instance_ids
     # instance_id -> attacks declared this round (== this phase), written beside
     # ``units_attacked_this_round`` at the three declare steps
@@ -204,6 +208,11 @@ class GameMemory:
     # so under Max Rebo LAW_72's second regroup they ready normally.  Cleared at the
     # round rollover as a backstop.
     skip_next_ready: set = field(default_factory=set)
+    # player_id -> instance_ids that player chose to ready under an opponent's
+    # regroup ready cap (Count Dooku IC27_148), filled by the ``regroup_ready_choice``
+    # decision just before the ready step and emptied by it, so Max Rebo LAW_72's
+    # second regroup asks again.
+    regroup_ready_picks: dict = field(default_factory=dict)
     # base-owner player_id -> list of enemy unit instance_ids that DECLARED an
     # attack against that player's base this round ("this round" == "this phase" —
     # base attacks happen only in ACTION, cleared at the round rollover; the
@@ -713,6 +722,7 @@ class GameMemory:
         self.prevent_next_base_damage.clear()
         self.forced_attack = None
         self.cards_discarded_this_phase.clear()
+        self.cards_discarded_from_hand_this_phase.clear()
         self.cards_drawn_this_phase.clear()
         self.phase_aura_sources.clear()
         self.indirect_dealers_this_phase.clear()
@@ -737,6 +747,7 @@ class GameMemory:
         self.token_unit_attackers_this_round.clear()
         self.units_dealt_base_damage_this_round.clear()
         self.skip_next_ready.clear()
+        self.regroup_ready_picks.clear()
         self.base_attackers_this_round.clear()
         self.attackers_defeated_this_round.clear()
         self.defeated_controllers_this_round.clear()
@@ -771,10 +782,13 @@ class GameMemory:
                 k: sorted(v) for k, v in self.non_unit_traits_played_this_phase.items()},
             "units_defeated_this_round": sorted(self.units_defeated_this_round),
             "cards_discarded_this_phase": sorted(self.cards_discarded_this_phase),
+            "cards_discarded_from_hand_this_phase": sorted(
+                self.cards_discarded_from_hand_this_phase),
             "units_attacked_this_round": sorted(self.units_attacked_this_round),
             "unit_attack_counts": {k: int(v) for k, v in self.unit_attack_counts.items()},
             "units_dealt_base_damage_this_round": sorted(self.units_dealt_base_damage_this_round),
             "skip_next_ready": sorted(self.skip_next_ready),
+            "regroup_ready_picks": {k: list(v) for k, v in self.regroup_ready_picks.items()},
             "token_unit_attackers_this_round": sorted(self.token_unit_attackers_this_round),
             "base_attackers_this_round": {k: list(v) for k, v in self.base_attackers_this_round.items()},
             "attackers_defeated_this_round": sorted(self.attackers_defeated_this_round),
@@ -883,10 +897,13 @@ class GameMemory:
                 d.get("non_unit_traits_played_this_phase", {}).items()},
             units_defeated_this_round=set(d.get("units_defeated_this_round", [])),
             cards_discarded_this_phase=set(d.get("cards_discarded_this_phase", [])),
+            cards_discarded_from_hand_this_phase=set(
+                d.get("cards_discarded_from_hand_this_phase", [])),
             units_attacked_this_round=set(d.get("units_attacked_this_round", [])),
             unit_attack_counts={k: int(v) for k, v in d.get("unit_attack_counts", {}).items()},
             units_dealt_base_damage_this_round=set(d.get("units_dealt_base_damage_this_round", [])),
             skip_next_ready=set(d.get("skip_next_ready", [])),
+            regroup_ready_picks={k: list(v) for k, v in d.get("regroup_ready_picks", {}).items()},
             token_unit_attackers_this_round=set(
                 d.get("token_unit_attackers_this_round", [])),
             base_attackers_this_round={k: list(v) for k, v in d.get("base_attackers_this_round", {}).items()},

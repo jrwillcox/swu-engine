@@ -1,6 +1,6 @@
 {
  "_comment": "The public surface of swu.engine.actions, measured before the module was split into a package. 3,500+ import sites across the suite and src/ depend on these names resolving. Regenerating this file is a deliberate act: a removal is a breaking change to callers.",
- "count": 644,
+ "count": 646,
  "names": [
   "AcceptExhaust",
   "AcceptTrigger",
@@ -27,6 +27,7 @@
   "ChooseNumber",
   "ChooseOwnTarget",
   "ChoosePreventionSacrifice",
+  "ChooseRegroupReadyUnit",
   "ChooseRepeatedMode",
   "ChooseRepeatedTarget",
   "ChooseRevealDeck",

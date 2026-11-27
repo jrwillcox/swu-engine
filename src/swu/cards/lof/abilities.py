@@ -3142,7 +3142,7 @@ def _second_sister_lof_184_fn(state, source_ci, target_id, event_ctx):
         milled.zone = Zone.DISCARD
         milled.face_down = False
         ps.discard.append(milled)
-        note_hand_or_deck_discard(state, milled)
+        note_hand_or_deck_discard(state, milled, from_hand=False)
         if "Force" in (getattr(milled.card_def, "traits", None) or ()):
             force_count += 1
     for r in ps.resources:

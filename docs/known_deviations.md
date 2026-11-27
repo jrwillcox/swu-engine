@@ -6,42 +6,27 @@ the card or engine function it affects; search `src/` for `DEVIATION` or
 `simplification` to find them.
 
 The list was last audited on 2026-11-23, when all ~200 notes in the code were read
-and sorted, and updated on 2026-11-25. If you fix one, remove it from this page in the same change.
+and sorted, and updated on 2026-11-27. If you fix one, remove it from this page in the same change.
 
 ## Deviations that can change a game
 
 These can produce a different result from a real game.
 
-- **Kylo's TIE Silencer IC27_63 can also be replayed after a deck discard**
-  (added 2026-11-26). The card says "When this unit is discarded from your
-  **hand**", but it reuses SHD_135's "discarded from your hand or deck this phase"
-  ledger, so milling it from your own deck also lets you play it from your discard
-  pile this phase (still paying its cost). Fixing it needs a hand-only ledger.
-  About ten mill sites call `note_hand_or_deck_discard` without
-  `from_deck=True` (for example `reveal.py`'s reveal-and-discard and several card
-  modules), so the flag can't yet tell a hand discard from a deck one. Passing it
-  at those sites would also change what Sebulba's Podracer LAW_176 sees.
+None are known. The last two were fixed on 2026-11-27 (see below).
 
-- **Count Dooku IC27_148 picks which enemy unit readies** (added 2026-11-26).
-  "Each opponent can't ready more than 1 ground unit and 1 space unit during the
-  regroup phase" should let the opponent choose. The engine readies their
-  highest-cost unit in each arena (ties go to the higher printed power), which is
-  almost always the one they would keep, but they can't pick a cheaper one.
-  Fixing it needs a choice inside the regroup ready step
-  (`turn._regroup_ready_capped_ids`).
+Two limits remain in the engine, but no card reaches them:
 
-The last two before that were fixed on 2026-11-25 (see below).
-
-One limit remains in the engine but no card reaches it: inside a conditional
-branch ("if …, do A, then B"), a choice pushed by A doesn't hold back B. No
-registered card has a choice-pushing effect before another effect in a branch.
-
-A second limit hasn't been audited yet. When an ability creates a token unit and
-a later effect of the same ability chooses a unit ("Create a Beast token. Deal 1
-damage to a friendly ground unit"), the choice is offered before the token
-exists, so the new token can't be picked. Run Amok HMW_194, Howl HMW_241 and
-Geonosian Picador HMW_199 work around it. Older cards written as a plain "create
-token, then targeted effect" list have not been checked.
+- Inside a conditional branch ("if …, do A, then B"), a choice pushed by A
+  doesn't hold back B. No registered card has a choice-pushing effect before
+  another effect in a branch.
+- When an ability creates a token unit and a later effect of the same ability
+  chooses a unit, the choice is offered before the token exists, so the new token
+  can't be picked. An audit of every registered card on 2026-11-27 found only
+  Run Amok HMW_194, Howl HMW_241 and Geonosian Picador HMW_199 with that wording,
+  and all three work around it by creating the token first. Covering the Wing
+  JTL_76 does the same. `tests/test_token_then_target.py` fails if a new
+  encoding puts a targeted effect that could pick the token after a
+  `CreateTokenUnit`.
 
 ## Shortcuts that don't change a sensible game
 
@@ -61,6 +46,15 @@ is shown. They are documented at each card. The main patterns:
   can only miss (Chimaera SOR_185, Garindan SEC_186, SEC_210, SEC_260).
 - **Cosmetic order or timing.** Examples: a "reveal" read without showing the card
   (JTL_17), and a top-card peek after the regroup draw (TWI_40).
+
+## Fixed on 2026-11-27
+
+- Kylo's TIE Silencer IC27_63 can be played from the discard pile only after it
+  was discarded from your hand, as printed. A deck discard used to open it too.
+  Kylo's TIE Silencer SHD_135 ("from your hand or deck") is unchanged.
+- Count Dooku IC27_148: each opponent chooses which ground unit and which space
+  unit ready during the regroup phase. The engine used to ready their
+  highest-cost unit in each arena.
 
 ## Fixed on 2026-11-25
 

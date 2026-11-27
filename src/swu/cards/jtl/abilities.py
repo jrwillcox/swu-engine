@@ -2439,7 +2439,7 @@ def _trench_run_fn(state, source_ci, target_id, event_ctx):
         card.zone = Zone.DISCARD
         card.face_down = False
         opp.discard.append(card)
-        note_hand_or_deck_discard(state, card)
+        note_hand_or_deck_discard(state, card, from_hand=False)
         costs.append(int(getattr(card.card_def, "cost", 0) or 0))
     if len(costs) == 2 and abs(costs[0] - costs[1]) > 0:
         from swu.abilities.resolver import _apply_indirect_damage
@@ -3007,7 +3007,7 @@ def _discard_hand_card(state, ps, ci):
     ps.hand.remove(ci)
     ci.zone = Zone.DISCARD
     ps.discard.append(ci)
-    note_hand_or_deck_discard(state, ci)
+    note_hand_or_deck_discard(state, ci, from_hand=True)
     record_hand_discard(state, ps.player_id)
 
 
@@ -3131,7 +3131,7 @@ def _annihilator_name_purge(state, source_ci, target_id, event_ctx):
         ps.deck.remove(ci)
         ci.zone = Zone.DISCARD
         ps.discard.append(ci)
-        note_hand_or_deck_discard(state, ci)
+        note_hand_or_deck_discard(state, ci, from_hand=False)
     if deck_hits:
         rng = state.make_rng()
         rng.shuffle(ps.deck)
@@ -3174,7 +3174,7 @@ def _cassian_andor_mill(state, source_ci, target_id, event_ctx):
     ci = theirs.deck.pop(0)
     ci.zone = Zone.DISCARD
     theirs.discard.append(ci)
-    note_hand_or_deck_discard(state, ci)
+    note_hand_or_deck_discard(state, ci, from_hand=False)
     if int(getattr(ci.card_def, "cost", None) or 0) <= 3:
         _draw_cards(state, mine, 1)
     return state

@@ -26,6 +26,7 @@ from swu.abilities.registry import _ESCAPE_HATCH, _REGISTRY, get_abilities  # no
 from swu.cards import reprints  # noqa: E402  (import applies the aliases as a side effect)
 
 from tests.dbpath import require_corpus_db, require_reprint_aliases  # noqa: E402
+from tests.synthetic_gap import GAP_NUMBER, GAP_SET, synthetic_gap_db  # noqa: E402
 
 
 def _db() -> str:
@@ -37,26 +38,21 @@ def _db() -> str:
 
 
 def _unregistered_keywordless_text_card():
-    """A card that is NOT registered, carries functional text, and prints NO keyword.
+    """A card that is NOT registered, carries functional text, and prints NO keyword,
+    and the DB that holds it.
 
     Exactly the shape ``verify_playable``'s functional-text guard must flag when such
     a card is (wrongly) filed under ``keyword_deferred``: with no keywords the keyword
-    gate passes, so only the text guard can catch it.  Found at run time rather than
-    named, so the campaign encoding one more card cannot rot this test; sorted for a
-    deterministic pick, and skipped outright if the campaign ever runs out."""
+    gate passes, so only the text guard can catch it.  The whole real corpus is now
+    encoded, so this is the made-up card ``ZZT_1`` in a copy of it
+    (``tests/synthetic_gap.py``).  The asserts check it still has that shape."""
+    db = synthetic_gap_db()
     registered, escape_hatch = audit._load_registry()
-    known = registered | escape_hatch
-    for card in sorted(audit.load_cards(_db()),
-                       key=lambda c: (c.set_code, int(c.card_number or 0))):
-        if card.card_type in audit.TOKEN_TYPES:
-            continue
-        if (card.set_code, card.card_number) in known:
-            continue
-        if card.keywords:
-            continue
-        if audit.has_functional_text(card.full_text, card.keywords):
-            return card
-    pytest.skip("no unregistered keyword-free text-bearing card left in the DB")
+    card = audit.index_by_set_number(audit.load_cards(db))[(GAP_SET, GAP_NUMBER)]
+    assert (card.set_code, card.card_number) not in registered | escape_hatch
+    assert not card.keywords
+    assert audit.has_functional_text(card.full_text, card.keywords)
+    return card, db
 
 # Sorted list so the parametrized ids are stable across runs.
 ALIASES = sorted(reprints.REPRINT_ALIASES.items())
@@ -375,7 +371,7 @@ class TestVerifyPlayable:
         # completed in ash-set:29.  It now FINDS a qualifying card at run time (the
         # test_plan_encoding.test_classification_strong_functional_text fix), so it
         # tracks the campaign instead of chasing it.
-        card = _unregistered_keywordless_text_card()
+        card, db = _unregistered_keywordless_text_card()
         fake = {
             "buckets": {
                 "already_playable": [],
@@ -387,7 +383,7 @@ class TestVerifyPlayable:
             },
             "member_counts": {"already_playable": 0, "keyword_deferred": 1},
         }
-        problems = find_reprints.verify_playable(fake, _db())
+        problems = find_reprints.verify_playable(fake, db)
         assert problems and problems[0]["set"] == card.set_code
         assert problems[0]["number"] == card.card_number
 

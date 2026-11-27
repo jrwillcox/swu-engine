@@ -1,6 +1,6 @@
 {
  "_comment": "web/serializers.py sends type(action).__name__ as the action 'kind' and asdict(action) as 'params', so every name below is part of the HTTP API the React frontend is written against. Moving a class between modules is safe; RENAMING a class or a field breaks the frontend.",
- "count": 169,
+ "count": 171,
  "actions": {
   "AcceptExhaust": [
    "unit_id"
@@ -67,6 +67,9 @@
    "target_id"
   ],
   "ChoosePreventionSacrifice": [
+   "target_id"
+  ],
+  "ChooseRegroupReadyUnit": [
    "target_id"
   ],
   "ChooseRepeatedMode": [
@@ -159,11 +162,11 @@
   "DeployLeaderAsUpgrade": [
    "vehicle_target_id"
   ],
-  "DiscardForModal": [
-   "card_id"
-  ],
   "DiscardChosenCard": [
    "instance_id"
+  ],
+  "DiscardForModal": [
+   "card_id"
   ],
   "DiscardForSearch": [
    "instance_id"

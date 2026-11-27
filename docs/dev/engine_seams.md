@@ -105,6 +105,7 @@ adding one; `granted_attack` and `play_from_hand` take many options:
 | `may_discard` | "An opponent may discard a random card; if they don't, you get tokens" | Political Pressure TWI_222 |
 | `exhaust_for_base_damage` | "Exhaust any number of units; deal N base damage for each" | The Invisible Hand TWI_234 |
 | `exhaust_combined_cost` | "Exhaust any number of units" within a cost budget (`budget`, `max_units`, `arena`) | Qui-Gon's Lightsaber LOF_201 |
+| `regroup_ready_choice` | "Each opponent can't ready more than 1 ground unit and 1 space unit during the regroup phase": the capped player picks what readies (`ChooseRegroupReadyUnit`). Pushed by the regroup flow, not by a card. | Count Dooku IC27_148 |
 | `recur_and_buff` | "Put up to N units from your discard on the bottom of your deck; buff that many units" | Luminous Beings LOF_104 |
 | `pay_resources_for_tokens` | "Pay up to N resources; get a token for each" | Curious Flock LOF_255 |
 | `use_force` | "You may use the Force for a bonus" (`decline_penalty`) | Impossible Escape LOF_218 |
@@ -238,8 +239,14 @@ The golden files in `tests/fixtures/` (`actions_decision_kinds.json`,
   `ready=True` (pick exhausted units and ready them; Jyn Erso IC27_123),
   `then_grant_keyword` (each pick gains it for the phase) and `same_arena` (the first
   pick fixes the arena; Princess Leia IC27_159).
-- **Regroup ready cap.** `OpponentRegroupReadyCap` (Count Dooku IC27_148), read in
-  `turn._ready_all_cards`; it auto-picks which unit readies (a known deviation).
+- **Regroup ready cap.** `OpponentRegroupReadyCap` (Count Dooku IC27_148). Before
+  the ready step, the capped player chooses which units ready (the
+  `regroup_ready_choice` decision, pushed from `turn._check_regroup_complete`); the
+  picks live in `game_memory.regroup_ready_picks` until `turn._ready_all_cards`.
+- **Hand-only discards.** `note_hand_or_deck_discard(from_hand=True)` feeds
+  `cards_discarded_from_hand_this_phase` / `SELF_DISCARDED_FROM_HAND_THIS_PHASE`
+  ("discarded from your hand", Kylo's TIE Silencer IC27_63). Every call passes
+  `from_hand` or `from_deck` (`tests/test_discard_ledgers.py`).
 - **Opponent play tax.** `OpponentPlayTax` takes `card_type="any"` and
   `while_exhausted` (Raddus IC27_43).
 - **Attacker swap from hand.** "If a friendly … unit would deal combat damage while

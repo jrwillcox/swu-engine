@@ -6,8 +6,9 @@ import {
   subjectOf,
   targetOf,
   targetsForSubject,
+  upgradeHosts,
 } from "../src/game/interaction";
-import { action } from "./fixtures";
+import { action, card } from "./fixtures";
 
 describe("interaction mapping", () => {
   it("anchors a PlayCard to its hand card as subject, no target", () => {
@@ -75,6 +76,28 @@ describe("interaction mapping", () => {
     expect(targets.size).toBe(3);
     expect(targets.has(BASE_TARGET)).toBe(true);
     expect(directActions(inter, "g1")).toHaveLength(0);
+  });
+
+  it("offers an attached upgrade's own action on its host card", () => {
+    // Bacta Tank's Action is anchored to the upgrade, which is only a chip on the
+    // base: without the host map nothing on the board could be clicked to use it.
+    const use = action("UseAbility", { source_id: "up1", ability_idx: 1, actor_id: null }, "a0");
+    expect(buildInteraction([use]).subjects.has("base1")).toBe(false);
+    const inter = buildInteraction([use], new Map([["up1", "base1"]]));
+    expect(inter.subjects.has("base1")).toBe(true);
+    expect(inter.subjects.has("up1")).toBe(false);
+    expect(directActions(inter, "base1")).toEqual([use]);
+  });
+
+  it("maps each attached upgrade to its host", () => {
+    const host = card({
+      instance_id: "base1",
+      attached_upgrades: [card({ instance_id: "up1" }), card({ instance_id: "up2" })],
+    });
+    const hosts = upgradeHosts([host, card({ instance_id: "u9" })]);
+    expect(hosts.get("up1")).toBe("base1");
+    expect(hosts.get("up2")).toBe("base1");
+    expect(hosts.has("u9")).toBe(false);
   });
 
   it("surfaces ChooseTarget options as free targets", () => {

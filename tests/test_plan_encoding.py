@@ -21,6 +21,7 @@ import audit_coverage as A  # noqa: E402
 
 DECK = str(_ROOT / "tests" / "fixtures" / "shd_han_solo.json")
 from tests.dbpath import require_corpus_db  # noqa: E402
+from tests.synthetic_gap import GAP_ID, GAP_SET, synthetic_gap_db  # noqa: E402
 
 
 def _db() -> str:
@@ -175,35 +176,26 @@ def test_classification_keyword_deferred():
     assert P.classify_card(details[("SHD", "165")], reg, esc) == "implemented"
 
 
-# NOTE: tests below that emit into a fresh tmp_path ENCODING_DIR plan a whole
-# *set*, not the shd-han-solo demo deck.  The demo deck is 100% implemented, so a
-# from-scratch plan of it finds zero gaps and yields zero groups — which would make
-# these reconcile/emit tests vacuous (and IndexError on groups[0]).  They need a
-# gap-bearing input, so the set is CHOSEN AT RUN TIME rather than hard-coded: SHD
-# was the hard-coded choice until shd-set:22 completed it and took these tests down
-# with it.
-#
-# ⚠️ The replacement was a hand-written candidate TUPLE, which rotted the same way
-# the moment the campaign completed its last entry (IBH, ibh-set:04 — these three
-# tests silently went to SKIP).  The candidate list is now READ FROM THE CAMPAIGN
-# ITSELF (``scripts/next_group.SET_ORDER``), so every set the walker will ever visit
-# is a candidate and this can only go quiet when the whole campaign is finished —
-# at which point skipping really is the right answer.
+# NOTE: tests below that emit into a fresh tmp_path ENCODING_DIR need a set with
+# gaps, or they are vacuous (and IndexError on groups[0]).  They used to search the
+# real corpus for one, and all went to SKIP when the campaign finished IC27 and the
+# whole database was encoded.  They now plan the made-up set ``ZZT`` in a copy of
+# the corpus (``tests/synthetic_gap.py``), whose one card is never registered.
 
 
-def _set_with_gaps():
-    """The first campaign set that still yields gap groups (skip if none do)."""
-    for set_code in _campaign_set_order():
-        _slug, groups, _meta = P.plan(None, set_code, _db())
-        if groups:
-            return set_code
-    pytest.skip("no set left with gap groups — the campaign has encoded them all")
+def _set_with_gaps() -> str:
+    """The set code of the made-up gap card; plan it against ``_gap_db()``."""
+    return GAP_SET
+
+
+def _gap_db() -> str:
+    return synthetic_gap_db()
 
 
 def test_emit_valid_artifacts(tmp_path, monkeypatch):
     monkeypatch.setattr(P, "ENCODING_DIR", tmp_path)
     set_with_gaps = _set_with_gaps()
-    slug, groups, meta = P.plan(None, set_with_gaps, _db())
+    slug, groups, meta = P.plan(None, set_with_gaps, _gap_db())
     assert groups, f"expected the {set_with_gaps} set to yield gap groups"
     out_dir = P.emit(slug, groups, meta)
     assert (out_dir / "MANIFEST.md").exists()
@@ -245,14 +237,15 @@ def test_rerun_stable_ids_no_clobber(tmp_path, monkeypatch):
     # Whole-set source (see the _set_with_gaps note above): the demo deck is fully
     # implemented now and yields no groups from scratch.
     set_with_gaps = _set_with_gaps()
-    slug, groups, meta = P.plan(None, set_with_gaps, _db())
+    slug, groups, meta = P.plan(None, set_with_gaps, _gap_db())
     P.emit(slug, groups, meta)
     gids_first = [g.gid for g in groups]
     assert gids_first, f"expected the {set_with_gaps} set to yield gap groups"
+    assert [c.cid for g in groups for c in g.cards] == [GAP_ID]
 
     # Sentinel: hand-edit a not-yet-complete spec; a re-run must rewrite it
     # (group still incomplete) — but ids stay stable via reconcile.
-    slug2, groups2, meta2 = P.plan(None, set_with_gaps, _db())
+    slug2, groups2, meta2 = P.plan(None, set_with_gaps, _gap_db())
     assert [g.gid for g in groups2] == gids_first
 
     # No-clobber: a spec whose group is fully done is preserved verbatim.
@@ -272,14 +265,14 @@ def test_rerun_drops_a_landed_primitive_from_a_persisted_group(tmp_path, monkeyp
     import json
     monkeypatch.setattr(P, "ENCODING_DIR", tmp_path)
     set_with_gaps = _set_with_gaps()
-    slug, groups, meta = P.plan(None, set_with_gaps, _db())
+    slug, groups, meta = P.plan(None, set_with_gaps, _gap_db())
     P.emit(slug, groups, meta)
     manifest = tmp_path / slug / "manifest.json"
     data = json.loads(manifest.read_text(encoding="utf-8"))
     data["groups"][0]["new_primitives"] = ["weakness-token", "not-yet-built"]
     manifest.write_text(json.dumps(data), encoding="utf-8")
     assert "weakness-token" in P._LANDED_CAPABILITIES
-    _, groups2, _ = P.plan(None, set_with_gaps, _db())
+    _, groups2, _ = P.plan(None, set_with_gaps, _gap_db())
     assert groups2[0].gid == data["groups"][0]["gid"]
     assert groups2[0].new_primitives == ["not-yet-built"]
 
@@ -299,7 +292,7 @@ def test_set_code_input(tmp_path, monkeypatch):
 
     # A set with gaps yields groups, and only the two campaign kinds.
     set_with_gaps = _set_with_gaps()
-    gslug, ggroups, _gmeta = P.plan(None, set_with_gaps, _db())
+    gslug, ggroups, _gmeta = P.plan(None, set_with_gaps, _gap_db())
     assert gslug == f"{set_with_gaps.lower()}-set"
     assert ggroups, f"expected the {set_with_gaps} set to yield gap groups"
     # Only the two campaign kinds, and a keyword group only ever for a keyword that

@@ -234,7 +234,13 @@ def _require_registry(registered: set[tuple[str, str]]) -> None:
     audit would then label every registered card unimplemented and overwrite
     ``docs/coverage_report.md`` with "Registered in ability registry: 0".
     Thousands of cards are registered, so an empty registry is always a load
-    failure, never a real result."""
+    failure, never a real result.
+
+    The message names the interpreter, because that is the usual cause: the
+    script doesn't put ``src/`` on ``sys.path``, so it needs a Python with the
+    project installed.  The "Registered: 0" reports of 2026-11-22 matched, byte
+    for byte, a run under an Anaconda ``python`` (a conda-activated editor
+    terminal) that has no ``swu`` package."""
     if registered:
         return
     try:
@@ -245,8 +251,9 @@ def _require_registry(registered: set[tuple[str, str]]) -> None:
         detail = "the card modules imported but registered nothing"
     sys.exit(
         "audit_coverage: the ability registry is empty, so the report would "
-        f"mark every card unimplemented ({detail}).  Run it with the project "
-        "venv from the swu-game directory.  Nothing was written.")
+        f"mark every card unimplemented ({detail}).  This Python is "
+        f"{sys.executable}.  Run it with the project venv "
+        "(.venv/Scripts/python.exe) from the swu-game directory.  Nothing was written.")
 
 
 # ── Classification ────────────────────────────────────────────────────────────

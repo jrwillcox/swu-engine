@@ -356,16 +356,58 @@ class TestObiWanKenobiIC27_42:
 
 class TestKylosTieSilencerIC27_63:
 
-    def test_IC27_63_playable_from_discard_after_being_discarded(self, repo):
-        from swu.engine.actions import legal_actions, PlayFromDiscard, note_hand_or_deck_discard
+    @staticmethod
+    def _offered(state, ci):
+        from swu.engine.actions import legal_actions, PlayFromDiscard
+        return any(isinstance(a, PlayFromDiscard) and a.instance_id == ci.instance_id
+                   for a in legal_actions(state))
+
+    def test_IC27_63_playable_from_discard_after_a_hand_discard(self, repo):
+        from swu.engine.actions import push_discard_of_choice
         state = _make_state()
-        tie = _discard(state, "P0", _ic27(repo, "63"))
+        tie = _hand(state, "P0", _ic27(repo, "63"))
         _give_resources(state, "P0", 10)          # cost 4 + aspect penalties
         state.active_player_index = 0
-        assert not any(isinstance(a, PlayFromDiscard) for a in legal_actions(state))
-        note_hand_or_deck_discard(state, tie)
-        assert any(isinstance(a, PlayFromDiscard) and a.instance_id == tie.instance_id
-                   for a in legal_actions(state))
+        push_discard_of_choice(state, "P0", 1, source_id=None,
+                               after_idx=len(state.pending_decisions))
+        assert tie.zone.name == "DISCARD"
+        assert self._offered(state, tie)
+
+    def test_IC27_63_not_playable_after_a_deck_discard(self, repo):
+        """It says "discarded from your hand", so a mill must not open the replay
+        (it used to: the ledger it shared with SHD_135 counts deck discards too)."""
+        from swu.engine.actions import discard_from_deck
+        from tests.test_sor_cards import _push_deck_top
+        state = _make_state()
+        tie = _push_deck_top(state, "P0", _ic27(repo, "63"))
+        _give_resources(state, "P0", 10)
+        state.active_player_index = 0
+        discard_from_deck(state, state.player_by_id("P0"), 1)
+        assert tie.zone.name == "DISCARD"
+        assert not self._offered(state, tie)
+
+    def test_SHD_135_still_playable_after_a_deck_discard(self, repo):
+        """SHD_135 says "from your hand or deck", so the mill still opens it."""
+        from swu.engine.actions import discard_from_deck
+        from tests.test_sor_cards import _push_deck_top
+        state = _make_state()
+        tie = _push_deck_top(state, "P0", _get_card(repo, "SHD", "135"))
+        _give_resources(state, "P0", 10)
+        state.active_player_index = 0
+        discard_from_deck(state, state.player_by_id("P0"), 1)
+        assert self._offered(state, tie)
+
+    def test_hand_discard_ledger_clears_and_round_trips(self, repo):
+        from swu.engine.actions import note_hand_or_deck_discard
+        from swu.engine.state import GameMemory
+        state = _make_state()
+        tie = _discard(state, "P0", _ic27(repo, "63"))
+        note_hand_or_deck_discard(state, tie, from_hand=True)
+        gm = state.game_memory
+        assert GameMemory.from_dict(gm.to_dict()).cards_discarded_from_hand_this_phase \
+            == {tie.instance_id}
+        gm.clear_phase()
+        assert gm.cards_discarded_from_hand_this_phase == set()
 
 
 class TestC3POIC27_70:
@@ -1731,6 +1773,74 @@ class TestIC27Group13:
         assert not _live(state, big).exhausted and not _live(state, ship).exhausted
         assert _live(state, small).exhausted and _live(state, foe).exhausted
         assert not _live(state, mine).exhausted
+
+    @staticmethod
+    def _regroup_with_dooku(repo):
+        """P0 controls Dooku; P1 has two exhausted ground units and one exhausted
+        space unit; both players are at the regroup resource step."""
+        from swu.engine.state import Phase
+        state = _make_state()
+        _place(state, "P0", _ic27(repo, "148"))
+        big = _place(state, "P1", _unit("Big", "931", cost=6))
+        small = _place(state, "P1", _unit("Small", "932", cost=1))
+        ship = _place(state, "P1", _unit("Ship", "933", cost=2), arena="space")
+        for u in (big, small, ship):
+            u.exhausted = True
+        state.phase = Phase.REGROUP
+        for ps in state.players:
+            ps.regroup_done = False
+        state.active_player_index = 0
+        return state, big, small, ship
+
+    def test_IC27_148_opponent_chooses_which_unit_readies(self, repo):
+        from swu.engine.actions import (
+            apply, legal_actions, ChooseRegroupReadyUnit, SkipResource)
+        state, big, small, ship = self._regroup_with_dooku(repo)
+        round_before = state.round_number
+        state = apply(state, SkipResource())
+        state = apply(state, SkipResource())
+        top = state.pending_decisions[-1]
+        assert top.kind == "regroup_ready_choice" and top.deciding_player_id == "P1"
+        acts = legal_actions(state)
+        assert all(isinstance(a, ChooseRegroupReadyUnit) for a in acts)
+        # Only the over-cap ground arena is asked about; the lone ship just readies.
+        assert {a.target_id for a in acts} == {big.instance_id, small.instance_id}
+        state = apply(state, ChooseRegroupReadyUnit(small.instance_id))   # the cheap one
+        assert not state.pending_decisions
+        assert state.round_number == round_before + 1
+        assert not _live(state, small).exhausted and not _live(state, ship).exhausted
+        assert _live(state, big).exhausted
+        assert state.game_memory.regroup_ready_picks == {}
+
+    def test_IC27_148_no_choice_when_within_the_cap(self, repo):
+        from swu.engine.actions import apply, SkipResource
+        state, big, small, ship = self._regroup_with_dooku(repo)
+        small.exhausted = False
+        state = apply(state, SkipResource())
+        state = apply(state, SkipResource())
+        assert not state.pending_decisions
+        assert not _live(state, big).exhausted and not _live(state, ship).exhausted
+
+    def test_IC27_148_rejects_a_unit_not_offered(self, repo):
+        import pytest
+        from swu.engine.actions import apply, ChooseRegroupReadyUnit, SkipResource
+        from swu.engine.actions.base import IllegalActionError
+        state, big, small, ship = self._regroup_with_dooku(repo)
+        state = apply(state, SkipResource())
+        state = apply(state, SkipResource())
+        with pytest.raises(IllegalActionError):
+            apply(state, ChooseRegroupReadyUnit(ship.instance_id))
+
+    def test_IC27_148_bot_readies_the_best_unit(self, repo):
+        from swu.engine.actions import apply, legal_actions, SkipResource
+        from swu.engine.views import build_view
+        from swu.players.heuristic_bot import HeuristicBot
+        state, big, small, ship = self._regroup_with_dooku(repo)
+        state = apply(state, SkipResource())
+        state = apply(state, SkipResource())
+        bot = HeuristicBot("P1", seed=1)
+        act = bot.choose_action(build_view(state, "P1"), legal_actions(state))
+        assert act.target_id == big.instance_id
 
 
 class TestIC27Group14:

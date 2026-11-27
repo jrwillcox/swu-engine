@@ -349,6 +349,10 @@ class HeuristicBot:
         if ("SelectUnitToExhaustCombined" in kinds
                 or "FinishExhaustCombined" in kinds):
             return self._choose_exhaust_combined(view, legal)
+        if "ChooseRegroupReadyUnit" in kinds:
+            # Count Dooku IC27_148's regroup cap: the engine lists each arena's
+            # candidates best first (printed cost, then power), so ready the first.
+            return self._first(legal, "ChooseRegroupReadyUnit")
         if ("SelectUnitToCaptureCombined" in kinds
                 or "FinishCaptureCombined" in kinds):
             return self._choose_capture_combined(view, legal)
@@ -2575,7 +2579,7 @@ _SAFE_DEFAULT_ORDER = (
     "DeclinePlayUpgradeFromHand", "DeclineCombatPrevention", "AcceptExhaust",
     "DeclineStealUpgrade", "DeclineNameAndDiscard", "DeclineCapturedPlay",
     "DeclineResourceUnitPlay", "FinishCombinedPowerPlay", "DeclineRescue",
-    "FinishResourceFromHand",
+    "FinishResourceFromHand", "ChooseRegroupReadyUnit",
 )
 
 

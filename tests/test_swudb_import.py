@@ -21,28 +21,13 @@ def _load(name):
     return json.loads((_ROOT / "tests" / "fixtures" / f"{name}.json").read_text(encoding="utf-8"))
 
 
-def _first_unimplemented_text_bearing_unit() -> str | None:
-    """A ``SET_NUM`` id for some unit that still has ability text and no registered
-    ability, or None once the encoding campaign has covered them all.  Deterministic
-    (sorted), so a failure always names the same card."""
-    import swu.cards  # noqa: F401 — populates the ability registry
-    from swu.abilities.registry import get_abilities
+@pytest.fixture(scope="module")
+def gap_repo():
+    """A repository over a copy of the corpus that also holds the made-up,
+    unencoded unit ``ZZT_1`` (``tests/synthetic_gap.py``)."""
     from swu.cards.repository import CardRepository
-    from scripts.audit_coverage import has_functional_text
-    repo = CardRepository(require_corpus_db())
-    cards = [cd for cd in repo.iter_all()
-             if type(cd).__name__ == "Unit" and (cd.text or "").strip()]
-    for cd in sorted(cards, key=lambda c: (c.set_code or "", c.card_number or "")):
-        # FUNCTIONAL text, not merely any text: a pure-keyword card ("Ambush /
-        # Restore 1") is correctly NOT reported as a gap by the importer, so
-        # picking one would fail the caller's assertion — Pathfinder Sergeant
-        # ASH_106 did exactly that once the campaign encoded past the ASH units
-        # ahead of it.
-        if not has_functional_text(cd.text, getattr(cd, "keywords", ()) or ()):
-            continue
-        if not get_abilities(cd.set_code or "", str(cd.card_number)):
-            return f"{cd.set_code}_{cd.card_number}"
-    return None
+    from tests.synthetic_gap import synthetic_gap_db
+    return CardRepository(synthetic_gap_db())
 
 
 def test_import_han_solo_deck_now_fully_playable(repo, tmp_path):
@@ -64,22 +49,21 @@ def test_import_han_solo_deck_now_fully_playable(repo, tmp_path):
     assert report.planner_hint and "plan_encoding.py" in report.planner_hint
 
 
-def test_import_reports_unimplemented_text_bearing_card(repo, tmp_path):
+def test_import_reports_unimplemented_text_bearing_card(gap_repo, tmp_path):
     """An imported deck containing a card with unimplemented ability text reports
     it as a gap (the core value of the import tool — it doesn't matter that this
-    synthetic deck isn't construction-legal)."""
+    synthetic deck isn't construction-legal).
+
+    Every real stand-in (SOR_103, then TWI_47, then whatever was left) rotted as
+    the campaign encoded it, and the whole corpus is encoded now, so the gap is
+    the made-up unit ``ZZT_1``."""
     from swu.web.swudb_import import import_deck
-    # The stand-in gap card is DISCOVERED, not hard-coded: every hard-coded choice
-    # so far (SOR_103 Rebel Assault, then TWI_47 Satine Kryze) has rotted the moment
-    # the encoding campaign reached it.  Pick any unit that still has ability text
-    # and no registration; skip once the campaign has encoded them all.
-    card_id = _first_unimplemented_text_bearing_unit()
-    if card_id is None:
-        pytest.skip("no unimplemented text-bearing unit left to stand in for a gap")
+    from tests.synthetic_gap import GAP_ID
+    card_id = GAP_ID
     data = {"leader": {"id": "SHD_13"}, "base": {"id": "SHD_24"},
             "deck": [{"id": card_id, "count": 3}]}
     out = tmp_path / "synthetic.json"
-    report = import_deck(data, repo, write_to=out, slug="synthetic")
+    report = import_deck(data, gap_repo, write_to=out, slug="synthetic")
 
     ids = {u["id"] for u in report.unimplemented}
     assert card_id in ids

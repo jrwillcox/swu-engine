@@ -371,7 +371,7 @@ def _accept_may_discard(s: GameState, card: CardInstance, choice: str) -> GameSt
     ps.hand.remove(card)
     card.zone = Zone.DISCARD
     ps.discard.append(card)
-    note_hand_or_deck_discard(s, card)
+    note_hand_or_deck_discard(s, card, from_hand=True)
     record_hand_discard(s, ps.player_id)
     # THEN-arm (Kouhun Assassination TS26_33): unlike every other may_discard
     # card the payoff sits on the ACCEPT branch — "If they DO, give a

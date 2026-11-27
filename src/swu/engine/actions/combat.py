@@ -568,7 +568,7 @@ def record_hand_discard(s: GameState, player_id: str, kind: str = "discard") -> 
 
 
 def note_hand_or_deck_discard(s: GameState, ci: "CardInstance", *,
-                              from_deck: bool = False) -> None:
+                              from_deck: bool = False, from_hand: bool = False) -> None:
     """Record that ``ci`` was discarded from a hand or deck this phase, feeding the
     phase-scoped ``cards_discarded_this_phase`` ledger read by Kylo's TIE Silencer
     SHD_135 ("If this unit was discarded from your hand or deck this phase, play it
@@ -588,8 +588,18 @@ def note_hand_or_deck_discard(s: GameState, ci: "CardInstance", *,
     only; it defaults False, so a hand discard — which is most of the ~20 call sites —
     is unaffected.  The same documented simplification applies one level down: a
     bespoke card-module mill that does not route through ``discard_from_deck`` or a
-    deck_search leaves the deck ledger alone, and simply does not fire the observer."""
+    deck_search leaves the deck ledger alone, and simply does not fire the observer.
+
+    ``from_hand`` marks a discard from a HAND, feeding the hand-only
+    ``cards_discarded_from_hand_this_phase`` (Kylo's TIE Silencer IC27_63, "When this
+    unit is discarded from your hand").  Every hand-discard caller passes it; a
+    deck mill never does, whether or not it passes ``from_deck``.
+    ``tests/test_discard_ledgers.py`` checks every call site passes one or neither."""
+    if from_hand and from_deck:
+        raise ValueError("a discard comes from a hand or a deck, not both")
     s.game_memory.cards_discarded_this_phase.add(ci.instance_id)
+    if from_hand:
+        s.game_memory.cards_discarded_from_hand_this_phase.add(ci.instance_id)
     # Beside the phase-scoped ledger, queue the card for the settle-drain that fires
     # its OWN "When this card is discarded from your hand or deck" observer (That's a
     # Rock LAW_206) — the note_unit_healed shape.  One entry per discarded card, so a

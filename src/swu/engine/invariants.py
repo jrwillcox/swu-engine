@@ -64,6 +64,7 @@ _KNOWN_DECISION_KINDS = frozenset({
     "resource_from_hand",
     "may_discard", "exhaust_for_base_damage", "recur_and_buff",
     "exhaust_combined_cost", "capture_combined_hp", "rescue_guarded",
+    "regroup_ready_choice",
     "pay_resources_for_tokens", "use_force",
     "per_exploit_damage",
     "assign_indirect_damage", "select_damage",

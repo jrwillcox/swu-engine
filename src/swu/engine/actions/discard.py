@@ -273,7 +273,7 @@ class SelectDiscardForExperience(Action):
         ps.hand.remove(card)
         card.zone = Zone.DISCARD
         ps.discard.append(card)
-        note_hand_or_deck_discard(s, card)
+        note_hand_or_deck_discard(s, card, from_hand=True)
         name = card.card_def.display_name
         target = None
         for arena in (ps.ground_arena, ps.space_arena):
@@ -997,7 +997,7 @@ class DiscardForSearch(Action):
         ps.hand.remove(unit)
         unit.zone = Zone.DISCARD
         ps.discard.append(unit)
-        note_hand_or_deck_discard(s, unit)
+        note_hand_or_deck_discard(s, unit, from_hand=True)
         s.pending_decisions.pop()
         s.event_log.append(DecisionResolved(
             deciding_player_id=top.deciding_player_id,
@@ -1412,7 +1412,7 @@ class SelectExcessHandCardToDiscard(Action):
         card.zone = Zone.DISCARD
         card.face_down = False
         ps.discard.append(card)
-        note_hand_or_deck_discard(s, card)
+        note_hand_or_deck_discard(s, card, from_hand=True)
         tally = dict(ctx.get("discarded", {}))
         tally[current] = tally.get(current, 0) + 1
         ctx["discarded"] = tally
@@ -1600,7 +1600,7 @@ def push_discard_of_choice(
             ci.zone = Zone.DISCARD
             ci.face_down = False
             ps.discard.append(ci)
-            note_hand_or_deck_discard(s, ci)
+            note_hand_or_deck_discard(s, ci, from_hand=True)
         if pool:
             record_hand_discard(s, player_id)
         if then_draw:
@@ -1677,7 +1677,7 @@ class NameAndDiscard(Action):
             opp.hand.remove(victim)
             victim.zone = Zone.DISCARD
             opp.discard.append(victim)
-            note_hand_or_deck_discard(s, victim)
+            note_hand_or_deck_discard(s, victim, from_hand=True)
             record_hand_discard(s, opp.player_id)
             # "If you do, that player draws a card" (Bazine Netal SHD_184).
             if ctx.get("discarder_draws"):

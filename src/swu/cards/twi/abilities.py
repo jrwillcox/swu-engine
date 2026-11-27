@@ -2489,7 +2489,7 @@ def _sabine_wren_mill(state, source_ci, target_id, event_ctx):
         card = ps.deck.pop(0)
         card.zone = Zone.DISCARD
         ps.discard.append(card)
-        note_hand_or_deck_discard(state, card)
+        note_hand_or_deck_discard(state, card, from_hand=False)
         card_aspects = {a.name for a in (getattr(card.card_def, "aspects", None) or ())}
     base = ps.base_instance
     base_aspects = ({a.name for a in (getattr(base.card_def, "aspects", None) or ())}
@@ -2734,7 +2734,7 @@ def _yoda_twi_4_mill(state, source_ci, target_id, event_ctx):
     card.zone = Zone.DISCARD
     card.face_down = False
     ps.discard.append(card)
-    note_hand_or_deck_discard(state, card)
+    note_hand_or_deck_discard(state, card, from_hand=False)
     cost = getattr(card.card_def, "cost", None)
     if cost is None:
         return state
@@ -2979,7 +2979,7 @@ def _satine_kryze_twi_47(state, source_ci, target_id, event_ctx):
         card.zone = Zone.DISCARD
         card.face_down = False
         opp.discard.append(card)
-        note_hand_or_deck_discard(state, card)
+        note_hand_or_deck_discard(state, card, from_hand=False)
     return state
 
 

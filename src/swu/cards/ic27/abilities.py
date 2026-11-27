@@ -589,13 +589,11 @@ def _kylos_tie_silencer_ic27():
     (paying its cost)."
 
     The trigger-then-permission collapses to Kylo's TIE Silencer SHD_135's
-    ``PlayFromDiscardAction`` gated on ``SELF_DISCARDED_THIS_PHASE``.  DOCUMENTED
-    DEVIATION (docs/known_deviations.md): that ledger is fed by hand AND deck
-    discards (several mill sites cannot tell them apart), so a self-mill also opens
-    the replay — favourable to the controller, and still paid in full.  Restore is
-    the keyword layer."""
+    ``PlayFromDiscardAction``, gated on the hand-only
+    ``SELF_DISCARDED_FROM_HAND_THIS_PHASE`` (SHD_135's ledger also counts deck
+    discards, which this card's text excludes).  Restore is the keyword layer."""
     return PlayFromDiscardAction(
-        condition=ConditionCheck(Condition.SELF_DISCARDED_THIS_PHASE))
+        condition=ConditionCheck(Condition.SELF_DISCARDED_FROM_HAND_THIS_PHASE))
 
 
 def _c3po_experience_then_draw(state, source_ci, target_id, event_ctx):
@@ -1778,8 +1776,8 @@ def _count_dooku_ic27_148():
     """IC27_148 — Count Dooku (Unit, Force/Official/Separatist/Sith, 7, 8/7): "Each
     opponent can't ready more than 1 ground unit and 1 space unit during the regroup
     phase.  When Played: You may exhaust a unit."  The new
-    ``OpponentRegroupReadyCap`` marker (auto-picks the unit that readies, a noted
-    deviation) plus the ``exhaust_combined_cost(max_units=1)`` "you may exhaust a
+    ``OpponentRegroupReadyCap`` marker (the opponent chooses which units ready, in
+    the ``regroup_ready_choice`` decision) plus the ``exhaust_combined_cost(max_units=1)`` "you may exhaust a
     unit" (Ahsoka Tano JTL_201)."""
     from swu.abilities.registry import OpponentRegroupReadyCap
     return [OpponentRegroupReadyCap(per_arena=1),
