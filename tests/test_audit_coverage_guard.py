@@ -32,6 +32,15 @@ def test_main_refuses_to_write_with_an_empty_registry(empty_registry, monkeypatc
     assert not out.exists()
 
 
+def test_guard_message_names_the_interpreter():
+    """The interpreter is the usual cause (an Anaconda ``python`` without the
+    project installed wrote the 2026-11-22 reports), so the message says which
+    one ran."""
+    with pytest.raises(SystemExit) as exc:
+        A._require_registry(set())
+    assert sys.executable in str(exc.value)
+
+
 def test_deck_audit_refuses_an_empty_registry(empty_registry, tmp_path):
     with pytest.raises(SystemExit, match="registry is empty"):
         A.audit_deck(tmp_path / "deck.json", str(tmp_path / "swu.db"))

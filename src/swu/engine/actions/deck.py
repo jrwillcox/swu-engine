@@ -573,7 +573,7 @@ def discard_random_from_hand(s: GameState, player_id: str) -> Optional[CardInsta
     card.zone = Zone.DISCARD
     card.face_down = False
     ps.discard.append(card)
-    note_hand_or_deck_discard(s, card)
+    note_hand_or_deck_discard(s, card, from_hand=True)
     record_hand_discard(s, player_id)
     return card
 

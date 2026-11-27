@@ -98,6 +98,7 @@ def _zone_to_model(d: dict) -> ZoneModel:
         space_arena=[card_to_model(c) for c in d["space_arena"]],
         base_zone=[card_to_model(c) for c in d["base_zone"]],
         is_eliminated=d["is_eliminated"],
+        deck_top=card_to_model(d["deck_top"]) if d.get("deck_top") else None,
     )
 
 

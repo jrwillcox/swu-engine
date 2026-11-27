@@ -19,6 +19,7 @@ import secrets
 import uuid
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
+from typing import Optional
 
 from swu.engine.actions import Action, apply, legal_actions
 from swu.engine.state import GameState, Zone
@@ -96,6 +97,7 @@ _PROMPTS: dict[str, str] = {
     "disclose": "You may disclose — reveal cards from your hand bearing the required aspect icons for a bonus, or decline.",
     "exhaust_for_base_damage": "Exhaust any number of friendly units — each deals 1 damage to the defending base. Pick one at a time, or finish.",
     "exhaust_combined_cost": "Exhaust any number of units with combined cost 6 or less — pick one at a time, or finish.",
+    "regroup_ready_choice": "An opponent's effect lets you ready only 1 ground unit and 1 space unit this regroup phase. Choose which.",
     "capture_combined_hp": "Capture any number of enemy non-leader units with combined remaining HP 7 or less — pick one at a time, or finish.",
     "rescue_guarded": "You may rescue one of your cards guarded by the attacking unit — but if you do, its controller draws cards.",
     "multi_capture_pairing": "Choose any number of your units — each captures an enemy non-leader unit in the same arena. Pick a captor and its prey, one pair at a time, or finish.",
@@ -382,6 +384,29 @@ class GameSession:
         cache = self._rebuild_cache()
         return list(cache.items())
 
+    def _use_ability_label(self, action: Action) -> Optional[str]:
+        """'Use <card>' for a ``UseAbility``, plus the ability's title when it has
+        a real one, or a number when the card has several untitled Actions.  None
+        if the source can't be found (the caller falls back to describe())."""
+        from swu.abilities.registry import ActivatedAbility, get_abilities
+        source_id = getattr(action, "source_id", "")
+        res = self.state.find_instance(source_id)
+        name = self._card_name(source_id)   # None for a card in a hidden zone
+        if res is None or not name:
+            return None
+        cd = res[1].card_def
+        specs = [getattr(s, "ability", s)
+                 for s in get_abilities(cd.set_code or "", str(cd.card_number or ""))]
+        idx = getattr(action, "ability_idx", -1)
+        spec = specs[idx] if 0 <= idx < len(specs) else None
+        title = getattr(spec, "title", "Action") or "Action"
+        if title != "Action":
+            return f"Use {name}: {title}"
+        activated = [i for i, s in enumerate(specs) if isinstance(s, ActivatedAbility)]
+        if len(activated) > 1 and idx in activated:
+            return f"Use {name} (ability {activated.index(idx) + 1})"
+        return f"Use {name}"
+
     def label_for(self, action: Action) -> str:
         """A human-readable button label for ``action``.
 
@@ -504,6 +529,10 @@ class GameSession:
                         and top.context.get("ready")):
                     return f"Ready {name}"
                 return f"Exhaust {name}"
+        from swu.engine.actions import ChooseRegroupReadyUnit
+        if isinstance(action, ChooseRegroupReadyUnit):
+            unit_name = self._card_name(action.target_id)
+            return f"Ready {unit_name}" if unit_name else "Ready a unit"
         from swu.engine.actions import DiscardChosenCard
         if isinstance(action, DiscardChosenCard):
             name = self._card_name(action.instance_id)
@@ -541,6 +570,13 @@ class GameSession:
                 name = self._card_name(action.target_id) if action.target_id else None
                 return f"Exhaust {name or 'a friendly unit'} to use the Force"
         from swu.engine.actions import UseAbility
+        if isinstance(action, UseAbility) and action.actor_id is None:
+            # describe() only knows ids ("Use ability 1 of human_40").  An upgrade's
+            # own Action is offered on its host card, so the menu must say WHICH
+            # card's ability it is (Bacta Tank on a base beside Verdant Fortress).
+            own = self._use_ability_label(action)
+            if own:
+                return own
         if isinstance(action, UseAbility) and action.actor_id is not None:
             # An aura-granted Action (Satine Kryze TWI_47) is offered once per unit
             # that gained it, so the button must name the ACTOR — describe() would

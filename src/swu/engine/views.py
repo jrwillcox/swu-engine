@@ -139,6 +139,9 @@ class PlayerZoneView:
     base_zone: list[CardView]
     is_eliminated: bool
     has_force_token: bool = False  # the player's Force token (public; qui-gon-jinn:06)
+    # The top card of this player's deck, set only in the player's OWN view and only
+    # while they may look at it (Intelligence Agency HMW_205); None otherwise.
+    deck_top: Optional[CardView] = None
 
     def to_dict(self) -> dict:
         return {
@@ -156,6 +159,7 @@ class PlayerZoneView:
             "space_arena": [c.to_dict() for c in self.space_arena],
             "base_zone": [c.to_dict() for c in self.base_zone],
             "is_eliminated": self.is_eliminated,
+            "deck_top": self.deck_top.to_dict() if self.deck_top is not None else None,
         }
 
 
@@ -374,6 +378,28 @@ def _safe_piloting_cost(gs: "GameState", ci: "CardInstance",
         return None
 
 
+def _may_look_at_deck_top(gs: "GameState", ps: "PlayerState") -> bool:
+    """Whether ``ps`` controls a card carrying ``MayLookAtTopOfDeck`` (Intelligence
+    Agency HMW_205 on their base).  Scans ``ps``'s base zone and arenas and the
+    upgrades attached there; a card whose abilities are suppressed doesn't count.
+    A view must always build, so any failure reads as False."""
+    try:
+        from swu.abilities.registry import get_abilities, MayLookAtTopOfDeck
+        from swu.engine.state import ability_suppressed
+        for host in ps.base_zone + ps.ground_arena + ps.space_arena:
+            for ci in (host, *host.attached_upgrades):
+                sc = getattr(ci.card_def, "set_code", None) or ""
+                cn = getattr(ci.card_def, "card_number", None) or ""
+                if not sc or not cn:
+                    continue
+                if (any(isinstance(s, MayLookAtTopOfDeck) for s in get_abilities(sc, cn))
+                        and not ability_suppressed(gs, ci)):
+                    return True
+    except Exception:
+        return False
+    return False
+
+
 def _zone_view(gs: "GameState", ps: "PlayerState", viewer_id: str,
                grantable: Optional[set] = None) -> PlayerZoneView:
     is_self = ps.player_id == viewer_id
@@ -428,6 +454,8 @@ def _zone_view(gs: "GameState", ps: "PlayerState", viewer_id: str,
                      for c in ps.space_arena],
         base_zone=[_card_view(c, True) for c in ps.base_zone],
         is_eliminated=ps.is_eliminated,
+        deck_top=(_card_view(ps.deck[0], True)
+                  if is_self and ps.deck and _may_look_at_deck_top(gs, ps) else None),
     )
 
 

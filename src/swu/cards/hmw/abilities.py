@@ -379,10 +379,13 @@ def _intelligence_agency():
     you do, they draw a card."
 
     The When Played is Remnant Lookouts ASH_220's text verbatim, so it reuses that
-    card's adapter.  The "look at your top card at any time" clause is pure hidden
-    information with no rules effect; it is not modelled (no UI surface yet)."""
-    return TriggerAbility(trigger=WhenPlayed(),
-                          effects=[CustomEffect(fn=_intelligence_agency_peek_hand)])
+    card's adapter.  The "look at your top card at any time" clause is hidden
+    information with no rules effect: the ``MayLookAtTopOfDeck`` marker makes the
+    controller's own view show their top card (``PlayerZoneView.deck_top``)."""
+    from swu.abilities.registry import MayLookAtTopOfDeck
+    return [TriggerAbility(trigger=WhenPlayed(),
+                           effects=[CustomEffect(fn=_intelligence_agency_peek_hand)]),
+            MayLookAtTopOfDeck()]
 
 
 @card_ability("HMW", "206")
@@ -1599,7 +1602,7 @@ def _keeper_discard_two(state, source_ci, target_id, event_ctx):
         ps.hand.remove(card)
         card.zone = Zone.DISCARD
         ps.discard.append(card)
-        note_hand_or_deck_discard(state, card)
+        note_hand_or_deck_discard(state, card, from_hand=True)
         record_hand_discard(state, ps.player_id)
     return state
 

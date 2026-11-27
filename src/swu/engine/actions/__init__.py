@@ -231,6 +231,7 @@ from swu.engine.actions.observers import (  # noqa: F401
 )
 from swu.engine.actions.turn import (  # noqa: F401
     STARTING_HAND_SIZE,
+    ChooseRegroupReadyUnit,
     _advance_mulligan,
     _advance_setup_resources,
     _check_regroup_complete,
@@ -753,6 +754,7 @@ __all__ = [
     "ChooseNumber",
     "ChooseOwnTarget",
     "ChoosePreventionSacrifice",
+    "ChooseRegroupReadyUnit",
     "ChooseRepeatedMode",
     "ChooseRepeatedTarget",
     "ChooseRevealDeck",

@@ -3203,7 +3203,7 @@ def _krennic_mill_and_maybe_recur(state, source_ci, target_id, event_ctx):
     milled = ps.deck.pop(0)
     milled.zone = Zone.DISCARD
     ps.discard.append(milled)
-    note_hand_or_deck_discard(state, milled)
+    note_hand_or_deck_discard(state, milled, from_hand=False)
     if not isinstance(milled.card_def, Unit):
         return state
     push_return_from_discard(
@@ -3367,7 +3367,7 @@ def _obi_wan_mill_and_permit(state, source_ci, target_id, event_ctx):
     milled = opp.deck.pop(0)
     milled.zone = Zone.DISCARD
     opp.discard.append(milled)
-    note_hand_or_deck_discard(state, milled)
+    note_hand_or_deck_discard(state, milled, from_hand=False)
     permitted = state.game_memory.foreign_discard_play_this_phase
     permitted.setdefault(actor_of(state, source_ci), []).append(milled.instance_id)
     return state

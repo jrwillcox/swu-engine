@@ -77,6 +77,8 @@ class ZoneModel(BaseModel):
     space_arena: list[CardModel]
     base_zone: list[CardModel]
     is_eliminated: bool
+    # Own view only, while the player may look at it (Intelligence Agency HMW_205).
+    deck_top: Optional[CardModel] = None
 
 
 class PendingDecisionModel(BaseModel):

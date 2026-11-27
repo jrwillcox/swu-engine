@@ -565,6 +565,12 @@ class Condition(Enum):
                                       # gates Kylo's TIE Silencer SHD_135's play-from-
                                       # discard Action.  Evaluated against the discard-
                                       # pile instance itself, not a board unit.
+    SELF_DISCARDED_FROM_HAND_THIS_PHASE = "self_discarded_from_hand_this_phase"
+                                      # the hand-only sibling: this card instance was
+                                      # discarded from a HAND this phase
+                                      # (game_memory.cards_discarded_from_hand_this_phase,
+                                      # fed by note_hand_or_deck_discard(from_hand=True)).
+                                      # Kylo's TIE Silencer IC27_63.
     CONTROLLER_DISCARDED_THIS_PHASE = "controller_discarded_this_phase"
                                       # the SOURCE's controller discarded ≥1 card from
                                       # their hand or deck this phase — "If you
@@ -1632,6 +1638,10 @@ class ConditionCheck:
         if c == Condition.SELF_DISCARDED_THIS_PHASE:
             gm = getattr(state, "game_memory", None)
             discarded = getattr(gm, "cards_discarded_this_phase", None) or set()
+            return source_ci.instance_id in discarded
+        if c == Condition.SELF_DISCARDED_FROM_HAND_THIS_PHASE:
+            gm = getattr(state, "game_memory", None)
+            discarded = getattr(gm, "cards_discarded_from_hand_this_phase", None) or set()
             return source_ci.instance_id in discarded
         if c == Condition.CONTROLLER_DISCARDED_THIS_PHASE:
             # The per-player reading of the same ledger: a card discarded from a hand
@@ -5045,12 +5055,25 @@ class OpponentRegroupReadyCap:
     unit in the regroup ready step (Count Dooku IC27_148: "Each opponent can't ready
     more than 1 ground unit and 1 space unit during the regroup phase").
 
-    Read only at ``turn._ready_all_cards``; resources and the base zone ready as
-    usual, and an ability that readies a unit is unaffected.  DEVIATION: the
-    opponent should CHOOSE which unit readies; the engine auto-picks the highest
-    printed cost (then power) per arena, the unit the opponent would almost always
-    keep, rather than open a decision inside the regroup step."""
+    Read by the regroup flow in ``turn``: when the resource step ends, an opponent
+    with more would-ready units in an arena than the cap chooses which ready (the
+    ``regroup_ready_choice`` decision), and ``_ready_all_cards`` leaves the rest
+    exhausted.  Resources and the base zone ready as usual, and an ability that
+    readies a unit is unaffected."""
     per_arena: int = 1
+
+
+@dataclass(frozen=True)
+class MayLookAtTopOfDeck:
+    """Constant marker: while this card is in play under a player's control (on
+    their base, in their arena, or attached to a card there), that player may look
+    at the top card of their own deck at any time (Intelligence Agency HMW_205:
+    "Attached base gains: 'You may look at the top card of your deck at any
+    time.'").
+
+    Hidden information only; no rules effect.  Read by ``views._zone_view``, which
+    adds the top card to the controller's own view (``PlayerZoneView.deck_top``);
+    the opponent's view never carries it."""
 
 
 @dataclass(frozen=True)

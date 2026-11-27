@@ -264,7 +264,7 @@ class DiscardRevealed(Action):
                 else:
                     card.zone = Zone.DISCARD
                     ps.discard.append(card)
-                    note_hand_or_deck_discard(s, card)
+                    note_hand_or_deck_discard(s, card, from_hand=False)
                 break
         _maybe_finish_reveal_top(s, top)
         return s
@@ -979,7 +979,7 @@ def _apply_disclose_payoff(s: GameState, ctx: dict) -> None:
             card = opp.hand.pop(rng.randrange(len(opp.hand)))
             card.zone = Zone.DISCARD
             opp.discard.append(card)
-            note_hand_or_deck_discard(s, card)
+            note_hand_or_deck_discard(s, card, from_hand=True)
             record_hand_discard(s, opp.player_id, kind="discard")
         s.rng_state = rng.getstate()
         return

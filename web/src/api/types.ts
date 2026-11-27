@@ -61,6 +61,8 @@ export interface ZoneModel {
   space_arena: CardModel[];
   base_zone: CardModel[];
   is_eliminated: boolean;
+  /** The top card of your own deck, while you may look at it (Intelligence Agency). */
+  deck_top?: CardModel | null;
 }
 
 export interface PendingDecisionModel {

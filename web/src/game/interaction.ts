@@ -2,7 +2,7 @@
 // UI's click model. The engine already lists every concrete (attacker, target)
 // pair as its own action, so the frontend never constructs targets — it just
 // anchors each action to the card(s) it names and routes clicks to action ids.
-import type { ActionModel } from "../api/types";
+import type { ActionModel, CardModel } from "../api/types";
 
 export const BASE_TARGET = "BASE";
 
@@ -72,7 +72,27 @@ export interface Interaction {
   freeTargets: Set<string>;
 }
 
-export function buildInteraction(actions: ActionModel[]): Interaction {
+/** upgrade instance_id -> the instance_id of the card it is attached to. */
+export function upgradeHosts(cards: CardModel[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const c of cards) {
+    for (const u of c.attached_upgrades) out.set(u.instance_id, c.instance_id);
+  }
+  return out;
+}
+
+/**
+ * Group the legal actions by the card a click starts from.
+ *
+ * An attached upgrade is drawn only as a small chip on its host, which can't be
+ * clicked, so an action anchored to an upgrade (its own Action — Bacta Tank,
+ * Heavy Ion Cannon) is anchored to the host instead: tapping the base or unit
+ * offers it.  Pass ``hostOf`` (see ``upgradeHosts``) to enable that.
+ */
+export function buildInteraction(
+  actions: ActionModel[],
+  hostOf?: Map<string, string>,
+): Interaction {
   const controls: ActionModel[] = [];
   const bySubject = new Map<string, ActionModel[]>();
   const freeTargets = new Set<string>();
@@ -84,7 +104,8 @@ export function buildInteraction(actions: ActionModel[]): Interaction {
       controls.push(a); // also offer in the decision banner as a fallback
       continue;
     }
-    const subj = CONTROL_KINDS.has(a.kind) ? undefined : subjectOf(a);
+    const own = CONTROL_KINDS.has(a.kind) ? undefined : subjectOf(a);
+    const subj = own === undefined ? undefined : (hostOf?.get(own) ?? own);
     if (subj === undefined) {
       controls.push(a);
     } else {

@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ActionModel, CardModel } from "../api/types";
 import type { Game } from "../game/useGame";
-import { BASE_TARGET, buildInteraction, targetOf, targetsForSubject } from "../game/interaction";
+import {
+  BASE_TARGET,
+  buildInteraction,
+  targetOf,
+  targetsForSubject,
+  upgradeHosts,
+} from "../game/interaction";
 import { playmatBackground, playmatFor } from "../playmats/playmats";
 import type { Highlight } from "./Card";
 import { ActionBar } from "./ActionBar";
@@ -101,10 +107,18 @@ export function Table({ game, onToggleLog }: { game: Game; onToggleLog?: () => v
   const awaiting = snapshot!.awaiting;
   const interactive = awaiting === "human" && !locked;
 
-  const inter = useMemo(
-    () => buildInteraction(interactive ? snapshot!.actions : []),
-    [snapshot, interactive],
-  );
+  const inter = useMemo(() => {
+    // An upgrade's own Action (Bacta Tank) is offered on the card it's attached to.
+    const hosts = upgradeHosts([
+      ...view.my.ground_arena,
+      ...view.my.space_arena,
+      ...view.my.base_zone,
+      ...view.opponent.ground_arena,
+      ...view.opponent.space_arena,
+      ...view.opponent.base_zone,
+    ]);
+    return buildInteraction(interactive ? snapshot!.actions : [], hosts);
+  }, [snapshot, interactive, view]);
 
   useEffect(() => {
     if (selected && !inter.subjects.has(selected)) setSelected(null);
@@ -587,7 +601,15 @@ export function Table({ game, onToggleLog }: { game: Game; onToggleLog?: () => v
             <ResourceRow zone={view.my} mine={true} slot={slot} />
             <span className="spacer" />
             <div className="piles">
-              <Pile label="Deck" count={view.my.deck_count} />
+              {/* "You may look at the top card of your deck at any time"
+                  (Intelligence Agency): the top card shows face up; tap to zoom. */}
+              <Pile
+                label="Deck"
+                count={view.my.deck_count}
+                topCard={view.my.deck_top}
+                onClick={view.my.deck_top ? () => setInspected(view.my.deck_top!) : undefined}
+                onHover={(c) => setHover(c)}
+              />
               <Pile
                 label="Discard"
                 count={view.my.discard.length}

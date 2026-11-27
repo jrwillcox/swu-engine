@@ -2800,7 +2800,7 @@ def _bt1_mill_and_arm(state, source_ci, target_id, event_ctx):
     card.zone = Zone.DISCARD
     card.face_down = False
     ps.discard.append(card)
-    note_hand_or_deck_discard(state, card)
+    note_hand_or_deck_discard(state, card, from_hand=False)
     aspects = {a.name for a in (getattr(card.card_def, "aspects", None) or ())}
     if "Aggression" in aspects:
         event_ctx["prior_target_id"] = card.instance_id
